@@ -1,0 +1,50 @@
+<div class="d-flex justify-content-between align-items-center mb-3"><h2 class="mb-0"><%= item.id ? 'Edit Item' : 'Add Item' %></h2><a class="btn btn-outline-secondary" href="/items">Back</a></div>
+<form method="post" action="<%= item.id ? '/items/'+item.id : '/items' %>" class="card shadow-sm"><div class="card-body row g-3">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+  <% if (item.id) { %>
+    <div class="col-md-4"><label class="form-label">Item Code</label><input value="<%= item.item_code || '' %>" class="form-control" readonly><div class="form-text">Code is permanent and never changes.</div></div>
+  <% } else { %>
+    <div class="col-md-3"><label class="form-label">Category *</label>
+      <select name="catCode" id="catCode" class="form-select" required>
+        <option value="">Select…</option>
+        <% (itemCategories||[]).forEach(c => { %><option value="<%= c.cat_code %>" data-mode="<%= c.default_label_mode %>"><%= c.cat_code %> — <%= c.cat_name %></option><% }) %>
+      </select></div>
+    <div class="col-md-3"><label class="form-label">Sub-Category *</label>
+      <select name="subCode" id="subCode" class="form-select" required><option value="">Select category first</option></select></div>
+    <div class="col-md-3"><label class="form-label">Item Code</label><input class="form-control" value="Auto (CAT-SUB-NNNN)" readonly><div class="form-text">Assigned automatically on save.</div></div>
+  <% } %>
+
+  <div class="col-md-<%= item.id ? 8 : 3 %>"><label class="form-label">Description *</label><input name="description" value="<%= item.description || '' %>" class="form-control" required placeholder="Short name shown in lists"></div>
+  <div class="col-12"><label class="form-label">Detailed Specification</label><textarea name="specification" class="form-control" rows="2" placeholder="Full technical spec, dimensions, ratings…"><%= item.specification || '' %></textarea></div>
+
+  <div class="col-md-2"><label class="form-label">UOM</label><input name="unit" value="<%= item.unit || '' %>" class="form-control" placeholder="NOS / MTR / LTR / KG / SET"></div>
+  <div class="col-md-2"><label class="form-label">Criticality</label><select name="criticality" class="form-select"><option value="">—</option><% ['A','B','C'].forEach(x=>{ %><option <%= item.criticality===x?'selected':'' %>><%= x %></option><% }) %></select></div>
+  <div class="col-md-3"><label class="form-label">Label Mode</label><select name="labelMode" class="form-select"><option value="unit" <%= item.label_mode==='unit'?'selected':'' %>>Per unit (serialised)</option><option value="batch" <%= item.label_mode==='batch'?'selected':'' %>>Per batch (bulk)</option></select><div class="form-text">Defaults from category; override if needed.</div></div>
+  <div class="col-md-2"><label class="form-label">Min Stock</label><input name="minLevel" type="number" min="0" step="0.01" value="<%= item.min_level || 0 %>" class="form-control"></div>
+  <div class="col-md-3"><label class="form-label">Reorder Qty</label><input name="reorderLevel" type="number" min="0" step="0.01" value="<%= item.reorder_level || 0 %>" class="form-control"></div>
+
+  <div class="col-md-4"><label class="form-label">Preferred Make(s)</label><input name="preferredMake" value="<%= item.preferred_make || '' %>" class="form-control" placeholder="SKF / FAG"></div>
+  <div class="col-md-4"><label class="form-label">OEM Part No.</label><input name="oemPartNo" value="<%= item.oem_part_no || '' %>" class="form-control"></div>
+  <div class="col-md-2"><label class="form-label">HSN Code</label><input name="hsnCode" value="<%= item.hsn_code || '' %>" class="form-control"></div>
+  <div class="col-md-2"><label class="form-label">GST %</label><input name="gstRate" type="number" min="0" step="0.01" value="<%= item.gst_rate || 0 %>" class="form-control"></div>
+
+  <div class="col-md-3"><label class="form-label">Status</label><select name="status" class="form-select"><option value="active">active</option><option value="inactive" <%= item.status==='inactive'?'selected':'' %>>inactive</option><option value="discontinued" <%= item.status==='discontinued'?'selected':'' %>>obsolete</option></select></div>
+  <div class="col-12"><label class="form-label">Remarks</label><input name="remarks" value="<%= item.remarks || '' %>" class="form-control"></div>
+  <div class="col-12"><button class="btn btn-primary">Save Item</button></div>
+</div></form>
+<% if (!item.id) { %>
+<script nonce="<%= cspNonce %>">
+(function(){
+  const cat=document.getElementById('catCode'), sub=document.getElementById('subCode'), mode=document.querySelector('[name=labelMode]');
+  cat.addEventListener('change', async ()=>{
+    const opt=cat.selectedOptions[0];
+    if(opt && opt.dataset.mode) mode.value=opt.dataset.mode;
+    sub.innerHTML='<option>Loading…</option>';
+    if(!cat.value){ sub.innerHTML='<option value="">Select category first</option>'; return; }
+    const rows=await fetch('/api/subcategories/'+cat.value).then(r=>r.json()).catch(()=>[]);
+    sub.innerHTML='<option value="">Select sub-category</option>'+rows.map(r=>`<option value="${r.sub_code}">${r.sub_code} — ${r.sub_name}</option>`).join('');
+  });
+})();
+</script>
+<% } %>

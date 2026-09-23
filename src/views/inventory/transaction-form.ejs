@@ -1,0 +1,126 @@
+<div class="d-flex justify-content-between align-items-center mb-3"><div><h2 class="mb-0">Record Transaction</h2><div class="text-muted small">Fields adapt to the transaction type. Hidden fields are ignored on submit.</div></div><a class="btn btn-outline-secondary" href="/transactions">Ledger</a></div>
+<form method="post" action="/transactions?_csrf=<%= csrfToken %>" enctype="multipart/form-data" class="card shadow-sm" id="txForm">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+  <div class="card-body row g-3">
+    <div class="col-md-4"><label class="form-label">Type *</label>
+      <select name="transactionType" id="ttype" class="form-select" required>
+        <option value="RECEIVED">Received (into stock)</option>
+        <option value="ISSUED">Issue / Consume (from a location)</option>
+        <option value="TRANSFER">Transfer / Distribute (site ⇄ site / vessel / equipment)</option>
+        <option value="RETURNED">Return to Vendor (against GRN)</option>
+        <option value="DISCARD">Discard / Scrap / Lost</option>
+        <option value="ADJUSTMENT_IN">Adjustment + (In)</option>
+        <option value="ADJUSTMENT_OUT">Adjustment − (Out)</option>
+      </select></div>
+
+    <div class="col-md-5 f-item"><label class="form-label">Item *</label>
+      <input list="itemList" id="itemPick" class="form-control" placeholder="Type item code or name…" autocomplete="off">
+      <input type="hidden" name="itemId" id="itemId">
+      <div class="form-text" id="itemPicked"></div>
+    </div>
+    <div class="col-md-3"><label class="form-label">Date</label><input name="transactionDate" type="datetime-local" class="form-control"></div>
+
+    <div class="col-md-3 f-grn"><label class="form-label">GRN No</label><input name="grnNo" id="grnNo" class="form-control" placeholder="Auto for received"></div>
+    <div class="col-md-3 f-grnsel"><label class="form-label">Select GRN *</label><select id="grnSel" class="form-select"><option value="">Select GRN</option><% grns.forEach(g => { %><option value="<%= g.grn_no %>"><%= g.grn_no %> (<%= g.line_count %>)</option><% }) %></select></div>
+    <div class="col-md-5 f-grnsel"><label class="form-label">Item in GRN</label><select id="grnItem" class="form-select"><option value="">Select GRN first</option></select></div>
+    <div class="col-md-3 f-issueorder"><label class="form-label">Issue Order</label><input name="issueOrderNo" class="form-control" placeholder="Auto"></div>
+    <div class="col-md-2"><label class="form-label">Quantity *</label><input name="quantity" type="number" min="0.01" step="0.01" class="form-control" required></div>
+
+    <div class="col-md-3 f-recv"><label class="form-label">Brand</label><input name="brand" class="form-control"></div>
+    <div class="col-md-3 f-recv"><label class="form-label">Vendor</label><input name="vendor" list="vList" class="form-control"></div>
+    <div class="col-md-3 f-recv"><label class="form-label">Manufacturer</label><input name="manufacturer" class="form-control"></div>
+    <div class="col-md-3 f-recv"><label class="form-label">Serial No</label><input name="serialNo" class="form-control"></div>
+
+    <div class="col-md-4 f-srcloc"><label class="form-label" id="srcLabel">Location (into stock)</label><input name="sourceLocation" id="sourceLocation" list="lList" class="form-control"></div>
+    <div class="col-md-2 f-cost"><label class="form-label">Cost / unit</label><input name="cost" type="number" min="0" step="0.01" class="form-control"></div>
+    <div class="col-md-2 f-recv"><label class="form-label">Reorder Qty</label><input name="reorderQuantity" type="number" min="0" step="0.01" class="form-control"></div>
+
+    <div class="col-md-4 f-fromloc"><label class="form-label">From Location *</label><input name="issueLocation" id="issueLocation" list="lList" class="form-control" placeholder="Where stock is taken from"></div>
+    <div class="col-md-4 f-destloc"><label class="form-label" id="destLabel">To Location / Vessel / Equipment</label><input name="destinationLocation" id="destinationLocation" list="lList" class="form-control" placeholder="e.g. Vessel-X, Crane-3, Site B"></div>
+
+    <div class="col-md-4 f-discard"><label class="form-label">Discard Reason *</label><select name="discardReason" class="form-select"><option value="">Select</option><option>Scrap Material</option><option>Damaged Material</option><option>Lost Item</option><option>Theft Item</option></select></div>
+    <div class="col-md-4 f-discard"><label class="form-label">Condition</label><input name="conditionText" class="form-control"></div>
+
+    <div class="col-md-4"><label class="form-label">Reference / Bill / Challan / Transfer No</label><input name="referenceNo" class="form-control"></div>
+    <div class="col-md-4"><label class="form-label">Attachment (image/PDF)</label><input name="attachment" type="file" accept="image/*,.pdf" class="form-control"></div>
+
+    <div class="col-12 f-avail"><div class="alert alert-info mb-0"><strong>Available by location:</strong><div id="avail" class="mt-2 small">Select item to view.</div></div></div>
+    <div class="col-12"><label class="form-label" id="notesLabel">Notes</label><textarea name="notes" id="notes" class="form-control"></textarea></div>
+    <div class="col-12"><button class="btn btn-primary">Record Transaction</button></div>
+  </div>
+</form>
+<datalist id="vList"><% vendors.forEach(v => { %><option value="<%= v.name %>"></option><% }) %></datalist>
+<datalist id="lList"><% locations.forEach(l => { %><option value="<%= l.name %>"></option><% }) %></datalist>
+<datalist id="itemList"><% items.forEach(i => { %><option value="<%= i.item_code %> — <%= i.description %>"></option><% }) %></datalist>
+<script nonce="<%= cspNonce %>">
+(function(){
+  const ITEMS = {};
+  <% items.forEach(i => { %>ITEMS["<%= (i.item_code + ' — ' + i.description).replace(/"/g,'\\"') %>"] = <%= i.id %>; ITEMS["<%= String(i.item_code).replace(/"/g,'\\"') %>"] = <%= i.id %>;<% }) %>
+  const SHOW = {
+    'f-item': ['RECEIVED','ISSUED','TRANSFER','DISCARD','ADJUSTMENT_IN','ADJUSTMENT_OUT'],
+    'f-grn': ['RECEIVED','RETURNED'], 'f-grnsel': ['RETURNED'], 'f-issueorder': ['ISSUED'],
+    'f-recv': ['RECEIVED','RETURNED'],
+    'f-srcloc': ['RECEIVED','RETURNED','ADJUSTMENT_IN','TRANSFER'],
+    'f-cost': ['RECEIVED','RETURNED','ADJUSTMENT_IN'],
+    'f-fromloc': ['ISSUED','DISCARD','ADJUSTMENT_OUT'],
+    'f-destloc': ['ISSUED','TRANSFER'], 'f-discard': ['DISCARD'],
+    'f-avail': ['ISSUED','DISCARD','ADJUSTMENT_OUT','TRANSFER']
+  };
+  const type=document.getElementById('ttype'), itemPick=document.getElementById('itemPick'), itemId=document.getElementById('itemId'),
+        grnSel=document.getElementById('grnSel'), grnItem=document.getElementById('grnItem'), grnNo=document.getElementById('grnNo'),
+        avail=document.getElementById('avail'), form=document.getElementById('txForm');
+  function setGroup(cls, visible){
+    document.querySelectorAll('.'+cls).forEach(el=>{
+      el.style.display = visible ? '' : 'none';
+      el.querySelectorAll('input,select,textarea').forEach(f=>{ if(f.type!=='hidden') f.disabled = !visible; });
+    });
+  }
+  function req(el, on){ if(el){ el.required = on; } }
+  function mode(){
+    const v=type.value;
+    Object.keys(SHOW).forEach(cls=>setGroup(cls, SHOW[cls].includes(v)));
+    // labels
+    document.getElementById('srcLabel').textContent = (v==='TRANSFER') ? 'From Location *' : 'Location (into stock)';
+    document.getElementById('destLabel').textContent = (v==='TRANSFER') ? 'To Location / Vessel / Equipment *' : 'To Vessel / Equipment (optional)';
+    document.getElementById('notesLabel').textContent = (v==='TRANSFER') ? 'Transfer Note *' : 'Notes';
+    // required (only on visible fields)
+    req(itemPick, v!=='RETURNED');
+    req(document.getElementById('issueLocation'), ['ISSUED','DISCARD','ADJUSTMENT_OUT'].includes(v));
+    req(document.getElementById('sourceLocation'), ['ADJUSTMENT_IN','TRANSFER'].includes(v));
+    req(document.getElementById('destinationLocation'), v==='TRANSFER');
+    req(document.querySelector('[name=discardReason]'), v==='DISCARD');
+    req(document.getElementById('notes'), v==='TRANSFER');
+    grnNo.readOnly = (v==='RETURNED');
+    refresh();
+  }
+  function locForAvail(){ const v=type.value; return (v==='TRANSFER') ? document.getElementById('sourceLocation') : document.getElementById('issueLocation'); }
+  async function refresh(){
+    if(!SHOW['f-avail'].includes(type.value) || !itemId.value){ avail.textContent='Select item to view stock by location.'; return; }
+    const rows=await fetch('/api/items/'+itemId.value+'/availability').then(r=>r.json()).catch(()=>[]);
+    avail.innerHTML=rows.length?('<table class="table table-sm mb-0"><thead><tr><th>Location</th><th>Balance</th><th>Vendor</th><th>Avg Cost</th></tr></thead><tbody>'+rows.map(r=>`<tr><td>${r.location||''}</td><td><strong>${r.balance}</strong></td><td>${r.vendor||''}</td><td>${r.cost||0}</td></tr>`).join('')+'</tbody></table>'):'No stock available for this item.';
+  }
+  itemPick.addEventListener('input',()=>{
+    const id=ITEMS[itemPick.value.trim()];
+    itemId.value = id || '';
+    document.getElementById('itemPicked').textContent = id ? '✓ selected' : (itemPick.value ? 'Type/select a valid item' : '');
+    refresh();
+  });
+  grnSel.addEventListener('change',async()=>{
+    grnNo.value=grnSel.value; grnItem.innerHTML='<option>Loading…</option>';
+    if(!grnSel.value){grnItem.innerHTML='<option value="">Select GRN first</option>';return;}
+    const rows=await fetch('/api/grn/'+encodeURIComponent(grnSel.value)+'/items').then(r=>r.json()).catch(()=>[]);
+    grnItem.innerHTML='<option value="">Select item</option>'+rows.map(r=>`<option value="${r.item_id}" data-row='${JSON.stringify(r).replace(/'/g,"&#39;")}'>${r.item_code} — ${r.description} / Qty ${r.quantity}</option>`).join('');
+  });
+  grnItem.addEventListener('change',()=>{
+    itemId.value=grnItem.value; const o=grnItem.selectedOptions[0]; if(!o||!o.dataset.row)return;
+    const r=JSON.parse(o.dataset.row);
+    document.querySelector('[name=brand]').value=r.brand||''; document.querySelector('[name=vendor]').value=r.vendor||'';
+    document.querySelector('[name=manufacturer]').value=r.manufacturer||''; document.querySelector('[name=serialNo]').value=r.serial_no||'';
+    document.getElementById('sourceLocation').value=r.source_location||''; document.querySelector('[name=cost]').value=r.cost||0;
+  });
+  form.addEventListener('submit',(e)=>{
+    if(type.value!=='RETURNED' && !itemId.value){ e.preventDefault(); alert('Please pick a valid item from the list.'); itemPick.focus(); }
+  });
+  type.addEventListener('change',mode); mode();
+})();
+</script>

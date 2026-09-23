@@ -1,0 +1,22 @@
+<div class="d-flex justify-content-between align-items-center mb-3"><h2 class="mb-0">Inventory Audit</h2></div>
+<div class="card shadow-sm mb-3"><div class="card-header"><strong>Start a new audit</strong></div><div class="card-body">
+  <form method="post" action="/inventory-audit" class="row g-2 align-items-end">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="col-md-4"><label class="form-label">Audit name *</label><input name="name" class="form-control" placeholder="e.g. Q2 count — Mumbai store" required></div>
+    <div class="col-md-3"><label class="form-label">Location (optional)</label><input name="location" list="lList" class="form-control" placeholder="Blank = all locations"></div>
+    <div class="col-md-2"><label class="form-label">Period</label><select name="period" class="form-select"><option>Monthly</option><option>Quarterly</option><option>Annual</option><option>Ad-hoc</option></select></div>
+    <div class="col-md-2"><label class="form-label">Notes</label><input name="notes" class="form-control"></div>
+    <div class="col-md-1 d-grid"><button class="btn btn-primary">Start</button></div>
+  </form>
+  <div class="form-text mt-1">Scoping to a location compares your scans against the stock recorded at that location.</div>
+</div></div>
+<div class="card shadow-sm"><div class="card-body table-responsive"><table class="table table-striped data-table align-middle">
+<thead><tr><th>Name</th><th>Period</th><th>Location</th><th>Status</th><th>Scans</th><th>Started</th><th>By</th><th></th></tr></thead><tbody>
+<% sessions.forEach(s => { %><tr>
+  <td><strong><%= s.name %></strong></td><td><%= s.period || '' %></td><td><%= s.location || 'All' %></td>
+  <td><span class="badge text-bg-<%= s.status==='open'?'warning':'success' %>"><%= s.status %></span></td>
+  <td><%= s.scan_count %></td><td><%= new Date(s.started_at).toLocaleString() %></td><td><%= s.started_by_name || '' %></td>
+  <td><% if (s.status==='open') { %><a class="btn btn-sm btn-primary" href="/inventory-audit/<%= s.id %>">Continue</a><% } else { %><a class="btn btn-sm btn-outline-secondary" href="/inventory-audit/<%= s.id %>/report">Report</a><% } %></td>
+</tr><% }) %>
+</tbody></table></div></div>
+<datalist id="lList"><% locations.forEach(l => { %><option value="<%= l.name %>"></option><% }) %></datalist>

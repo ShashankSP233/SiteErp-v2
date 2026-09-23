@@ -1,0 +1,7 @@
+<h2 class="mb-3">Vendor Payables</h2>
+<div class="card shadow-sm"><div class="card-body table-responsive">
+<% if (!payables.length) { %><p class="text-muted mb-0">No outstanding payables.</p><% } else { %>
+<table class="table table-striped data-table"><thead><tr><th>Vendor</th><th>Billed</th><th>Outstanding</th></tr></thead><tbody>
+<% payables.forEach(p => { %><tr><td><%= p.vendor || '(unknown)' %></td><td>₹<%= Number(p.billed).toLocaleString('en-IN') %></td><td class="fw-bold text-danger">₹<%= Number(p.outstanding).toLocaleString('en-IN') %></td></tr><% }) %>
+</tbody></table><% } %>
+</div></div>

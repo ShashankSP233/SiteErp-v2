@@ -1,0 +1,7 @@
+<h2 class="mb-3">Pending Approvals</h2>
+<div class="card shadow-sm"><div class="card-body table-responsive">
+<% if (!approvals.length) { %><p class="text-muted mb-0">No bills awaiting approval.</p><% } else { %>
+<table class="table table-striped data-table align-middle"><thead><tr><th>Bill No</th><th>Date</th><th>Vendor</th><th>Total</th><th></th></tr></thead><tbody>
+<% approvals.forEach(b => { %><tr><td><strong><%= b.bill_no %></strong></td><td><%= new Date(b.bill_date).toLocaleDateString() %></td><td><%= b.vendor || '' %></td><td>₹<%= Number(b.total).toLocaleString('en-IN') %></td><td><a class="btn btn-sm btn-primary" href="/bills/<%= b.id %>">Review</a></td></tr><% }) %>
+</tbody></table><% } %>
+</div></div>

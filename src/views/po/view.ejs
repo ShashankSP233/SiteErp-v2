@@ -1,0 +1,43 @@
+<% const sc={submitted:'warning',approved:'info',partially_received:'primary',received:'success',rejected:'danger',cancelled:'secondary'}[po.status]||'secondary'; %>
+<div class="d-flex justify-content-between align-items-center mb-3"><div><h2 class="mb-0">PO <%= po.po_no %> <span class="badge text-bg-<%= sc %>"><%= po.status.replace('_',' ') %></span></h2><div class="text-muted small"><%= po.vendor || 'No vendor' %> · <%= new Date(po.po_date).toLocaleDateString() %><% if (po.delivery_to) { %> · deliver to <%= po.delivery_to %><% } %></div></div><a class="btn btn-outline-secondary" href="/purchase-orders">Back</a></div>
+
+<div class="card shadow-sm mb-3"><div class="card-body table-responsive">
+<table class="table table-sm align-middle mb-0"><thead><tr><th>Item</th><th>Ordered</th><th>Received</th><th>Pending</th><th>Rate</th><th>Amount</th></tr></thead><tbody>
+<% po.lines.forEach(l => { %><tr><td><%= l.item_code %> — <%= l.description %></td><td><%= l.quantity %></td><td><%= l.received_qty %></td><td><strong><%= l.pending %></strong> <%= l.unit || '' %></td><td>₹<%= Number(l.rate).toFixed(2) %></td><td>₹<%= (Number(l.quantity)*Number(l.rate)).toLocaleString('en-IN') %></td></tr><% }) %>
+</tbody><tfoot><tr><th colspan="5" class="text-end">Total</th><th>₹<%= Number(po.value).toLocaleString('en-IN') %></th></tr></tfoot></table>
+<% if (po.notes) { %><div class="small text-muted mt-2">Notes: <%= po.notes %></div><% } %>
+<% if (po.attachment) { %><div class="mt-2"><a href="<%= po.attachment %>" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">View attachment</a></div><% } %>
+<div class="small text-muted mt-1">Created by <%= po.created_by_name || '—' %><% if (po.approved_by_name) { %> · <%= po.status %> by <%= po.approved_by_name %><% } %></div>
+</div></div>
+
+<% if (po.status === 'submitted' && ['admin','manager'].includes(currentUser.role)) { %>
+<div class="card shadow-sm mb-3"><div class="card-header"><strong>Approval</strong></div><div class="card-body">
+  <form method="post" action="/purchase-orders/<%= po.id %>/decision" class="row g-2">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="col-md-8"><input name="remarks" class="form-control" placeholder="Remarks (optional)"></div>
+    <div class="col-md-2 d-grid"><button name="decision" value="approve" class="btn btn-success">Approve</button></div>
+    <div class="col-md-2 d-grid"><button name="decision" value="reject" class="btn btn-outline-danger">Reject</button></div>
+  </form>
+</div></div>
+<% } %>
+
+<% if (['approved','partially_received'].includes(po.status)) { %>
+<div class="card shadow-sm"><div class="card-header"><strong>Receive Goods (creates a GRN and adds to stock)</strong></div><div class="card-body">
+  <form method="post" action="/purchase-orders/<%= po.id %>/receive?_csrf=<%= csrfToken %>">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="table-responsive"><table class="table table-sm align-middle">
+      <thead><tr><th>Item</th><th>Pending</th><th>Receive Qty</th><th>Into Location</th></tr></thead><tbody>
+      <% po.lines.forEach((l, idx) => { if (Number(l.pending) > 0) { %>
+      <tr>
+        <td><%= l.item_code %> — <%= l.description %></td><td><%= l.pending %></td>
+        <td><input type="hidden" name="receipts[<%= idx %>][lineId]" value="<%= l.id %>">
+            <input name="receipts[<%= idx %>][receiveQty]" type="number" min="0" max="<%= l.pending %>" step="0.01" value="0" class="form-control form-control-sm" style="max-width:140px"></td>
+        <td><input name="receipts[<%= idx %>][location]" list="lList" value="<%= po.delivery_to || '' %>" class="form-control form-control-sm" style="max-width:200px"></td>
+      </tr>
+      <% } }) %>
+      </tbody></table></div>
+    <button class="btn btn-primary">Receive Goods</button>
+  </form>
+</div></div>
+<datalist id="lList"><% locations.forEach(l => { %><option value="<%= l.name %>"></option><% }) %></datalist>
+<% } %>

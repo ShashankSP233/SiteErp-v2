@@ -1,0 +1,27 @@
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark px-3">
+  <a class="navbar-brand fw-bold" href="/"><%= typeof appName !== "undefined" ? appName : "Site ERP" %></a>
+  <button class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#nav"><span class="navbar-toggler-icon"></span></button>
+  <div class="collapse navbar-collapse" id="nav">
+    <ul class="navbar-nav me-auto">
+      <li class="nav-item"><a class="nav-link" href="/">Dashboard</a></li>
+      <li class="nav-item"><a class="nav-link" href="/items">Items</a></li>
+      <li class="nav-item"><a class="nav-link" href="/transactions">Ledger</a></li>
+      <li class="nav-item"><a class="nav-link" href="/transactions/new">Record</a></li>
+      <li class="nav-item"><a class="nav-link" href="/purchase-orders">Purchase Orders</a></li>
+      <li class="nav-item"><a class="nav-link" href="/bills">Bills</a></li>
+      <li class="nav-item"><a class="nav-link" href="/vendors">Vendors</a></li>
+      <% if (['admin','manager'].includes(currentUser.role)) { %><li class="nav-item"><a class="nav-link" href="/approvals">Approvals</a></li><% } %>
+      <li class="nav-item"><a class="nav-link" href="/payables">Payables</a></li>
+      <li class="nav-item"><a class="nav-link" href="/reports">Reports</a></li>
+      <li class="nav-item"><a class="nav-link" href="/barcodes">Barcodes</a></li>
+      <li class="nav-item"><a class="nav-link" href="/inventory-audit">Inventory Audit</a></li>
+      <% if (['admin','manager'].includes(currentUser.role)) { %><li class="nav-item"><a class="nav-link" href="/audit">Audit Trail</a></li><% } %>
+      <% if (currentUser.role === 'admin') { %><li class="nav-item"><a class="nav-link" href="/users">Users</a></li><% } %>
+    </ul>
+    <div class="d-flex align-items-center gap-2 text-white">
+      <span class="badge text-bg-secondary"><%= currentUser.username %> / <%= currentUser.role %></span>
+      <a class="btn btn-sm btn-outline-light" href="/change-password">Password</a>
+      <form method="post" action="/logout" class="m-0"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn btn-sm btn-outline-light">Logout</button></form>
+    </div>
+  </div>
+</nav>

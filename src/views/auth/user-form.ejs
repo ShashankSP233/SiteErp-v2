@@ -1,0 +1,9 @@
+<div class="d-flex justify-content-between align-items-center mb-3"><h2 class="mb-0">Create User</h2><a class="btn btn-outline-secondary" href="/users">Back</a></div>
+<form method="post" action="/users" class="card shadow-sm"><div class="card-body row g-3">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+  <div class="col-md-4"><label class="form-label">Username</label><input name="username" class="form-control" required></div>
+  <div class="col-md-4"><label class="form-label">Full Name</label><input name="fullName" class="form-control"></div>
+  <div class="col-md-4"><label class="form-label">Role</label><select name="role" class="form-select"><option>operator</option><option>manager</option><option>viewer</option><option>admin</option></select></div>
+  <div class="col-md-4"><label class="form-label">Password</label><input name="password" type="password" minlength="8" class="form-control" required><div class="form-text">Min 8 chars. User resets on first login.</div></div>
+  <div class="col-12"><button class="btn btn-primary">Create User</button></div>
+</div></form>

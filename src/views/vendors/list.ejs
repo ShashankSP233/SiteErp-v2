@@ -1,0 +1,5 @@
+<div class="d-flex justify-content-between align-items-center mb-3"><h2 class="mb-0">Vendors</h2><% if (['admin','manager'].includes(currentUser.role)) { %><a class="btn btn-primary" href="/vendors/new">Add Vendor</a><% } %></div>
+<div class="card shadow-sm"><div class="card-body table-responsive"><table class="table table-striped data-table align-middle">
+<thead><tr><th>Name</th><th>Contact</th><th>Mobile</th><th>GSTIN</th><th>Outstanding</th><th></th></tr></thead><tbody>
+<% vendors.forEach(v => { %><tr><td><strong><%= v.name %></strong></td><td><%= v.contact_name || '' %></td><td><%= v.mobile || v.phone || '' %></td><td><%= v.gstin || '' %></td><td>₹<%= Number(v.outstanding||0).toLocaleString('en-IN') %></td><td><% if (['admin','manager'].includes(currentUser.role)) { %><a class="btn btn-sm btn-outline-primary" href="/vendors/<%= v.id %>/edit">Edit</a><% } %></td></tr><% }) %>
+</tbody></table></div></div>

@@ -1,0 +1,41 @@
+<h2 class="mb-3">Dashboard</h2>
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-2"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Items</div><div class="metric"><%= stats.totalItems %></div></div></div></div>
+  <div class="col-6 col-lg-2"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Stock Value</div><div class="metric">₹<%= Number(stats.totalValue).toLocaleString('en-IN') %></div></div></div></div>
+  <div class="col-6 col-lg-2"><div class="card shadow-sm border-danger"><div class="card-body"><div class="text-muted small">Low Stock</div><div class="metric text-danger"><%= stats.lowStock %></div></div></div></div>
+  <div class="col-6 col-lg-2"><div class="card shadow-sm border-warning"><div class="card-body"><div class="text-muted small">Pending Approvals</div><div class="metric text-warning"><%= bstats.pendingApprovals %></div></div></div></div>
+  <div class="col-6 col-lg-2"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Open POs</div><div class="metric"><%= (typeof pstats!=="undefined") ? pstats.openPO : 0 %></div></div></div></div>
+  <div class="col-6 col-lg-2"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Outstanding</div><div class="metric">₹<%= Number(bstats.outstanding).toLocaleString('en-IN') %></div></div></div></div>
+  <div class="col-6 col-lg-2"><div class="card shadow-sm"><div class="card-body"><div class="text-muted small">Total Paid</div><div class="metric">₹<%= Number(bstats.totalPaid).toLocaleString('en-IN') %></div></div></div></div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-6"><div class="card shadow-sm">
+    <div class="card-header d-flex justify-content-between"><strong>Low Stock</strong><a class="btn btn-sm btn-outline-danger" href="/reports/low-stock.csv">Export</a></div>
+    <div class="card-body table-responsive">
+      <% if (!lowStock.length) { %><p class="text-muted mb-0">Nothing below reorder level.</p><% } else { %>
+      <table class="table table-sm mb-0"><thead><tr><th>Code</th><th>Item</th><th>Balance</th><th>Reorder</th></tr></thead><tbody>
+      <% lowStock.forEach(r => { %><tr><td><a href="/items/<%= r.id %>/ledger"><%= r.item_code %></a></td><td><%= r.description %></td><td><span class="badge text-bg-danger"><%= r.current_balance %></span></td><td><%= r.reorder_level %></td></tr><% }) %>
+      </tbody></table><% } %>
+    </div>
+  </div></div>
+
+  <div class="col-lg-6"><div class="card shadow-sm">
+    <div class="card-header d-flex justify-content-between"><strong>Pending Bill Approvals</strong><a class="btn btn-sm btn-outline-warning" href="/approvals">View all</a></div>
+    <div class="card-body table-responsive">
+      <% if (!approvals.length) { %><p class="text-muted mb-0">No bills awaiting approval.</p><% } else { %>
+      <table class="table table-sm mb-0"><thead><tr><th>Bill</th><th>Vendor</th><th>Total</th><th></th></tr></thead><tbody>
+      <% approvals.slice(0,8).forEach(b => { %><tr><td><%= b.bill_no %></td><td><%= b.vendor || '' %></td><td>₹<%= Number(b.total).toLocaleString('en-IN') %></td><td><a class="btn btn-sm btn-outline-primary" href="/bills/<%= b.id %>">Review</a></td></tr><% }) %>
+      </tbody></table><% } %>
+    </div>
+  </div></div>
+
+  <div class="col-12"><div class="card shadow-sm">
+    <div class="card-header d-flex justify-content-between"><strong>Recent Transactions</strong><a class="btn btn-sm btn-outline-secondary" href="/transactions">Full ledger</a></div>
+    <div class="card-body table-responsive">
+      <table class="table table-sm mb-0"><thead><tr><th>Date</th><th>Item</th><th>Type</th><th>Qty</th><th>Location</th><th>User</th></tr></thead><tbody>
+      <% transactions.forEach(t => { %><tr><td><%= new Date(t.transaction_date).toLocaleDateString() %></td><td><%= t.item_code %> — <%= t.description %></td><td><span class="badge text-bg-secondary"><%= t.transaction_type %></span></td><td><%= t.quantity %></td><td><%= t.source_location || t.issue_location || '' %></td><td><%= t.username %></td></tr><% }) %>
+      </tbody></table>
+    </div>
+  </div></div>
+</div>

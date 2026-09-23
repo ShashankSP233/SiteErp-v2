@@ -1,0 +1,6 @@
+body { background: #f5f6f8; }
+.navbar-brand { letter-spacing: .3px; }
+.card { border: none; }
+.metric { font-size: 1.6rem; font-weight: 700; }
+.table thead th { white-space: nowrap; }
+main { max-width: 1400px; margin: 0 auto; }

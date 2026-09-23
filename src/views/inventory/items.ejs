@@ -1,0 +1,10 @@
+<div class="d-flex justify-content-between align-items-center mb-3"><h2 class="mb-0">Item Master</h2>
+  <% if (['admin','manager'].includes(currentUser.role)) { %><a class="btn btn-primary" href="/items/new">Add Item</a><% } %></div>
+<div class="card shadow-sm"><div class="card-body table-responsive"><table class="table table-striped data-table align-middle">
+<thead><tr><th>Code</th><th>Description</th><th>UOM</th><th>Cat/Sub</th><th>Crit.</th><th>Label</th><th>Status</th><th></th></tr></thead><tbody>
+<% items.forEach(i => { %><tr>
+<td><a href="/items/<%= i.id %>/ledger"><strong><%= i.item_code %></strong></a></td><td><%= i.description %></td><td><%= i.unit || '' %></td><td><%= (i.cat_code && i.sub_code) ? (i.cat_code + '-' + i.sub_code) : (i.category || '') %></td><td><%= i.criticality || '' %></td><td><span class="badge text-bg-light border"><%= i.label_mode || 'unit' %></span></td>
+<td><span class="badge text-bg-<%= i.status==='active'?'success':'secondary' %>"><%= i.status %></span></td>
+<td><a class="btn btn-sm btn-outline-secondary" href="/items/<%= i.id %>/ledger">Ledger</a> <% if (['admin','manager'].includes(currentUser.role)) { %><a class="btn btn-sm btn-outline-primary" href="/items/<%= i.id %>/edit">Edit</a><% } %></td>
+</tr><% }) %>
+</tbody></table></div></div>

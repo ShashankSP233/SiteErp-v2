@@ -1,0 +1,48 @@
+<div class="d-flex justify-content-between align-items-center mb-3"><h2 class="mb-0">Print Barcodes</h2></div>
+
+<div class="card shadow-sm mb-3"><div class="card-header"><strong>Generate labels for existing stock</strong></div><div class="card-body">
+  <form method="post" action="/barcodes/generate" class="row g-2 align-items-end">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="col-md-5"><label class="form-label">Item</label><select name="itemId" class="form-select" required><option value="">Select item</option><% items.forEach(i => { %><option value="<%= i.id %>"><%= i.item_code %> — <%= i.description %> (<%= i.label_mode || 'unit' %>)</option><% }) %></select></div>
+    <div class="col-md-2"><label class="form-label">Quantity</label><input name="qty" type="number" min="1" step="1" class="form-control" required></div>
+    <div class="col-md-3"><label class="form-label">Location (optional)</label><input name="location" list="lList" class="form-control"></div>
+    <div class="col-md-2 d-grid"><button class="btn btn-outline-primary">Generate</button></div>
+  </form>
+  <div class="form-text mt-1">Per-unit items produce one label per unit; per-batch items produce one label showing the quantity. Labels are also created automatically whenever goods are received.</div>
+</div></div>
+
+<div class="card shadow-sm"><div class="card-header d-flex justify-content-between align-items-center">
+  <strong>Labels</strong>
+  <form method="get" action="/barcodes" class="d-flex gap-2 align-items-center m-0">
+    <select name="itemId" class="form-select form-select-sm" style="max-width:280px" onchange="this.form.submit()">
+      <option value="">All items</option>
+      <% items.forEach(i => { %><option value="<%= i.id %>" <%= itemId===i.id?'selected':'' %>><%= i.item_code %> — <%= i.description %></option><% }) %>
+    </select>
+    <div class="form-check form-check-inline m-0"><input class="form-check-input" type="checkbox" name="unprinted" value="1" <%= unprinted?'checked':'' %> onchange="this.form.submit()"><label class="form-check-label small">Unprinted only</label></div>
+    <a class="btn btn-sm btn-outline-success" href="/barcodes/export.csv<%= itemId?('?itemId='+itemId):'' %>">Export Excel/CSV</a>
+  </form>
+</div>
+<div class="card-body">
+  <% if (!labels.length) { %><p class="text-muted mb-0">No labels yet. Receive goods, or generate labels above.</p><% } else { %>
+  <form method="post" action="/barcodes/print" target="_blank">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="mb-2 d-flex gap-2"><button class="btn btn-primary btn-sm">Print selected → PDF</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm" id="selAll">Select all</button></div>
+    <div class="table-responsive"><table class="table table-sm table-striped align-middle">
+      <thead><tr><th></th><th>Label Code</th><th>Item</th><th>Qty</th><th>Mode</th><th>Location</th><th>Printed</th></tr></thead><tbody>
+      <% labels.forEach(l => { %><tr>
+        <td><input class="form-check-input rowchk" type="checkbox" name="codes" value="<%= l.label_code %>"></td>
+        <td><code><%= l.label_code %></code></td><td><%= l.item_code %> — <%= l.description %></td>
+        <td><%= l.qty %></td><td><%= l.label_mode %></td><td><%= l.location || '' %></td>
+        <td><%= l.printed_at ? new Date(l.printed_at).toLocaleDateString() : '—' %></td>
+      </tr><% }) %>
+      </tbody></table></div>
+  </form>
+  <% } %>
+</div></div>
+<datalist id="lList"><% items.forEach(function(){}); %></datalist>
+<script nonce="<%= cspNonce %>">
+document.getElementById('selAll') && document.getElementById('selAll').addEventListener('click',function(){
+  var on=this.dataset.on==='1'; document.querySelectorAll('.rowchk').forEach(function(c){c.checked=!on;}); this.dataset.on=on?'0':'1'; this.textContent=on?'Select all':'Clear all';
+});
+</script>
