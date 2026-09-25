@@ -1,0 +1,385 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+
+  <div>
+
+    <h2 class="mb-1">
+      Manage User Sites
+    </h2>
+
+    <div class="text-muted">
+      <strong><%= user.username %></strong>
+      —
+      <%= user.full_name || '' %>
+    </div>
+
+  </div>
+
+  <a
+    href="/users"
+    class="btn btn-outline-secondary"
+  >
+    Back to Users
+  </a>
+
+</div>
+
+
+<div class="row g-4">
+
+
+  <!-- USER INFORMATION -->
+
+  <div class="col-lg-4">
+
+    <div class="card shadow-sm">
+
+      <div class="card-header">
+        <strong>User</strong>
+      </div>
+
+      <div class="card-body">
+
+        <dl class="row mb-0">
+
+          <dt class="col-5">
+            Username
+          </dt>
+
+          <dd class="col-7">
+            <%= user.username %>
+          </dd>
+
+
+          <dt class="col-5">
+            Name
+          </dt>
+
+          <dd class="col-7">
+            <%= user.full_name || '—' %>
+          </dd>
+
+
+          <dt class="col-5">
+            Role
+          </dt>
+
+          <dd class="col-7">
+
+            <span class="badge text-bg-secondary">
+              <%= user.role %>
+            </span>
+
+          </dd>
+
+
+          <dt class="col-5">
+            Status
+          </dt>
+
+          <dd class="col-7">
+
+            <% if (user.is_active) { %>
+
+              <span class="badge text-bg-success">
+                Active
+              </span>
+
+            <% } else { %>
+
+              <span class="badge text-bg-secondary">
+                Inactive
+              </span>
+
+            <% } %>
+
+          </dd>
+
+        </dl>
+
+      </div>
+
+    </div>
+
+
+    <% if (user.role === 'operator') { %>
+
+      <div class="alert alert-info mt-3">
+
+        <strong>Operator rule</strong>
+
+        <div class="small mt-1">
+          An operator can be assigned to exactly one
+          active site.
+        </div>
+
+      </div>
+
+    <% } %>
+
+
+    <% if (user.role === 'manager') { %>
+
+      <div class="alert alert-info mt-3">
+
+        <strong>Manager rule</strong>
+
+        <div class="small mt-1">
+          A manager can be assigned to multiple active
+          sites.
+        </div>
+
+      </div>
+
+    <% } %>
+
+  </div>
+
+
+  <!-- CURRENT ASSIGNMENTS -->
+
+  <div class="col-lg-8">
+
+    <div class="card shadow-sm mb-4">
+
+      <div class="card-header">
+        <strong>Current Site Assignments</strong>
+      </div>
+
+      <div class="card-body">
+
+        <% const activeSites = user.sites.filter(
+          s => !s.assigned_until
+        ); %>
+
+
+        <% if (!activeSites.length) { %>
+
+          <p class="text-muted mb-0">
+            No active site assignments.
+          </p>
+
+        <% } else { %>
+
+          <div class="table-responsive">
+
+            <table class="table table-sm align-middle mb-0">
+
+              <thead>
+
+                <tr>
+                  <th>Code</th>
+                  <th>Site</th>
+                  <th>Type</th>
+                  <th>Primary</th>
+                  <th class="text-end">Action</th>
+                </tr>
+
+              </thead>
+
+              <tbody>
+
+                <% activeSites.forEach(site => { %>
+
+                  <tr>
+
+                    <td>
+                      <strong>
+                        <%= site.code %>
+                      </strong>
+                    </td>
+
+                    <td>
+                      <%= site.name %>
+                    </td>
+
+                    <td>
+                      <%= site.site_type === 'SUPER_STORE'
+                        ? 'Super-Store'
+                        : 'Normal Site' %>
+                    </td>
+
+                    <td>
+
+                      <% if (site.is_primary) { %>
+
+                        <span class="badge text-bg-primary">
+                          Primary
+                        </span>
+
+                      <% } else { %>
+
+                        <span class="text-muted">
+                          —
+                        </span>
+
+                      <% } %>
+
+                    </td>
+
+                    <td class="text-end">
+
+                      <form
+                        method="post"
+                        action="/users/<%= user.id %>/sites/<%= site.id %>/remove"
+                        class="d-inline"
+                      >
+
+                        <input
+                          type="hidden"
+                          name="_csrf"
+                          value="<%= csrfToken %>"
+                        >
+
+                        <button
+                          type="submit"
+                          class="btn btn-sm btn-outline-danger"
+                          onclick="return confirm('Remove this site assignment?')"
+                        >
+                          Remove
+                        </button>
+
+                      </form>
+
+                    </td>
+
+                  </tr>
+
+                <% }) %>
+
+              </tbody>
+
+            </table>
+
+          </div>
+
+        <% } %>
+
+      </div>
+
+    </div>
+
+
+    <!-- ADD ASSIGNMENT -->
+
+    <% if (user.role !== 'admin') { %>
+
+      <div class="card shadow-sm">
+
+        <div class="card-header">
+          <strong>Assign Site</strong>
+        </div>
+
+        <div class="card-body">
+
+          <form
+            method="post"
+            action="/users/<%= user.id %>/sites"
+          >
+
+            <input
+              type="hidden"
+              name="_csrf"
+              value="<%= csrfToken %>"
+            >
+
+
+            <div class="row g-3 align-items-end">
+
+              <div class="col-md-7">
+
+                <label class="form-label">
+                  Site
+                </label>
+
+                <select
+                  name="siteId"
+                  class="form-select"
+                  required
+                >
+
+                  <option value="">
+                    Select site
+                  </option>
+
+                  <% sites
+                    .filter(site => site.status === 'ACTIVE')
+                    .forEach(site => {
+                  %>
+
+                    <option value="<%= site.id %>">
+
+                      <%= site.code %>
+                      —
+                      <%= site.name %>
+
+                      <% if (site.site_type === 'SUPER_STORE') { %>
+                        (Super-Store)
+                      <% } %>
+
+                    </option>
+
+                  <% }) %>
+
+                </select>
+
+              </div>
+
+
+              <div class="col-md-3">
+
+                <% if (user.role !== 'operator') { %>
+
+                  <div class="form-check">
+
+                    <input
+                      class="form-check-input"
+                      type="checkbox"
+                      name="isPrimary"
+                      id="isPrimary"
+                    >
+
+                    <label
+                      class="form-check-label"
+                      for="isPrimary"
+                    >
+                      Primary site
+                    </label>
+
+                  </div>
+
+                <% } else { %>
+
+                  <div class="form-text">
+                    Operator assignment automatically
+                    becomes primary.
+                  </div>
+
+                <% } %>
+
+              </div>
+
+
+              <div class="col-md-2">
+
+                <button
+                  type="submit"
+                  class="btn btn-primary w-100"
+                >
+                  Assign
+                </button>
+
+              </div>
+
+            </div>
+
+          </form>
+
+        </div>
+
+      </div>
+
+    <% } %>
+
+  </div>
+
+</div>

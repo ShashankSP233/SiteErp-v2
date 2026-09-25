@@ -1,0 +1,351 @@
+<div class="mb-4">
+
+  <h1 class="h3 mb-1">
+    <%= item.id ? 'Edit Item Master' : 'Create Item Master' %>
+  </h1>
+
+  <p class="text-muted mb-0">
+    Define the properties shared by all physical instances of this item.
+  </p>
+
+</div>
+
+
+<div class="card shadow-sm">
+
+  <div class="card-body">
+
+    <form
+      method="POST"
+      action="<%= item.id ? '/items/' + item.id : '/items' %>"
+    >
+
+      <input
+        type="hidden"
+        name="_csrf"
+        value="<%= csrfToken %>"
+      >
+
+
+      <div class="row g-3">
+
+
+        <!-- ITEM CODE -->
+
+        <div class="col-md-6">
+
+          <label class="form-label">
+            Item Code
+          </label>
+
+          <% if (item.id) { %>
+
+            <input
+              type="text"
+              class="form-control"
+              value="<%= item.item_code %>"
+              disabled
+            >
+
+          <% } else { %>
+
+            <input
+              type="text"
+              name="itemCode"
+              class="form-control"
+              placeholder="CEMENT-001"
+              required
+              maxlength="50"
+            >
+
+          <% } %>
+
+        </div>
+
+
+        <!-- NAME -->
+
+        <div class="col-md-6">
+
+          <label class="form-label">
+            Item Name
+          </label>
+
+          <input
+            type="text"
+            name="name"
+            class="form-control"
+            value="<%= item.name || '' %>"
+            required
+            maxlength="200"
+          >
+
+        </div>
+
+
+        <!-- CATEGORY -->
+
+        <div class="col-md-6">
+
+          <label class="form-label">
+            Category
+          </label>
+
+          <input
+            type="text"
+            name="category"
+            class="form-control"
+            value="<%= item.category || '' %>"
+            placeholder="Construction Materials"
+          >
+
+        </div>
+
+
+        <!-- UNIT -->
+
+        <div class="col-md-6">
+
+          <label class="form-label">
+            Unit
+          </label>
+
+          <input
+            type="text"
+            name="unit"
+            class="form-control"
+            value="<%= item.unit || '' %>"
+            placeholder="BAG, L, PCS, KG..."
+            required
+          >
+
+        </div>
+
+
+        <!-- DESCRIPTION -->
+
+        <div class="col-12">
+
+          <label class="form-label">
+            Description
+          </label>
+
+          <textarea
+            name="description"
+            class="form-control"
+            rows="3"
+          ><%= item.description || '' %></textarea>
+
+        </div>
+
+
+        <!-- CONSUMABLE -->
+
+        <div class="col-md-4">
+
+          <div class="form-check">
+
+            <input
+              class="form-check-input"
+              type="checkbox"
+              name="isConsumable"
+              id="isConsumable"
+              <%= item.is_consumable ? 'checked' : '' %>
+            >
+
+            <label
+              class="form-check-label"
+              for="isConsumable"
+            >
+              Consumable item
+            </label>
+
+          </div>
+
+          <div class="form-text">
+            Can be consumed during operations.
+          </div>
+
+        </div>
+
+
+        <!-- PARTIAL CONSUMPTION -->
+
+        <div class="col-md-4">
+
+          <div class="form-check">
+
+            <input
+              class="form-check-input"
+              type="checkbox"
+              name="allowsPartialConsumption"
+              id="allowsPartialConsumption"
+              <%= item.allows_partial_consumption ? 'checked' : '' %>
+            >
+
+            <label
+              class="form-check-label"
+              for="allowsPartialConsumption"
+            >
+              Allows partial consumption
+            </label>
+
+          </div>
+
+          <div class="form-text">
+            Example: consume 5 L from a 20 L barrel.
+          </div>
+
+        </div>
+
+
+        <!-- INSTANCE TRACKING -->
+
+        <div class="col-md-4">
+
+          <div class="form-check">
+
+            <input
+              class="form-check-input"
+              type="checkbox"
+              name="requiresInstanceTracking"
+              id="requiresInstanceTracking"
+              <%= item.id
+                ? (item.requires_instance_tracking ? 'checked' : '')
+                : 'checked' %>
+            >
+
+            <label
+              class="form-check-label"
+              for="requiresInstanceTracking"
+            >
+              Track physical instances
+            </label>
+
+          </div>
+
+          <div class="form-text">
+            Each physical item receives its own barcode.
+          </div>
+
+        </div>
+
+
+        <!-- REORDER LEVEL -->
+
+        <div class="col-md-4">
+
+          <label class="form-label">
+            Reorder Level
+          </label>
+
+          <input
+            type="number"
+            name="reorderLevel"
+            class="form-control"
+            min="0"
+            step="0.001"
+            value="<%= item.reorder_level ?? 0 %>"
+          >
+
+        </div>
+
+
+        <% if (item.id) { %>
+
+          <div class="col-md-4">
+
+            <label class="form-label">
+              Status
+            </label>
+
+            <select
+              name="status"
+              class="form-select"
+            >
+
+              <option
+                value="ACTIVE"
+                <%= item.status === 'ACTIVE' ? 'selected' : '' %>
+              >
+                Active
+              </option>
+
+              <option
+                value="INACTIVE"
+                <%= item.status === 'INACTIVE' ? 'selected' : '' %>
+              >
+                Inactive
+              </option>
+
+              <option
+                value="DISCONTINUED"
+                <%= item.status === 'DISCONTINUED' ? 'selected' : '' %>
+              >
+                Discontinued
+              </option>
+
+            </select>
+
+          </div>
+
+        <% } %>
+
+
+      </div>
+
+
+      <div class="d-flex gap-2 mt-4">
+
+        <button
+          type="submit"
+          class="btn btn-primary"
+        >
+          <%= item.id ? 'Save Changes' : 'Create Item' %>
+        </button>
+
+        <a
+          href="/items"
+          class="btn btn-outline-secondary"
+        >
+          Cancel
+        </a>
+
+      </div>
+
+    </form>
+
+  </div>
+
+</div>
+
+
+<script nonce="<%= cspNonce %>">
+
+  const consumable =
+    document.getElementById('isConsumable');
+
+  const partial =
+    document.getElementById('allowsPartialConsumption');
+
+  if (consumable && partial) {
+
+    function updatePartialState() {
+
+      partial.disabled = !consumable.checked;
+
+      if (!consumable.checked) {
+        partial.checked = false;
+      }
+
+    }
+
+    consumable.addEventListener(
+      'change',
+      updatePartialState
+    );
+
+    updatePartialState();
+  }
+
+</script>

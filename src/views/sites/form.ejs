@@ -1,0 +1,199 @@
+<div class="mb-4">
+  <h1 class="h3 mb-1">
+    <%= site.id ? 'Edit Site' : 'Create Site' %>
+  </h1>
+
+  <p class="text-muted mb-0">
+    Define a physical Site-ERP inventory location.
+  </p>
+</div>
+
+
+<div class="card shadow-sm">
+
+  <div class="card-body">
+
+    <form
+      method="POST"
+      action="<%= site.id ? '/sites/' + site.id : '/sites' %>"
+    >
+
+      <input
+        type="hidden"
+        name="_csrf"
+        value="<%= csrfToken %>"
+      >
+
+
+      <div class="row g-3">
+
+        <!-- CODE -->
+
+        <div class="col-md-6">
+
+          <label class="form-label">
+            Site Code
+          </label>
+
+          <% if (site.id) { %>
+
+            <input
+              type="text"
+              class="form-control"
+              value="<%= site.code %>"
+              disabled
+            >
+
+          <% } else { %>
+
+            <input
+              type="text"
+              name="code"
+              class="form-control"
+              placeholder="SITE-A"
+              required
+              maxlength="50"
+            >
+
+          <% } %>
+
+        </div>
+
+
+        <!-- NAME -->
+
+        <div class="col-md-6">
+
+          <label class="form-label">
+            Site Name
+          </label>
+
+          <input
+            type="text"
+            name="name"
+            class="form-control"
+            value="<%= site.name || '' %>"
+            required
+            maxlength="200"
+          >
+
+        </div>
+
+
+        <!-- TYPE -->
+
+        <div class="col-md-6">
+
+          <label class="form-label">
+            Site Type
+          </label>
+
+          <select
+            name="siteType"
+            class="form-select"
+            required
+          >
+
+            <option value="">
+              Select site type
+            </option>
+
+            <option
+              value="NORMAL"
+              <%= site.site_type === 'NORMAL' ? 'selected' : '' %>
+            >
+              Normal Site
+            </option>
+
+            <option
+              value="SUPER_STORE"
+              <%= site.site_type === 'SUPER_STORE' ? 'selected' : '' %>
+            >
+              Super-Store
+            </option>
+
+          </select>
+
+        </div>
+
+
+        <!-- STATUS -->
+
+        <% if (site.id) { %>
+
+          <div class="col-md-6">
+
+            <label class="form-label">
+              Status
+            </label>
+
+            <select
+              name="status"
+              class="form-select"
+              required
+            >
+
+              <option
+                value="ACTIVE"
+                <%= site.status === 'ACTIVE' ? 'selected' : '' %>
+              >
+                Active
+              </option>
+
+              <option
+                value="INACTIVE"
+                <%= site.status === 'INACTIVE' ? 'selected' : '' %>
+              >
+                Inactive
+              </option>
+
+            </select>
+
+          </div>
+
+        <% } %>
+
+
+        <!-- ADDRESS -->
+
+        <div class="col-12">
+
+          <label class="form-label">
+            Address
+          </label>
+
+          <textarea
+            name="address"
+            class="form-control"
+            rows="3"
+            maxlength="500"
+          ><%= site.address || '' %></textarea>
+
+        </div>
+
+      </div>
+
+
+      <div class="d-flex gap-2 mt-4">
+
+        <button
+          type="submit"
+          class="btn btn-primary"
+        >
+          <%= site.id ? 'Save Changes' : 'Create Site' %>
+        </button>
+
+        <a
+          href="/sites"
+          class="btn btn-outline-secondary"
+        >
+          Cancel
+        </a>
+
+      </div>
+
+    </form>
+
+  </div>
+
+</div>

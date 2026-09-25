@@ -1,0 +1,157 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 mb-1">Inventory Instances</h1>
+    <p class="text-muted mb-0">
+      Physical inventory currently registered in Site-ERP.
+    </p>
+  </div>
+
+  <% if (['admin', 'manager', 'operator'].includes(currentUser.role)) { %>
+    <a href="/inventory/receive" class="btn btn-primary">
+      Receive Inventory
+    </a>
+  <% } %>
+</div>
+
+<% if (typeof query !== 'undefined' && query.received) { %>
+  <div class="alert alert-success">
+    Inventory received successfully.
+    Instance:
+    <strong><%= query.received %></strong>
+  </div>
+<% } %>
+
+<% if (!instances.length) { %>
+
+  <div class="card">
+    <div class="card-body text-center py-5">
+      <h5>No inventory instances yet</h5>
+      <p class="text-muted mb-3">
+        Receive your first physical inventory instance to get started.
+      </p>
+
+      <% if (['admin', 'manager', 'operator'].includes(currentUser.role)) { %>
+        <a href="/inventory/receive" class="btn btn-primary">
+          Receive Inventory
+        </a>
+      <% } %>
+    </div>
+  </div>
+
+<% } else { %>
+
+  <div class="card">
+    <div class="card-body p-0">
+
+      <div class="table-responsive">
+
+        <table class="table table-hover mb-0 align-middle">
+
+          <thead class="table-light">
+            <tr>
+              <th>Instance</th>
+              <th>Item</th>
+              <th>Barcode</th>
+              <th>Quantity</th>
+              <th>Site</th>
+              <th>Condition</th>
+              <th>Status</th>
+              <th>Received</th>
+            </tr>
+          </thead>
+
+          <tbody>
+
+            <% instances.forEach(instance => { %>
+
+              <tr>
+
+                <td>
+                  <strong>
+                    <%= instance.instance_code %>
+                  </strong>
+                </td>
+
+                <td>
+                  <div>
+                    <strong>
+                      <%= instance.item_code %>
+                    </strong>
+                  </div>
+
+                  <small class="text-muted">
+                    <%= instance.item_name %>
+                  </small>
+                </td>
+
+                <td>
+                  <code>
+                    <%= instance.barcode %>
+                  </code>
+                </td>
+
+                <td>
+                  <%= Number(instance.current_quantity).toLocaleString() %>
+                  <%= instance.unit %>
+                </td>
+
+                <td>
+                  <% if (instance.site_code) { %>
+                    <strong><%= instance.site_code %></strong>
+                    <br>
+                    <small class="text-muted">
+                      <%= instance.site_name %>
+                    </small>
+                  <% } else { %>
+                    <span class="text-muted">No site</span>
+                  <% } %>
+                </td>
+
+                <td>
+                  <% if (instance.condition === 'GOOD') { %>
+                    <span class="badge bg-success">
+                      Good
+                    </span>
+                  <% } else { %>
+                    <span class="badge bg-warning text-dark">
+                      <%= instance.condition %>
+                    </span>
+                  <% } %>
+                </td>
+
+                <td>
+                  <% if (instance.lifecycle_status === 'ACTIVE') { %>
+                    <span class="badge bg-primary">
+                      Active
+                    </span>
+                  <% } else if (instance.lifecycle_status === 'CONSUMED') { %>
+                    <span class="badge bg-secondary">
+                      Consumed
+                    </span>
+                  <% } else { %>
+                    <span class="badge bg-warning text-dark">
+                      <%= instance.lifecycle_status %>
+                    </span>
+                  <% } %>
+                </td>
+
+                <td>
+                  <small>
+                    <%= new Date(instance.created_at).toLocaleString() %>
+                  </small>
+                </td>
+
+              </tr>
+
+            <% }) %>
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+  </div>
+
+<% } %>

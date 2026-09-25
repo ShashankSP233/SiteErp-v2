@@ -4,7 +4,12 @@ const db = require('../config/db');
 const env = require('../config/env');
 const { hashPassword } = require('../utils/password');
 
-const migrationsDir = path.join(__dirname, 'migrations', db.backend);
+const migrationsDir = path.join(
+  __dirname,
+  'migrations',
+  'v2',
+  db.backend
+);
 
 async function runMigrations() {
   await db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
