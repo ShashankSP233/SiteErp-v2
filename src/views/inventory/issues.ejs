@@ -1,0 +1,212 @@
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <div class="text-muted small mb-1">Inventory / Issue Management</div>
+    <h1 class="h3 mb-1">Inventory Issues</h1>
+    <p class="text-muted mb-0">
+      Allocate physical inventory instances to projects, employees, departments, or other recipients.
+    </p>
+  </div>
+</div>
+
+<% if (error) { %>
+  <div class="alert alert-danger" role="alert"><%= error %></div>
+<% } %>
+
+<% if (success) { %>
+  <div class="alert alert-success" role="alert"><%= success %></div>
+<% } %>
+
+<section class="card shadow-sm mb-4">
+  <div class="card-header bg-white py-3">
+    <h2 class="h5 mb-0">Issue Inventory</h2>
+  </div>
+  <div class="card-body">
+    <form method="POST" action="/inventory/issues">
+      <% if (typeof csrfToken !== 'undefined') { %>
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <% } %>
+
+      <div class="row g-3">
+        <div class="col-12 col-md-6">
+          <label for="instanceCode" class="form-label fw-semibold">
+            Instance Code <span class="text-danger">*</span>
+          </label>
+          <input
+            type="text"
+            id="instanceCode"
+            name="instanceCode"
+            class="form-control"
+            required
+            maxlength="100"
+            placeholder="Example: OIL-20L-0015"
+            autocomplete="off"
+          >
+          <div class="form-text">
+            Enter or scan the physical instance code, e.g. OIL-20L-0015.
+          </div>
+        </div>
+
+        <div class="col-12 col-md-6">
+          <label for="recipientType" class="form-label fw-semibold">
+            Recipient Type <span class="text-danger">*</span>
+          </label>
+          <select id="recipientType" name="recipientType" class="form-select" required>
+            <option value="">Select recipient type</option>
+            <option value="PROJECT">Project</option>
+            <option value="EMPLOYEE">Employee</option>
+            <option value="DEPARTMENT">Department</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </div>
+
+        <div class="col-12 col-md-6">
+          <label for="recipientReference" class="form-label">Recipient Reference</label>
+          <input
+            type="text"
+            id="recipientReference"
+            name="recipientReference"
+            class="form-control"
+            maxlength="255"
+            placeholder="Project name, employee ID, department, etc."
+          >
+        </div>
+
+        <div class="col-12 col-md-3">
+          <label for="quantity" class="form-label">Quantity to Issue</label>
+          <input
+            type="number"
+            id="quantity"
+            name="quantity"
+            class="form-control"
+            min="0.001"
+            step="0.001"
+            placeholder="Full available"
+          >
+          <div class="form-text">Leave blank to issue the full available quantity.</div>
+        </div>
+
+        <div class="col-12 col-md-3">
+          <label for="reason" class="form-label">Reason</label>
+          <input
+            type="text"
+            id="reason"
+            name="reason"
+            class="form-control"
+            maxlength="500"
+            placeholder="Reason for issuing inventory"
+          >
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-end mt-4">
+        <button type="submit" class="btn btn-primary">Issue Inventory</button>
+      </div>
+    </form>
+  </div>
+</section>
+
+<section class="card shadow-sm">
+  <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+    <h2 class="h5 mb-0">Current Issues</h2>
+    <span class="text-muted small"><%= issues.length %> active issue<%= issues.length === 1 ? '' : 's' %></span>
+  </div>
+
+  <% if (!issues || issues.length === 0) { %>
+    <div class="card-body text-center text-muted py-5">
+      No open inventory issues.
+    </div>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Issue</th>
+            <th>Item / Instance</th>
+            <th>Site</th>
+            <th>Issued</th>
+            <th>Remaining</th>
+            <th>Recipient</th>
+            <th>Status</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% issues.forEach(issue => { %>
+            <% const isConsumable = issue.is_consumable === true || issue.is_consumable === 1 || issue.is_consumable === 'true'; %>
+            <% const allowsPartial = issue.allows_partial_consumption === true || issue.allows_partial_consumption === 1 || issue.allows_partial_consumption === 'true'; %>
+            <% const canConsume = isConsumable && allowsPartial && Number(issue.remaining_quantity) > 0; %>
+            <tr>
+              <td>
+                <strong><%= issue.issue_number %></strong>
+                <small class="d-block text-muted">
+                  <%= issue.issued_at ? new Date(issue.issued_at).toLocaleString() : 'Date unavailable' %>
+                </small>
+                <small class="d-block text-muted">By: <%= issue.issued_by_name || 'Unknown' %></small>
+              </td>
+              <td>
+                <strong class="d-block"><%= issue.item_code %></strong>
+                <span class="d-block"><%= issue.item_name %></span>
+                <code><%= issue.instance_code %></code>
+              </td>
+              <td><strong><%= issue.site_code || '—' %></strong></td>
+              <td class="text-nowrap"><strong><%= issue.issued_quantity %> <%= issue.unit || '' %></strong></td>
+              <td class="text-nowrap"><strong><%= issue.remaining_quantity %> <%= issue.unit || '' %></strong></td>
+              <td>
+                <strong class="d-block"><%= issue.recipient_type %></strong>
+                <% if (issue.recipient_reference) { %>
+                  <span class="text-muted"><%= issue.recipient_reference %></span>
+                <% } %>
+              </td>
+              <td>
+                <% if (issue.status === 'OPEN') { %>
+                  <span class="badge text-bg-primary">OPEN</span>
+                <% } else { %>
+                  <span class="badge text-bg-warning"><%= issue.status %></span>
+                <% } %>
+              </td>
+              <td class="text-end">
+                <div class="d-flex flex-column align-items-stretch gap-2">
+                  <% if (canConsume) { %>
+                    <form method="POST" action="/inventory/issues/<%= issue.id %>/consume" class="d-flex gap-2">
+                      <% if (typeof csrfToken !== 'undefined') { %>
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                      <% } %>
+                      <input
+                        type="number"
+                        name="quantity"
+                        class="form-control form-control-sm"
+                        min="0.001"
+                        max="<%= issue.remaining_quantity %>"
+                        step="0.001"
+                        required
+                        aria-label="Quantity to consume in <%= issue.unit || 'units' %>"
+                      >
+                      <button type="submit" class="btn btn-sm btn-primary text-nowrap">Consume</button>
+                    </form>
+                  <% } %>
+
+                  <% if (!isConsumable || canConsume) { %>
+                    <form
+                      method="POST"
+                      action="/inventory/issues/<%= issue.id %>/return"
+                      onsubmit="return confirm('Return all remaining quantity for this issue?');"
+                    >
+                      <% if (typeof csrfToken !== 'undefined') { %>
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                      <% } %>
+                      <button type="submit" class="btn btn-sm btn-outline-secondary w-100">Return</button>
+                    </form>
+                  <% } %>
+
+                  <% if (!canConsume && isConsumable && allowsPartial) { %>
+                    <small class="text-muted">No quantity remaining.</small>
+                  <% } %>
+                </div>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>

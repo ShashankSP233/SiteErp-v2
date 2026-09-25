@@ -1,8 +1,14 @@
-<div class="d-flex justify-content-between align-items-center mb-4">
+<%
+  const selectedItem = (itemMasters || []).find(
+    item => String(item.id) === String(form.itemMasterId || '')
+  );
+%>
+
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
   <div>
     <h1 class="h3 mb-1">Receive Inventory</h1>
     <p class="text-muted mb-0">
-      Create a physical inventory instance and record its receipt.
+      Create physical inventory instances in a site.
     </p>
   </div>
 
@@ -11,15 +17,15 @@
   </a>
 </div>
 
+
+
 <% if (error) { %>
-  <div class="alert alert-danger">
-    <%= error %>
-  </div>
+  <div class="alert alert-danger" role="alert"><%= error %></div>
 <% } %>
 
-<div class="card">
-  <div class="card-header">
-    <strong>New Inventory Instance</strong>
+<div class="card shadow-sm">
+  <div class="card-header bg-white py-3">
+    <h2 class="h5 mb-0">Receive Physical Inventory</h2>
   </div>
 
   <div class="card-body">
@@ -33,7 +39,7 @@
 
       <div class="row g-3">
 
-        <div class="col-md-6">
+        <div class="col-12 col-md-6">
           <label for="itemMasterId" class="form-label">
             Item
           </label>
@@ -49,6 +55,9 @@
             <% itemMasters.forEach(item => { %>
               <option
                 value="<%= item.id %>"
+                data-physical-unit="<%= item.unit || '' %>"
+                data-instance-quantity="<%= item.instance_quantity ?? '' %>"
+                data-quantity-unit="<%= item.instance_quantity_unit || '' %>"
                 <%= String(form.itemMasterId || '') === String(item.id) ? 'selected' : '' %>
               >
                 <%= item.item_code %> — <%= item.name %>
@@ -61,11 +70,32 @@
               No instance-tracked active items are available.
             </div>
           <% } %>
+
+          <div
+            id="selectedItemInfo"
+            class="alert alert-info mt-3 mb-0 <%= selectedItem ? '' : 'd-none' %>"
+          >
+            <div class="fw-semibold mb-2">Selected item contents</div>
+            <div class="row g-2 small">
+              <div class="col-sm-4">
+                <span class="d-block text-muted">Physical Unit</span>
+                <strong id="physicalUnit"><%= selectedItem?.unit || '—' %></strong>
+              </div>
+              <div class="col-sm-4">
+                <span class="d-block text-muted">Quantity per Instance</span>
+                <strong id="instanceQuantity"><%= selectedItem?.instance_quantity ?? '—' %> <%= selectedItem?.instance_quantity_unit || '' %></strong>
+              </div>
+              <div class="col-sm-4">
+                <span class="d-block text-muted">Quantity Unit</span>
+                <strong id="quantityUnit"><%= selectedItem?.instance_quantity_unit || '—' %></strong>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="col-md-3">
           <label for="quantity" class="form-label">
-            Quantity
+            Number of Physical Instances
           </label>
 
           <input
@@ -80,7 +110,8 @@
           >
 
           <div class="form-text">
-            Quantity of this physical instance.
+            Enter how many physical units/containers are being received.
+            Example: 5 BARREL.
           </div>
         </div>
 
@@ -108,68 +139,6 @@
           </select>
         </div>
 
-        <div class="col-md-6">
-          <label for="batchNumber" class="form-label">
-            Batch Number
-            <span class="text-muted">(optional)</span>
-          </label>
-
-          <input
-            type="text"
-            class="form-control"
-            id="batchNumber"
-            name="batchNumber"
-            value="<%= form.batchNumber || '' %>"
-            maxlength="100"
-          >
-        </div>
-
-        <div class="col-md-6">
-          <label for="serialNumber" class="form-label">
-            Serial Number
-            <span class="text-muted">(optional)</span>
-          </label>
-
-          <input
-            type="text"
-            class="form-control"
-            id="serialNumber"
-            name="serialNumber"
-            value="<%= form.serialNumber || '' %>"
-            maxlength="100"
-          >
-        </div>
-
-        <div class="col-md-6">
-          <label for="manufactureDate" class="form-label">
-            Manufacture Date
-            <span class="text-muted">(optional)</span>
-          </label>
-
-          <input
-            type="date"
-            class="form-control"
-            id="manufactureDate"
-            name="manufactureDate"
-            value="<%= form.manufactureDate || '' %>"
-          >
-        </div>
-
-        <div class="col-md-6">
-          <label for="expiryDate" class="form-label">
-            Expiry Date
-            <span class="text-muted">(optional)</span>
-          </label>
-
-          <input
-            type="date"
-            class="form-control"
-            id="expiryDate"
-            name="expiryDate"
-            value="<%= form.expiryDate || '' %>"
-          >
-        </div>
-
         <div class="col-12">
           <label for="reason" class="form-label">
             Reason / Reference
@@ -185,6 +154,86 @@
             maxlength="255"
             placeholder="e.g. Initial stock receipt"
           >
+        </div>
+
+        <div class="col-12">
+          <button
+            type="button"
+            class="btn btn-outline-secondary"
+            data-bs-toggle="collapse"
+            data-bs-target="#traceabilityFields"
+            aria-expanded="false"
+            aria-controls="traceabilityFields"
+          >
+            Advanced / Traceability
+          </button>
+          <div class="form-text">
+            Optional details for batch, serial, manufacturing, or expiry information.
+          </div>
+
+          <div class="collapse mt-3" id="traceabilityFields">
+            <div class="border rounded p-3 bg-light">
+              <p class="small text-muted mb-3">
+                These fields are optional and can be used when the physical stock carries batch, serial, manufacturing, or expiry information.
+              </p>
+
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label for="batchNumber" class="form-label">
+                    Batch Number <span class="text-muted">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="batchNumber"
+                    name="batchNumber"
+                    value="<%= form.batchNumber || '' %>"
+                    maxlength="100"
+                  >
+                </div>
+
+                <div class="col-md-6">
+                  <label for="serialNumber" class="form-label">
+                    Serial Number <span class="text-muted">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="serialNumber"
+                    name="serialNumber"
+                    value="<%= form.serialNumber || '' %>"
+                    maxlength="100"
+                  >
+                </div>
+
+                <div class="col-md-6">
+                  <label for="manufactureDate" class="form-label">
+                    Manufacture Date <span class="text-muted">(optional)</span>
+                  </label>
+                  <input
+                    type="date"
+                    class="form-control"
+                    id="manufactureDate"
+                    name="manufactureDate"
+                    value="<%= form.manufactureDate || '' %>"
+                  >
+                </div>
+
+                <div class="col-md-6">
+                  <label for="expiryDate" class="form-label">
+                    Expiry Date <span class="text-muted">(optional)</span>
+                  </label>
+                  <input
+                    type="date"
+                    class="form-control"
+                    id="expiryDate"
+                    name="expiryDate"
+                    value="<%= form.expiryDate || '' %>"
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
       </div>
@@ -208,3 +257,31 @@
     </form>
   </div>
 </div>
+
+<script nonce="<%= cspNonce %>">
+  (() => {
+    const itemSelect = document.getElementById('itemMasterId');
+    const itemInfo = document.getElementById('selectedItemInfo');
+    const physicalUnit = document.getElementById('physicalUnit');
+    const instanceQuantity = document.getElementById('instanceQuantity');
+    const quantityUnit = document.getElementById('quantityUnit');
+
+    itemSelect?.addEventListener('change', () => {
+      const option = itemSelect.selectedOptions[0];
+
+      if (!option || !option.value) {
+        itemInfo?.classList.add('d-none');
+        return;
+      }
+
+      const physicalUnitValue = option.dataset.physicalUnit || '—';
+      const instanceQuantityValue = option.dataset.instanceQuantity || '—';
+      const quantityUnitValue = option.dataset.quantityUnit || '';
+
+      physicalUnit.textContent = physicalUnitValue;
+      instanceQuantity.textContent = `${instanceQuantityValue} ${quantityUnitValue}`.trim();
+      quantityUnit.textContent = quantityUnitValue || '—';
+      itemInfo?.classList.remove('d-none');
+    });
+  })();
+</script>

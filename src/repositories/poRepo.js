@@ -1,106 +1,562 @@
 const db = require('../config/db');
-const inv = require('./inventoryRepo');
-const { round2 } = require('../utils/finance');
-const clean = (v) => { if (v === undefined || v === null) return null; const s = String(v).trim(); return s || null; };
 
-async function findOrCreateVendor(c, name) {
-  const n = clean(name); if (!n) return null;
-  const row = await c.one(`INSERT INTO vendors(name) VALUES (?) ON CONFLICT(name) DO UPDATE SET name=excluded.name RETURNING id`, [n]);
-  return row.id;
-}
+const PO_STATUSES = [
+    'DRAFT',
+    'SENT',
+    'PARTIALLY_RECEIVED',
+    'COMPLETED',
+    'CANCELLED'
+];
 
-// input: { vendor, poDate, deliveryTo, notes, lines: [{itemId, quantity, rate, notes}] }
-async function createPO(input, userId) {
-  const lines = (input.lines || []).filter(l => Number(l.quantity) > 0 && l.itemId);
-  if (!lines.length) throw new Error('Add at least one item line with a quantity.');
-  return db.tx(async (c) => {
-    const poNo = await inv.nextDocumentNo(c, 'PO', new Date());
-    const vendorId = await findOrCreateVendor(c, input.vendor);
-    const po = await c.one(
-      `INSERT INTO purchase_orders(po_no, vendor_id, po_date, delivery_to, status, notes, attachment, created_by)
-       VALUES (?,?,?,?, 'submitted', ?, ?, ?) RETURNING id`,
-      [poNo, vendorId, input.poDate || new Date().toISOString().slice(0, 10), clean(input.deliveryTo), clean(input.notes), clean(input.attachment), userId || null]);
-    for (const l of lines) {
-      await c.query(
-        `INSERT INTO po_lines(po_id, item_id, quantity, rate, notes) VALUES (?,?,?,?,?)`,
-        [po.id, Number(l.itemId), Number(l.quantity), Number(l.rate || 0), clean(l.notes)]);
+function validatePoStatus(status) {
+    if (!PO_STATUSES.includes(status)) {
+        throw new Error(`Invalid purchase order status: ${status}`);
     }
-    return po.id;
-  });
 }
 
-async function listPOs(limit = 100, offset = 0) {
-  return db.many(
-    `SELECT po.*, v.name AS vendor,
-       (SELECT COUNT(*) FROM po_lines l WHERE l.po_id=po.id) AS line_count,
-       (SELECT COALESCE(SUM(l.quantity*l.rate),0) FROM po_lines l WHERE l.po_id=po.id) AS po_value
-     FROM purchase_orders po LEFT JOIN vendors v ON v.id=po.vendor_id
-     ORDER BY po.po_date DESC, po.id DESC LIMIT ? OFFSET ?`, [limit, offset]);
-}
-async function countPOs() { return Number((await db.one('SELECT COUNT(*) AS c FROM purchase_orders')).c); }
+function normalizePoNumber(value) {
+    const valueString = String(value || '').trim();
 
-async function getPO(id) {
-  const po = await db.one(
-    `SELECT po.*, v.name AS vendor, cu.username AS created_by_name, au.username AS approved_by_name
-     FROM purchase_orders po LEFT JOIN vendors v ON v.id=po.vendor_id
-     LEFT JOIN users cu ON cu.id=po.created_by LEFT JOIN users au ON au.id=po.approved_by WHERE po.id=?`, [id]);
-  if (!po) return null;
-  const lines = await db.many(
-    `SELECT l.*, i.item_code, i.description, i.unit, (l.quantity - l.received_qty) AS pending
-     FROM po_lines l JOIN items i ON i.id=l.item_id WHERE l.po_id=? ORDER BY l.id`, [id]);
-  po.lines = lines;
-  po.value = round2(lines.reduce((s, l) => s + Number(l.quantity) * Number(l.rate), 0));
-  po.fully_received = lines.length > 0 && lines.every(l => Number(l.received_qty) >= Number(l.quantity));
-  return po;
-}
-
-async function setPOStatus(id, status, userId, remarks) {
-  if (!['approved', 'rejected', 'cancelled'].includes(status)) throw new Error('Invalid PO action.');
-  const po = await db.one('SELECT status FROM purchase_orders WHERE id=?', [id]);
-  if (!po) throw new Error('Purchase order not found.');
-  if (status !== 'cancelled' && po.status !== 'submitted') throw new Error(`Only submitted POs can be approved/rejected (current: ${po.status}).`);
-  await db.query(
-    `UPDATE purchase_orders SET status=?, approved_by=?, approved_at=CURRENT_TIMESTAMP, approval_remarks=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-    [status, userId, clean(remarks), id]);
-}
-
-// receipts: [{ lineId, receiveQty, location }]
-async function receiveAgainstPO(id, receipts, userId) {
-  const toReceive = (receipts || []).filter(r => Number(r.receiveQty) > 0);
-  if (!toReceive.length) throw new Error('Enter a quantity to receive for at least one line.');
-  return db.tx(async (c) => {
-    const po = await c.one('SELECT * FROM purchase_orders WHERE id=?' + db.rowLock, [id]);
-    if (!po) throw new Error('Purchase order not found.');
-    if (!['approved', 'partially_received'].includes(po.status)) {
-      throw new Error(`Goods can only be received against an approved PO (current: ${po.status}).`);
+    if (!valueString) {
+        throw new Error('PO number is required.');
     }
-    const grnNo = await inv.nextDocumentNo(c, 'GRN', new Date());
-    for (const r of toReceive) {
-      const line = await c.one('SELECT * FROM po_lines WHERE id=? AND po_id=?', [r.lineId, id]);
-      if (!line) throw new Error('PO line not found.');
-      const pending = Number(line.quantity) - Number(line.received_qty);
-      const qty = Number(r.receiveQty);
-      if (qty > pending + 0.001) throw new Error(`Cannot receive ${qty} for ${line.item_id}; only ${pending} pending.`);
-      await inv.insertReceipt(c, {
-        itemId: line.item_id, quantity: qty, cost: line.rate, vendorId: po.vendor_id,
-        location: r.location || po.delivery_to, grnNo, referenceNo: po.po_no, notes: `Against PO ${po.po_no}`
-      }, userId);
-      await c.query('UPDATE po_lines SET received_qty = received_qty + ? WHERE id=?', [qty, line.id]);
+
+    return valueString;
+}
+
+function normalizeQuantity(value) {
+    const quantity = Number(value);
+
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+        throw new Error('Quantity must be greater than zero.');
     }
-    const lines = await c.many('SELECT quantity, received_qty FROM po_lines WHERE po_id=?', [id]);
-    const allDone = lines.every(l => Number(l.received_qty) >= Number(l.quantity));
-    await c.query('UPDATE purchase_orders SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
-      [allDone ? 'received' : 'partially_received', id]);
-    return { grnNo, status: allDone ? 'received' : 'partially_received' };
-  });
+
+    return quantity;
 }
 
-async function poStats() {
-  const row = await db.one(
-    `SELECT COUNT(*) FILTER (WHERE status='submitted') AS pending_po,
-            COUNT(*) FILTER (WHERE status IN ('approved','partially_received')) AS open_po
-     FROM purchase_orders`);
-  return { pendingPO: Number(row.pending_po || 0), openPO: Number(row.open_po || 0) };
+async function listPurchaseOrders({
+    status = null,
+    siteId = null,
+    vendorId = null
+} = {}) {
+    const conditions = [];
+    const params = [];
+
+    if (status) {
+        validatePoStatus(status);
+        params.push(status);
+        conditions.push(`po.status = $${params.length}`);
+    }
+
+    if (siteId) {
+        params.push(siteId);
+        conditions.push(`po.site_id = $${params.length}`);
+    }
+
+    if (vendorId) {
+        params.push(vendorId);
+        conditions.push(`po.vendor_id = $${params.length}`);
+    }
+
+    const whereClause = conditions.length
+        ? `WHERE ${conditions.join(' AND ')}`
+        : '';
+
+    const result = await db.query(
+        `
+        SELECT
+            po.id,
+            po.po_number,
+            po.vendor_id,
+            v.vendor_code,
+            v.name AS vendor_name,
+            po.po_date,
+            po.site_id,
+            s.code,
+            s.name AS site_name,
+            po.expected_delivery_date,
+            po.status,
+            po.reference_text,
+            po.notes,
+            po.created_by,
+            u.full_name AS created_by_name,
+            po.created_at,
+            po.updated_at,
+
+            COALESCE(
+                SUM(pol.ordered_quantity),
+                0
+            ) AS total_ordered_quantity,
+
+            COUNT(pol.id) AS line_count
+
+        FROM purchase_orders po
+
+        JOIN vendors v
+            ON v.id = po.vendor_id
+
+        JOIN sites s
+            ON s.id = po.site_id
+
+        JOIN users u
+            ON u.id = po.created_by
+
+        LEFT JOIN purchase_order_lines pol
+            ON pol.purchase_order_id = po.id
+
+        ${whereClause}
+
+        GROUP BY
+            po.id,
+            v.vendor_code,
+            v.name,
+            s.code,
+            s.name,
+            u.full_name
+
+        ORDER BY
+            po.po_date DESC,
+            po.id DESC
+        `,
+        params
+    );
+
+    return result.rows;
 }
 
-module.exports = { createPO, listPOs, countPOs, getPO, setPOStatus, receiveAgainstPO, poStats };
+async function getPurchaseOrderById(id) {
+    const headerResult = await db.query(
+        `
+        SELECT
+            po.id,
+            po.po_number,
+            po.vendor_id,
+            v.vendor_code,
+            v.name AS vendor_name,
+            v.contact_person AS vendor_contact_person,
+            v.email AS vendor_email,
+            v.phone AS vendor_phone,
+
+            po.po_date,
+            po.site_id,
+            s.code,
+            s.name AS site_name,
+
+            po.expected_delivery_date,
+            po.status,
+            po.reference_text,
+            po.notes,
+
+            po.created_by,
+            u.full_name AS created_by_name,
+
+            po.created_at,
+            po.updated_at
+
+        FROM purchase_orders po
+
+        JOIN vendors v
+            ON v.id = po.vendor_id
+
+        JOIN sites s
+            ON s.id = po.site_id
+
+        JOIN users u
+            ON u.id = po.created_by
+
+        WHERE po.id = $1
+        `,
+        [id]
+    );
+
+    const header = headerResult.rows[0];
+
+    if (!header) {
+        return null;
+    }
+
+    const linesResult = await db.query(
+        `
+        SELECT
+            pol.id,
+            pol.purchase_order_id,
+            pol.item_master_id,
+            im.item_code,
+            im.name AS item_name,
+            im.description AS item_description,
+            im.category,
+            im.unit AS item_master_unit,
+            im.instance_quantity,
+            im.instance_quantity_unit,
+            im.is_consumable,
+            im.allows_partial_consumption,
+            im.requires_instance_tracking,
+
+            pol.ordered_quantity,
+            pol.unit,
+            pol.notes,
+
+            pol.created_at,
+            pol.updated_at
+
+        FROM purchase_order_lines pol
+
+        JOIN item_masters im
+            ON im.id = pol.item_master_id
+
+        WHERE pol.purchase_order_id = $1
+
+        ORDER BY pol.id ASC
+        `,
+        [id]
+    );
+
+    return {
+        ...header,
+        lines: linesResult.rows
+    };
+}
+
+async function createPurchaseOrder({
+    poNumber,
+    vendorId,
+    poDate,
+    siteId,
+    expectedDeliveryDate = null,
+    referenceText = null,
+    notes = null,
+    createdBy
+}) {
+    const cleanPoNumber = normalizePoNumber(poNumber);
+
+    if (!vendorId) {
+        throw new Error('Vendor is required.');
+    }
+
+    if (!poDate) {
+        throw new Error('PO date is required.');
+    }
+
+    if (!siteId) {
+        throw new Error('Site is required.');
+    }
+
+    if (!createdBy) {
+        throw new Error('Creating user is required.');
+    }
+
+    if (
+        expectedDeliveryDate &&
+        expectedDeliveryDate < poDate
+    ) {
+        throw new Error(
+            'Expected delivery date cannot be before the PO date.'
+        );
+    }
+
+    const result = await db.query(
+        `
+        INSERT INTO purchase_orders (
+            po_number,
+            vendor_id,
+            po_date,
+            site_id,
+            expected_delivery_date,
+            status,
+            reference_text,
+            notes,
+            created_by
+        )
+        VALUES (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            'DRAFT',
+            $6,
+            $7,
+            $8
+        )
+        RETURNING *
+        `,
+        [
+            cleanPoNumber,
+            vendorId,
+            poDate,
+            siteId,
+            expectedDeliveryDate || null,
+            referenceText || null,
+            notes || null,
+            createdBy
+        ]
+    );
+
+    return result.rows[0];
+}
+
+async function updatePurchaseOrder(
+    id,
+    {
+        poNumber,
+        vendorId,
+        poDate,
+        siteId,
+        expectedDeliveryDate = null,
+        referenceText = null,
+        notes = null
+    }
+) {
+    const cleanPoNumber = normalizePoNumber(poNumber);
+
+    if (!vendorId) {
+        throw new Error('Vendor is required.');
+    }
+
+    if (!poDate) {
+        throw new Error('PO date is required.');
+    }
+
+    if (!siteId) {
+        throw new Error('Site is required.');
+    }
+
+    if (
+        expectedDeliveryDate &&
+        expectedDeliveryDate < poDate
+    ) {
+        throw new Error(
+            'Expected delivery date cannot be before the PO date.'
+        );
+    }
+
+    const result = await db.query(
+        `
+        UPDATE purchase_orders
+        SET
+            po_number = $1,
+            vendor_id = $2,
+            po_date = $3,
+            site_id = $4,
+            expected_delivery_date = $5,
+            reference_text = $6,
+            notes = $7,
+            updated_at = NOW()
+        WHERE id = $8
+        RETURNING *
+        `,
+        [
+            cleanPoNumber,
+            vendorId,
+            poDate,
+            siteId,
+            expectedDeliveryDate || null,
+            referenceText || null,
+            notes || null,
+            id
+        ]
+    );
+
+    return result.rows[0] || null;
+}
+
+async function addPurchaseOrderLine({
+    purchaseOrderId,
+    itemMasterId,
+    orderedQuantity,
+    unit,
+    notes = null
+}) {
+    const quantity = normalizeQuantity(orderedQuantity);
+
+    if (!purchaseOrderId) {
+        throw new Error('Purchase order is required.');
+    }
+
+    if (!itemMasterId) {
+        throw new Error('Item Master is required.');
+    }
+
+    const itemResult = await db.query(
+        `
+        SELECT
+            id,
+            item_code,
+            name,
+            unit,
+            instance_quantity,
+            instance_quantity_unit,
+            status
+        FROM item_masters
+        WHERE id = $1
+        `,
+        [itemMasterId]
+    );
+
+    const itemMaster = itemResult.rows[0];
+
+    if (!itemMaster) {
+        throw new Error('Item Master not found.');
+    }
+
+    if (itemMaster.status !== 'ACTIVE') {
+        throw new Error('Only active Item Masters can be added to a Purchase Order.');
+    }
+
+    const physicalUnit = String(itemMaster.unit || '').trim();
+
+    if (!physicalUnit) {
+        throw new Error('Item Master physical unit is not configured.');
+    }
+
+    if (unit && String(unit).trim() !== physicalUnit) {
+        throw new Error(
+            `Invalid unit for ${itemMaster.item_code}. `
+            + `Purchase Order unit must be ${physicalUnit}.`
+        );
+    }
+
+    const result = await db.query(
+        `
+        INSERT INTO purchase_order_lines (
+            purchase_order_id,
+            item_master_id,
+            ordered_quantity,
+            unit,
+            notes
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING *
+        `,
+        [
+            purchaseOrderId,
+            itemMasterId,
+            quantity,
+            physicalUnit,
+            notes || null
+        ]
+    );
+
+    return result.rows[0];
+}
+
+async function updatePurchaseOrderLine(
+    lineId,
+    {
+        itemMasterId,
+        orderedQuantity,
+        unit,
+        notes = null
+    }
+) {
+    const quantity = normalizeQuantity(orderedQuantity);
+
+    if (!itemMasterId) {
+        throw new Error('Item Master is required.');
+    }
+
+    const itemResult = await db.query(
+        `
+        SELECT
+            id,
+            item_code,
+            name,
+            unit,
+            instance_quantity,
+            instance_quantity_unit,
+            status
+        FROM item_masters
+        WHERE id = $1
+        `,
+        [itemMasterId]
+    );
+
+    const itemMaster = itemResult.rows[0];
+
+    if (!itemMaster) {
+        throw new Error('Item Master not found.');
+    }
+
+    if (itemMaster.status !== 'ACTIVE') {
+        throw new Error('Only active Item Masters can be used in a Purchase Order.');
+    }
+
+    const physicalUnit = String(itemMaster.unit || '').trim();
+
+    if (!physicalUnit) {
+        throw new Error('Item Master physical unit is not configured.');
+    }
+
+    if (unit && String(unit).trim() !== physicalUnit) {
+        throw new Error(
+            `Invalid unit for ${itemMaster.item_code}. `
+            + `Purchase Order unit must be ${physicalUnit}.`
+        );
+    }
+
+    const result = await db.query(
+        `
+        UPDATE purchase_order_lines
+        SET
+            item_master_id = $1,
+            ordered_quantity = $2,
+            unit = $3,
+            notes = $4,
+            updated_at = NOW()
+        WHERE id = $5
+        RETURNING *
+        `,
+        [
+            itemMasterId,
+            quantity,
+            physicalUnit,
+            notes || null,
+            lineId
+        ]
+    );
+
+    return result.rows[0] || null;
+}
+
+async function deletePurchaseOrderLine(lineId) {
+    const result = await db.query(
+        `
+        DELETE FROM purchase_order_lines
+        WHERE id = $1
+        RETURNING *
+        `,
+        [lineId]
+    );
+
+    return result.rows[0] || null;
+}
+
+async function setPurchaseOrderStatus(id, status) {
+    validatePoStatus(status);
+
+    const result = await db.query(
+        `
+        UPDATE purchase_orders
+        SET
+            status = $1,
+            updated_at = NOW()
+        WHERE id = $2
+        RETURNING *
+        `,
+        [status, id]
+    );
+
+    return result.rows[0] || null;
+}
+
+module.exports = {
+    PO_STATUSES,
+    listPurchaseOrders,
+    getPurchaseOrderById,
+    createPurchaseOrder,
+    updatePurchaseOrder,
+    addPurchaseOrderLine,
+    updatePurchaseOrderLine,
+    deletePurchaseOrderLine,
+    setPurchaseOrderStatus
+};

@@ -1,0 +1,565 @@
+<div class="container-fluid py-3">
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+
+        <div>
+
+            <h2 class="mb-1">
+                Goods Receipt
+                <%= grn.grn_number %>
+            </h2>
+
+            <p class="text-muted mb-0">
+                Goods receipt details and receiving status.
+            </p>
+
+        </div>
+
+
+        <div class="d-flex flex-wrap gap-2">
+
+            <a
+                href="/goods-receipts"
+                class="btn btn-outline-secondary"
+            >
+                Back
+            </a>
+
+
+            <% if (
+                currentUser &&
+                ['admin', 'manager', 'operator'].includes(currentUser.role) &&
+                grn.status === 'DRAFT'
+            ) { %>
+
+                <a
+                    href="/goods-receipts/<%= grn.id %>/edit"
+                    class="btn btn-outline-primary"
+                >
+                    Edit
+                </a>
+
+            <% } %>
+
+        </div>
+
+    </div>
+
+
+    <!-- ============================= -->
+    <!-- GRN INFORMATION -->
+    <!-- ============================= -->
+
+    <div class="card shadow-sm mb-4">
+
+        <div class="card-header d-flex justify-content-between align-items-center">
+
+            <strong>
+                Goods Receipt Information
+            </strong>
+
+
+            <% if (grn.status === 'DRAFT') { %>
+
+                <span class="badge bg-secondary">
+                    Draft
+                </span>
+
+            <% } else if (grn.status === 'RECEIVED') { %>
+
+                <span class="badge bg-success">
+                    Received
+                </span>
+
+            <% } else { %>
+
+                <span class="badge bg-danger">
+                    Cancelled
+                </span>
+
+            <% } %>
+
+        </div>
+
+
+        <div class="card-body">
+
+            <div class="row g-4">
+
+
+                <div class="col-md-4">
+
+                    <div class="text-muted small">
+                        GRN Number
+                    </div>
+
+                    <strong>
+                        <%= grn.grn_number %>
+                    </strong>
+
+                </div>
+
+
+                <div class="col-md-4">
+
+                    <div class="text-muted small">
+                        Purchase Order
+                    </div>
+
+                    <a
+                        href="/purchase-orders/<%= grn.purchase_order_id %>"
+                        class="fw-semibold"
+                    >
+                        <%= grn.po_number %>
+                    </a>
+
+                </div>
+
+
+                <div class="col-md-4">
+
+                    <div class="text-muted small">
+                        Vendor
+                    </div>
+
+                    <strong>
+                        <%= grn.vendor_code %>
+                        -
+                        <%= grn.vendor_name %>
+                    </strong>
+
+                </div>
+
+
+                <div class="col-md-4">
+
+                    <div class="text-muted small">
+                        Site
+                    </div>
+
+                    <strong>
+                        <%= grn.site_code %>
+                        -
+                        <%= grn.site_name %>
+                    </strong>
+
+                </div>
+
+
+                <div class="col-md-4">
+
+                    <div class="text-muted small">
+                        Delivery Date
+                    </div>
+
+                    <%= grn.delivery_date || '-' %>
+
+                </div>
+
+
+                <div class="col-md-4">
+
+                    <div class="text-muted small">
+                        Received At
+                    </div>
+
+                    <%= grn.received_at
+                        ? new Date(
+                            grn.received_at
+                        ).toLocaleString()
+                        : 'Not confirmed yet'
+                    %>
+
+                </div>
+
+
+                <div class="col-md-4">
+
+                    <div class="text-muted small">
+                        Received By
+                    </div>
+
+                    <%= grn.received_by_name || '-' %>
+
+                </div>
+
+
+                <div class="col-md-4">
+
+                    <div class="text-muted small">
+                        Delivery Reference
+                    </div>
+
+                    <%= grn.delivery_reference || '-' %>
+
+                </div>
+
+
+                <div class="col-md-4">
+
+                    <div class="text-muted small">
+                        Notes
+                    </div>
+
+                    <%= grn.notes || '-' %>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ============================= -->
+    <!-- RECEIVED ITEMS -->
+    <!-- ============================= -->
+
+    <div class="card shadow-sm mb-4">
+
+        <div class="card-header">
+
+            <strong>
+                Received Items
+            </strong>
+
+        </div>
+
+
+        <div class="card-body p-0">
+
+
+            <% if (
+                !grn.lines ||
+                grn.lines.length === 0
+            ) { %>
+
+                <div class="text-center text-muted py-5">
+
+                    No receipt lines have been added to this GRN.
+
+                    <% if (grn.status === 'DRAFT') { %>
+
+                        <div class="mt-3">
+
+                            <a
+                                href="/goods-receipts/<%= grn.id %>/edit"
+                                class="btn btn-primary"
+                            >
+                                Add Receipt Items
+                            </a>
+
+                        </div>
+
+                    <% } %>
+
+                </div>
+
+
+            <% } else { %>
+
+
+                <div class="p-3 border-bottom bg-light">
+
+                    <div class="fw-semibold">
+                        Physical-instance receipt
+                    </div>
+
+                    <div class="small text-muted mt-1">
+
+                        Each received physical unit becomes its
+                        own inventory instance.
+
+                        The quantity per instance comes from
+                        the Item Master.
+
+                    </div>
+
+                </div>
+
+
+                <div class="table-responsive">
+
+                    <table class="table table-hover align-middle mb-0">
+
+                        <thead class="table-light">
+
+                            <tr>
+
+                                <th>
+                                    #
+                                </th>
+
+                                <th>
+                                    Item Code
+                                </th>
+
+                                <th>
+                                    Item
+                                </th>
+
+                                <th>
+                                    Received
+                                </th>
+
+                                <th>
+                                    Physical Unit
+                                </th>
+
+                                <th>
+                                    Per Instance
+                                </th>
+
+                                <th>
+                                    PO Ordered
+                                </th>
+
+                                <th>
+                                    Notes
+                                </th>
+
+                            </tr>
+
+                        </thead>
+
+
+                        <tbody>
+
+                            <% grn.lines.forEach(
+                                (line, index) => {
+                            %>
+
+                                <tr>
+
+                                    <td>
+                                        <%= index + 1 %>
+                                    </td>
+
+
+                                    <td>
+
+                                        <strong>
+                                            <%= line.item_code %>
+                                        </strong>
+
+                                    </td>
+
+
+                                    <td>
+
+                                        <div>
+                                            <%= line.item_name %>
+                                        </div>
+
+                                        <% if (
+                                            line.item_description
+                                        ) { %>
+
+                                            <div class="small text-muted">
+                                                <%= line.item_description %>
+                                            </div>
+
+                                        <% } %>
+
+                                    </td>
+
+
+                                    <td>
+
+                                        <strong>
+                                            <%= line.received_quantity %>
+                                        </strong>
+
+                                    </td>
+
+
+                                    <td>
+
+                                        <span class="badge text-bg-secondary">
+                                            <%= line.unit %>
+                                        </span>
+
+                                    </td>
+
+
+                                    <td>
+
+                                        <strong>
+                                            <%= line.instance_quantity %>
+                                        </strong>
+
+                                        <%= line.instance_quantity_unit %>
+
+                                        <div class="small text-muted">
+                                            per <%= line.unit %>
+                                        </div>
+
+                                    </td>
+
+
+                                    <td>
+
+                                        <%= line.ordered_quantity %>
+                                        <%= line.unit %>
+
+                                    </td>
+
+
+                                    <td>
+                                        <%= line.notes || '-' %>
+                                    </td>
+
+                                </tr>
+
+
+                                <tr class="table-light">
+
+                                    <td></td>
+
+                                    <td colspan="7">
+
+                                        <div class="small text-muted">
+
+                                            <strong>
+                                                <%= line.received_quantity %>
+                                                <%= line.unit %>
+                                            </strong>
+
+                                            =
+
+                                            <%= line.received_quantity %>
+                                            physical instance(s)
+
+                                            ×
+
+                                            <%= line.instance_quantity %>
+                                            <%= line.instance_quantity_unit %>
+                                            each
+
+                                        </div>
+
+                                    </td>
+
+                                </tr>
+
+                            <% }) %>
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            <% } %>
+
+        </div>
+
+    </div>
+
+
+    <!-- ============================= -->
+    <!-- ACTIONS -->
+    <!-- ============================= -->
+
+    <% if (
+        currentUser &&
+        ['admin', 'manager', 'operator'].includes(
+            currentUser.role
+        ) &&
+        grn.status === 'DRAFT'
+    ) { %>
+
+        <div class="card shadow-sm">
+
+            <div class="card-header">
+
+                <strong>
+                    Goods Receipt Actions
+                </strong>
+
+            </div>
+
+
+            <div class="card-body">
+
+                <div class="alert alert-info mb-3">
+
+                    This GRN is still a draft.
+
+                    Inventory has not been added yet.
+
+                    Review the receipt carefully before confirming it.
+
+                </div>
+
+
+                <div class="d-flex flex-wrap gap-2">
+
+
+                    <a
+                        href="/goods-receipts/<%= grn.id %>/edit"
+                        class="btn btn-primary"
+                    >
+                        Edit Receipt
+                    </a>
+
+
+                    <form
+                        method="POST"
+                        action="/goods-receipts/<%= grn.id %>/receive"
+                        class="d-inline"
+                        onsubmit="return confirm(
+                            'Confirm this Goods Receipt? This will create physical inventory instances and cannot be undone.'
+                        );"
+                    >
+
+                        <input
+                            type="hidden"
+                            name="_csrf"
+                            value="<%= csrfToken %>"
+                        >
+
+                        <button
+                            type="submit"
+                            class="btn btn-success"
+                        >
+                            Confirm Receipt
+                        </button>
+
+                    </form>
+
+
+                    <form
+                        method="POST"
+                        action="/goods-receipts/<%= grn.id %>/cancel"
+                        class="d-inline"
+                    >
+
+                        <input
+                            type="hidden"
+                            name="_csrf"
+                            value="<%= csrfToken %>"
+                        >
+
+                        <button
+                            type="submit"
+                            class="btn btn-outline-danger"
+                            onclick="return confirm(
+                                'Cancel this draft GRN?'
+                            );"
+                        >
+                            Cancel GRN
+                        </button>
+
+                    </form>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    <% } %>
+
+</div>

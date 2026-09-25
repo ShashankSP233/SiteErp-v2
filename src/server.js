@@ -83,14 +83,21 @@ app.use(csrf);
 app.use(enforcePasswordChange);
 app.use((req, res, next) => { res.locals.appName = env.appName; next(); });
 
+
+// ============================================================
+// SITE-ERP V2
+// ============================================================
+
 app.use(require('./routes/authRoutes'));
 app.use(require('./routes/siteRoutes'));
 app.use(require('./routes/dashboardRoutes'));
 app.use(require('./routes/itemRoutes'));
 app.use(require('./routes/itemInstanceRoutes'));
-// ============================================================
-// SITE-ERP V2
-// ============================================================
+app.use(require('./routes/inventoryIssueRoutes'));
+app.use(require('./routes/vendorRoutes'));
+app.use(require('./routes/poRoutes'));
+app.use(require('./routes/grnRoutes'));
+
 
 // V1 modules temporarily disabled while V2 is rebuilt.
 //

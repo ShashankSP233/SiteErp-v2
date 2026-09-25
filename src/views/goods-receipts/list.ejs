@@ -1,0 +1,300 @@
+<div class="container-fluid py-3">
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+
+        <div>
+            <h2 class="mb-1">Goods Receipts</h2>
+
+            <p class="text-muted mb-0">
+                Record and manage goods received against Purchase Orders.
+            </p>
+        </div>
+
+        <% if (currentUser && ['admin', 'manager', 'operator'].includes(currentUser.role)) { %>
+
+            <a
+                href="/goods-receipts/new"
+                class="btn btn-primary"
+            >
+                + Create GRN
+            </a>
+
+        <% } %>
+
+    </div>
+
+
+    <!-- Filters -->
+    <div class="card shadow-sm mb-4">
+
+        <div class="card-header">
+            <strong>Filters</strong>
+        </div>
+
+        <div class="card-body">
+
+            <form method="GET" action="/goods-receipts">
+
+                <div class="row g-3 align-items-end">
+
+                    <div class="col-md-3">
+
+                        <label class="form-label">
+                            Status
+                        </label>
+
+                        <select
+                            name="status"
+                            class="form-select"
+                        >
+                            <option value="">
+                                All Statuses
+                            </option>
+
+                            <% ['DRAFT', 'RECEIVED', 'CANCELLED'].forEach(status => { %>
+
+                                <option
+                                    value="<%= status %>"
+                                    <%= filters.status === status ? 'selected' : '' %>
+                                >
+                                    <%= status %>
+                                </option>
+
+                            <% }) %>
+
+                        </select>
+
+                    </div>
+
+
+                    <div class="col-md-3">
+
+                        <label class="form-label">
+                            Site
+                        </label>
+
+                        <select
+                            name="siteId"
+                            class="form-select"
+                        >
+                            <option value="">
+                                All Sites
+                            </option>
+
+                            <% sites.forEach(site => { %>
+
+                                <option
+                                    value="<%= site.id %>"
+                                    <%= String(filters.siteId) === String(site.id)
+                                        ? 'selected'
+                                        : '' %>
+                                >
+                                    <%= site.code %> -
+                                    <%= site.name %>
+                                </option>
+
+                            <% }) %>
+
+                        </select>
+
+                    </div>
+
+
+                    <div class="col-md-3">
+
+                        <label class="form-label">
+                            Purchase Order ID
+                        </label>
+
+                        <input
+                            type="number"
+                            name="purchaseOrderId"
+                            class="form-control"
+                            min="1"
+                            value="<%= filters.purchaseOrderId || '' %>"
+                            placeholder="PO ID"
+                        >
+
+                    </div>
+
+
+                    <div class="col-md-3 d-flex gap-2">
+
+                        <button
+                            type="submit"
+                            class="btn btn-primary"
+                        >
+                            Filter
+                        </button>
+
+                        <a
+                            href="/goods-receipts"
+                            class="btn btn-outline-secondary"
+                        >
+                            Reset
+                        </a>
+
+                    </div>
+
+                </div>
+
+            </form>
+
+        </div>
+
+    </div>
+
+
+    <!-- GRN List -->
+    <div class="card shadow-sm">
+
+        <div class="card-header">
+            <strong>Goods Receipt List</strong>
+        </div>
+
+        <div class="card-body p-0">
+
+            <% if (!grns || grns.length === 0) { %>
+
+                <div class="text-center py-5">
+
+                    <h5>No Goods Receipts found</h5>
+
+                    <p class="text-muted">
+                        No GRNs match the current filters.
+                    </p>
+
+                    <% if (currentUser && ['admin', 'manager', 'operator'].includes(currentUser.role)) { %>
+
+                        <a
+                            href="/goods-receipts/new"
+                            class="btn btn-primary"
+                        >
+                            Create GRN
+                        </a>
+
+                    <% } %>
+
+                </div>
+
+            <% } else { %>
+
+                <div class="table-responsive">
+
+                    <table class="table table-hover align-middle mb-0">
+
+                        <thead class="table-light">
+
+                            <tr>
+                                <th>GRN Number</th>
+                                <th>PO Number</th>
+                                <th>Site</th>
+                                <th>Delivery Date</th>
+                                <th>Lines</th>
+                                <th>Status</th>
+                                <th>Received By</th>
+                                <th class="text-end">Action</th>
+                            </tr>
+
+                        </thead>
+
+                        <tbody>
+
+                            <% grns.forEach(grn => { %>
+
+                                <tr>
+
+                                    <td>
+                                        <strong>
+                                            <%= grn.grn_number %>
+                                        </strong>
+                                    </td>
+
+                                    <td>
+                                        <%= grn.po_number %>
+                                    </td>
+
+                                    <td>
+                                        <%= grn.site_code %> -
+                                        <%= grn.site_name %>
+                                    </td>
+
+                                    <td>
+                                        <%= grn.delivery_date || '-' %>
+                                    </td>
+
+                                    <td>
+                                        <%= grn.line_count %>
+                                    </td>
+
+                                    <td>
+
+                                        <% if (grn.status === 'DRAFT') { %>
+
+                                            <span class="badge bg-secondary">
+                                                Draft
+                                            </span>
+
+                                        <% } else if (grn.status === 'RECEIVED') { %>
+
+                                            <span class="badge bg-success">
+                                                Received
+                                            </span>
+
+                                        <% } else { %>
+
+                                            <span class="badge bg-danger">
+                                                Cancelled
+                                            </span>
+
+                                        <% } %>
+
+                                    </td>
+
+                                    <td>
+                                        <%= grn.received_by_name || '-' %>
+                                    </td>
+
+                                    <td class="text-end">
+
+                                        <a
+                                            href="/goods-receipts/<%= grn.id %>"
+                                            class="btn btn-sm btn-outline-primary"
+                                        >
+                                            View
+                                        </a>
+
+                                        <% if (
+                                            currentUser &&
+                                            ['admin', 'manager', 'operator'].includes(currentUser.role) &&
+                                            grn.status === 'DRAFT'
+                                        ) { %>
+
+                                            <a
+                                                href="/goods-receipts/<%= grn.id %>/edit"
+                                                class="btn btn-sm btn-outline-secondary"
+                                            >
+                                                Edit
+                                            </a>
+
+                                        <% } %>
+
+                                    </td>
+
+                                </tr>
+
+                            <% }) %>
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            <% } %>
+
+        </div>
+
+    </div>
+
+</div>

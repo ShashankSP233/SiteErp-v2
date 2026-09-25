@@ -1,4 +1,4 @@
-const db = require('../config/db');
+const db = require("../config/db");
 
 /**
  * Get an item master by ID.
@@ -6,17 +6,19 @@ const db = require('../config/db');
 async function getItemMasterForInstance(itemMasterId) {
   return db.one(
     `SELECT
-       id,
-       item_code,
-       name,
-       unit,
-       is_consumable,
-       allows_partial_consumption,
-       requires_instance_tracking,
-       status
-     FROM item_masters
-     WHERE id = ?`,
-    [itemMasterId]
+      id,
+      item_code,
+      name,
+      unit,
+      instance_quantity,
+      instance_quantity_unit,
+      is_consumable,
+      allows_partial_consumption,
+      requires_instance_tracking,
+      status
+    FROM item_masters
+    WHERE id = ?`,
+    [itemMasterId],
   );
 }
 
@@ -34,7 +36,7 @@ async function allocateInstanceNumber(tx, itemMasterId) {
     FROM item_instance_counters
     WHERE item_master_id = ?
     FOR UPDATE`,
-    [itemMasterId]
+    [itemMasterId],
   );
 
   const existing = result.rows[0] || null;
@@ -44,7 +46,7 @@ async function allocateInstanceNumber(tx, itemMasterId) {
       `INSERT INTO item_instance_counters
          (item_master_id, next_number)
        VALUES (?, 2)`,
-      [itemMasterId]
+      [itemMasterId],
     );
 
     return 1;
@@ -57,7 +59,7 @@ async function allocateInstanceNumber(tx, itemMasterId) {
      SET next_number = ?,
          updated_at = now()
      WHERE item_master_id = ?`,
-    [number + 1, itemMasterId]
+    [number + 1, itemMasterId],
   );
 
   return number;
@@ -70,85 +72,288 @@ async function allocateInstanceNumber(tx, itemMasterId) {
  * CEMENT-001 + 1 -> CEMENT-001-0001
  */
 function buildInstanceCode(itemCode, number) {
-  return `${itemCode}-${String(number).padStart(4, '0')}`;
+  return `${itemCode}-${String(number).padStart(4, "0")}`;
 }
 
 /**
- * Create one physical inventory instance and its RECEIVE movement.
+ * Create one physical inventory instance and its RECEIVE movement
+ * using an existing database transaction.
  *
- * The entire operation happens inside one PostgreSQL transaction.
+ * IMPORTANT:
+ * The caller owns the transaction.
  */
-async function receiveInstance({
-  itemMasterId,
-  quantity,
-  siteId,
-  performedBy,
-  batchNumber = null,
-  serialNumber = null,
-  manufactureDate = null,
-  expiryDate = null,
-  reason = null
-}) {
+async function receiveInstanceWithinTransaction(
+  tx,
+  {
+    itemMasterId,
+    quantity,
+    siteId,
+    performedBy,
+    batchNumber = null,
+    serialNumber = null,
+    manufactureDate = null,
+    expiryDate = null,
+    reason = null,
+  },
+) {
   if (!Number.isFinite(Number(quantity)) || Number(quantity) <= 0) {
-    throw new Error('Quantity must be greater than zero.');
+    throw new Error("Quantity must be greater than zero.");
   }
 
   const qty = Number(quantity);
 
-  return db.tx(async (tx) => {
-    // Lock and validate the item master.
-    const itemMaster = await tx.one(
-      `SELECT
-         id,
-         item_code,
-         name,
-         unit,
-         is_consumable,
-         allows_partial_consumption,
-         requires_instance_tracking,
-         status
-       FROM item_masters
-       WHERE id = ?
-       FOR UPDATE`,
-      [itemMasterId]
+  // Lock and validate the item master.
+  const itemMaster = await tx.one(
+    `SELECT
+        id,
+        item_code,
+        name,
+        unit,
+        instance_quantity,
+        instance_quantity_unit,
+        is_consumable,
+        allows_partial_consumption,
+        requires_instance_tracking,
+        status
+      FROM item_masters
+      WHERE id = ?
+      FOR UPDATE`,
+    [itemMasterId],
+  );
+
+  if (itemMaster.status !== "ACTIVE") {
+    throw new Error("Cannot receive inventory for an inactive item master.");
+  }
+
+  if (!itemMaster.requires_instance_tracking) {
+    throw new Error(
+      "This item master is not configured for physical instance tracking.",
     );
+  }
 
-    if (itemMaster.status !== 'ACTIVE') {
-      throw new Error('Cannot receive inventory for an inactive item master.');
-    }
+  // Validate the destination site.
+  const site = await tx.one(
+    `SELECT
+       id,
+       code,
+       name,
+       site_type,
+       status
+     FROM sites
+     WHERE id = ?
+     FOR UPDATE`,
+    [siteId],
+  );
 
-    if (!itemMaster.requires_instance_tracking) {
-      throw new Error(
-        'This item master is not configured for physical instance tracking.'
-      );
-    }
+  if (site.status !== "ACTIVE") {
+    throw new Error("Cannot receive inventory into an inactive site.");
+  }
 
-    // Validate the destination site.
-    const site = await tx.one(
-      `SELECT id, code, name, site_type, status
-       FROM sites
-       WHERE id = ?
-       FOR UPDATE`,
-      [siteId]
+  // Allocate a unique instance number.
+  const instanceNumber = await allocateInstanceNumber(tx, itemMaster.id);
+
+  const instanceCode = buildInstanceCode(itemMaster.item_code, instanceNumber);
+
+  // The barcode is the permanent identity of this physical instance.
+  const barcode = instanceCode;
+
+  // Create the physical instance.
+  const instance = await tx.one(
+    `INSERT INTO item_instances (
+       item_master_id,
+       instance_code,
+       barcode,
+       original_quantity,
+       current_quantity,
+       unit,
+       site_id,
+       lifecycle_status,
+       condition,
+       batch_number,
+       serial_number,
+       manufacture_date,
+       expiry_date
+     )
+     VALUES (
+       ?,
+       ?,
+       ?,
+       ?,
+       ?,
+       ?,
+       ?,
+       'ACTIVE',
+       'GOOD',
+       ?,
+       ?,
+       ?,
+       ?
+     )
+     RETURNING *`,
+    [
+      itemMaster.id,
+      instanceCode,
+      barcode,
+      qty,
+      qty,
+      itemMaster.instance_quantity_unit,
+      site.id,
+      batchNumber || null,
+      serialNumber || null,
+      manufactureDate || null,
+      expiryDate || null,
+    ],
+  );
+
+  // Create the corresponding inventory movement.
+  await tx.query(
+    `INSERT INTO inventory_movements (
+       instance_id,
+       movement_type,
+       quantity,
+       from_site_id,
+       to_site_id,
+       reference_type,
+       reference_id,
+       reason,
+       performed_by
+     )
+     VALUES (
+       ?,
+       'RECEIVE',
+       ?,
+       NULL,
+       ?,
+       'DIRECT_RECEIVE',
+       ?,
+       ?,
+       ?
+     )`,
+    [
+      instance.id,
+      qty,
+      site.id,
+      instanceCode,
+      reason || "Inventory received",
+      performedBy,
+    ],
+  );
+
+  return {
+    instance,
+    itemMaster,
+    site,
+  };
+}
+
+/**
+ * Create multiple physical inventory instances and their RECEIVE movements
+ * using an existing database transaction.
+ *
+ * instanceCount means the number of physical units received.
+ *
+ * Example:
+ *   instanceCount = 5
+ *   item master = OIL-20L
+ *   instance_quantity = 20
+ *   instance_quantity_unit = L
+ *
+ * Result:
+ *   5 physical instances
+ *   each containing 20 L
+ *
+ * IMPORTANT:
+ * The caller owns the transaction.
+ */
+async function receiveInstancesWithinTransaction(
+  tx,
+  {
+    itemMasterId,
+    instanceCount,
+    siteId,
+    performedBy,
+    batchNumber = null,
+    serialNumber = null,
+    manufactureDate = null,
+    expiryDate = null,
+    reason = null,
+  },
+) {
+  const count = Number(instanceCount);
+
+  if (!Number.isInteger(count) || count <= 0) {
+    throw new Error("Instance count must be a positive whole number.");
+  }
+
+  // Lock and validate the item master.
+  const itemMaster = await tx.one(
+    `SELECT
+       id,
+       item_code,
+       name,
+       unit,
+       instance_quantity,
+       instance_quantity_unit,
+       is_consumable,
+       allows_partial_consumption,
+       requires_instance_tracking,
+       status
+     FROM item_masters
+     WHERE id = ?
+     FOR UPDATE`,
+    [itemMasterId],
+  );
+
+  if (itemMaster.status !== "ACTIVE") {
+    throw new Error("Cannot receive inventory for an inactive item master.");
+  }
+
+  if (!itemMaster.requires_instance_tracking) {
+    throw new Error(
+      "This item master is not configured for physical instance tracking.",
     );
+  }
 
-    if (site.status !== 'ACTIVE') {
-      throw new Error('Cannot receive inventory into an inactive site.');
-    }
+  const instanceQuantity = Number(itemMaster.instance_quantity);
 
+  if (!Number.isFinite(instanceQuantity) || instanceQuantity <= 0) {
+    throw new Error("Item master has an invalid instance quantity.");
+  }
+
+  if (!itemMaster.instance_quantity_unit?.trim()) {
+    throw new Error("Item master has no instance quantity unit configured.");
+  }
+
+  // Validate the destination site.
+  const site = await tx.one(
+    `SELECT
+       id,
+       code,
+       name,
+       site_type,
+       status
+     FROM sites
+     WHERE id = ?
+     FOR UPDATE`,
+    [siteId],
+  );
+
+  if (site.status !== "ACTIVE") {
+    throw new Error("Cannot receive inventory into an inactive site.");
+  }
+
+  const createdInstances = [];
+
+  for (let i = 0; i < count; i += 1) {
     // Allocate a unique instance number.
-    const instanceNumber = await allocateInstanceNumber(
-      tx,
-      itemMaster.id
-    );
+    const instanceNumber = await allocateInstanceNumber(tx, itemMaster.id);
 
     const instanceCode = buildInstanceCode(
       itemMaster.item_code,
-      instanceNumber
+      instanceNumber,
     );
 
-    // For now the barcode value is the permanent instance code.
-    // Later we can encode this same value into a printable QR/Code128 label.
+    // Barcode is the permanent identity of this physical instance.
     const barcode = instanceCode;
 
     // Create the physical instance.
@@ -168,21 +373,35 @@ async function receiveInstance({
          manufacture_date,
          expiry_date
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 'GOOD', ?, ?, ?, ?)
+       VALUES (
+         ?,
+         ?,
+         ?,
+         ?,
+         ?,
+         ?,
+         ?,
+         'ACTIVE',
+         'GOOD',
+         ?,
+         ?,
+         ?,
+         ?
+       )
        RETURNING *`,
       [
         itemMaster.id,
         instanceCode,
         barcode,
-        qty,
-        qty,
-        itemMaster.unit,
+        instanceQuantity,
+        instanceQuantity,
+        itemMaster.instance_quantity_unit,
         site.id,
         batchNumber || null,
         serialNumber || null,
         manufactureDate || null,
-        expiryDate || null
-      ]
+        expiryDate || null,
+      ],
     );
 
     // Create the corresponding inventory movement.
@@ -211,19 +430,55 @@ async function receiveInstance({
        )`,
       [
         instance.id,
-        qty,
+        instanceQuantity,
         site.id,
         instanceCode,
-        reason || 'Inventory received',
-        performedBy
-      ]
+        reason || "Inventory received",
+        performedBy,
+      ],
     );
 
-    return {
-      instance,
-      itemMaster,
-      site
-    };
+    createdInstances.push(instance);
+  }
+
+  return {
+    instances: createdInstances,
+    itemMaster,
+    site,
+  };
+}
+
+/**
+ * Create one physical inventory instance and its RECEIVE movement.
+ *
+ * This public helper starts its own transaction.
+ *
+ * Use receiveInstanceWithinTransaction() when the caller already
+ * has an active transaction.
+ */
+async function receiveInstance({
+  itemMasterId,
+  quantity,
+  siteId,
+  performedBy,
+  batchNumber = null,
+  serialNumber = null,
+  manufactureDate = null,
+  expiryDate = null,
+  reason = null,
+}) {
+  return db.tx(async (tx) => {
+    return receiveInstanceWithinTransaction(tx, {
+      itemMasterId,
+      quantity,
+      siteId,
+      performedBy,
+      batchNumber,
+      serialNumber,
+      manufactureDate,
+      expiryDate,
+      reason,
+    });
   });
 }
 
@@ -234,15 +489,30 @@ async function receiveInstance({
  * Other users only see their assigned active sites.
  */
 async function listInstancesForUser(user) {
-  if (user.role === 'admin') {
+  if (user.role === "admin") {
     return db.many(
       `SELECT
          ii.id,
          ii.instance_code,
          ii.barcode,
          ii.original_quantity,
-         ii.current_quantity,
-         ii.unit,
+          ii.current_quantity,
+          ii.unit,
+
+          COALESCE((
+              SELECT SUM(inv.remaining_quantity)
+              FROM inventory_issues inv
+              WHERE inv.instance_id = ii.id
+                AND inv.status IN ('OPEN', 'PARTIALLY_CONSUMED')
+          ), 0) AS issued_quantity,
+
+          ii.current_quantity - COALESCE((
+              SELECT SUM(inv.remaining_quantity)
+              FROM inventory_issues inv
+              WHERE inv.instance_id = ii.id
+                AND inv.status IN ('OPEN', 'PARTIALLY_CONSUMED')
+          ), 0) AS available_quantity,
+
          ii.lifecycle_status,
          ii.condition,
          ii.batch_number,
@@ -254,13 +524,16 @@ async function listInstancesForUser(user) {
          im.id AS item_master_id,
          im.item_code,
          im.name AS item_name,
+         im.unit AS physical_unit,
+         im.instance_quantity,
+         im.instance_quantity_unit,
          s.id AS site_id,
          s.code AS site_code,
          s.name AS site_name
        FROM item_instances ii
        JOIN item_masters im ON im.id = ii.item_master_id
        LEFT JOIN sites s ON s.id = ii.site_id
-       ORDER BY ii.created_at DESC`
+       ORDER BY ii.created_at DESC`,
     );
   }
 
@@ -270,8 +543,22 @@ async function listInstancesForUser(user) {
        ii.instance_code,
        ii.barcode,
        ii.original_quantity,
-       ii.current_quantity,
-       ii.unit,
+        ii.current_quantity,
+        ii.unit,
+
+        COALESCE((
+            SELECT SUM(inv.remaining_quantity)
+            FROM inventory_issues inv
+            WHERE inv.instance_id = ii.id
+              AND inv.status IN ('OPEN', 'PARTIALLY_CONSUMED')
+        ), 0) AS issued_quantity,
+
+        ii.current_quantity - COALESCE((
+            SELECT SUM(inv.remaining_quantity)
+            FROM inventory_issues inv
+            WHERE inv.instance_id = ii.id
+              AND inv.status IN ('OPEN', 'PARTIALLY_CONSUMED')
+        ), 0) AS available_quantity,
        ii.lifecycle_status,
        ii.condition,
        ii.batch_number,
@@ -283,6 +570,9 @@ async function listInstancesForUser(user) {
        im.id AS item_master_id,
        im.item_code,
        im.name AS item_name,
+       im.unit AS physical_unit,
+       im.instance_quantity,
+       im.instance_quantity_unit,
        s.id AS site_id,
        s.code AS site_code,
        s.name AS site_name
@@ -294,7 +584,7 @@ async function listInstancesForUser(user) {
       AND sa.assigned_until IS NULL
      JOIN sites s ON s.id = ii.site_id
      ORDER BY ii.created_at DESC`,
-    [user.id]
+    [user.id],
   );
 }
 
@@ -302,6 +592,8 @@ module.exports = {
   getItemMasterForInstance,
   allocateInstanceNumber,
   buildInstanceCode,
+  receiveInstanceWithinTransaction,
+  receiveInstancesWithinTransaction,
   receiveInstance,
-  listInstancesForUser
+  listInstancesForUser,
 };

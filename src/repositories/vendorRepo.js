@@ -1,28 +1,197 @@
 const db = require('../config/db');
-const clean = (v) => { if (v === undefined || v === null) return null; const s = String(v).trim(); return s || null; };
 
-async function listVendors() {
-  return db.many(`SELECT v.*,
-      COALESCE((SELECT SUM(b.total) FROM bills b WHERE b.vendor_id=v.id AND b.status IN ('approved','part_paid','paid')),0)
-      - COALESCE((SELECT SUM(p.amount) FROM payments p JOIN bills b ON b.id=p.bill_id WHERE b.vendor_id=v.id),0) AS outstanding
-    FROM vendors v ORDER BY v.name`);
-}
-const getVendor = (id) => db.one('SELECT * FROM vendors WHERE id=?', [id]);
+async function listVendors({ includeInactive = false } = {}) {
+    const conditions = [];
+    const params = [];
 
-async function createVendor(input) {
-  const name = clean(input.name);
-  if (!name) throw new Error('Vendor name is required.');
-  const row = await db.one(
-    `INSERT INTO vendors(name, contact_name, email, mobile, phone, address, gstin, notes)
-     VALUES (?,?,?,?,?,?,?,?) RETURNING id`,
-    [name, clean(input.contactName), clean(input.email), clean(input.mobile), clean(input.phone),
-     clean(input.address), clean(input.gstin), clean(input.notes)]);
-  return row.id;
+    if (!includeInactive) {
+        conditions.push('is_active = TRUE');
+    }
+
+    const where = conditions.length
+        ? `WHERE ${conditions.join(' AND ')}`
+        : '';
+
+    const result = await db.query(
+        `
+        SELECT
+            id,
+            vendor_code,
+            name,
+            contact_person,
+            email,
+            phone,
+            address,
+            tax_identifier,
+            notes,
+            is_active,
+            created_at,
+            updated_at
+        FROM vendors
+        ${where}
+        ORDER BY name ASC, vendor_code ASC
+        `,
+        params
+    );
+
+    return result.rows;
 }
-async function updateVendor(id, input) {
-  await db.query(
-    `UPDATE vendors SET name=?, contact_name=?, email=?, mobile=?, phone=?, address=?, gstin=?, notes=? WHERE id=?`,
-    [clean(input.name), clean(input.contactName), clean(input.email), clean(input.mobile), clean(input.phone),
-     clean(input.address), clean(input.gstin), clean(input.notes), id]);
+
+async function getVendorById(id) {
+    const result = await db.query(
+        `
+        SELECT
+            id,
+            vendor_code,
+            name,
+            contact_person,
+            email,
+            phone,
+            address,
+            tax_identifier,
+            notes,
+            is_active,
+            created_at,
+            updated_at
+        FROM vendors
+        WHERE id = $1
+        `,
+        [id]
+    );
+
+    return result.rows[0] || null;
 }
-module.exports = { listVendors, getVendor, createVendor, updateVendor };
+
+async function createVendor({
+    vendorCode,
+    name,
+    contactPerson = null,
+    email = null,
+    phone = null,
+    address = null,
+    taxIdentifier = null,
+    notes = null
+}) {
+    const cleanVendorCode = String(vendorCode || '').trim();
+    const cleanName = String(name || '').trim();
+
+    if (!cleanVendorCode) {
+        throw new Error('Vendor code is required.');
+    }
+
+    if (!cleanName) {
+        throw new Error('Vendor name is required.');
+    }
+
+    const result = await db.query(
+        `
+        INSERT INTO vendors (
+            vendor_code,
+            name,
+            contact_person,
+            email,
+            phone,
+            address,
+            tax_identifier,
+            notes
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING *
+        `,
+        [
+            cleanVendorCode,
+            cleanName,
+            contactPerson || null,
+            email || null,
+            phone || null,
+            address || null,
+            taxIdentifier || null,
+            notes || null
+        ]
+    );
+
+    return result.rows[0];
+}
+
+async function updateVendor(
+    id,
+    {
+        vendorCode,
+        name,
+        contactPerson = null,
+        email = null,
+        phone = null,
+        address = null,
+        taxIdentifier = null,
+        notes = null,
+        isActive = true
+    }
+) {
+    const cleanVendorCode = String(vendorCode || '').trim();
+    const cleanName = String(name || '').trim();
+
+    if (!cleanVendorCode) {
+        throw new Error('Vendor code is required.');
+    }
+
+    if (!cleanName) {
+        throw new Error('Vendor name is required.');
+    }
+
+    const result = await db.query(
+        `
+        UPDATE vendors
+        SET
+            vendor_code = $1,
+            name = $2,
+            contact_person = $3,
+            email = $4,
+            phone = $5,
+            address = $6,
+            tax_identifier = $7,
+            notes = $8,
+            is_active = $9,
+            updated_at = NOW()
+        WHERE id = $10
+        RETURNING *
+        `,
+        [
+            cleanVendorCode,
+            cleanName,
+            contactPerson || null,
+            email || null,
+            phone || null,
+            address || null,
+            taxIdentifier || null,
+            notes || null,
+            Boolean(isActive),
+            id
+        ]
+    );
+
+    return result.rows[0] || null;
+}
+
+async function setVendorActive(id, isActive) {
+    const result = await db.query(
+        `
+        UPDATE vendors
+        SET
+            is_active = $1,
+            updated_at = NOW()
+        WHERE id = $2
+        RETURNING *
+        `,
+        [Boolean(isActive), id]
+    );
+
+    return result.rows[0] || null;
+}
+
+module.exports = {
+    listVendors,
+    getVendorById,
+    createVendor,
+    updateVendor,
+    setVendorActive
+};

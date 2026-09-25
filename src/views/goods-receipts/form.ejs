@@ -1,0 +1,1684 @@
+<%
+    const isEdit = !!goodsReceipt;
+
+    const grn =
+        goodsReceipt || null;
+
+    const po =
+        purchaseOrder ||
+        selectedPo ||
+        null;
+
+    const lines =
+        Array.isArray(grn?.lines)
+            ? grn.lines
+            : [];
+
+    const availableLines =
+        Array.isArray(receivableLines)
+            ? receivableLines
+            : [];
+
+    const selectedSite =
+        selectedSiteId ??
+        grn?.site_id ??
+        po?.site_id ??
+        '';
+
+    const currentDate =
+        new Date();
+
+    const today =
+        `${currentDate.getFullYear()}-${String(
+            currentDate.getMonth() + 1
+        ).padStart(2, '0')}-${String(
+            currentDate.getDate()
+        ).padStart(2, '0')}`;
+
+    const rawDeliveryDate =
+        grn?.delivery_date ||
+        grn?.receipt_date ||
+        today;
+
+    const deliveryDate =
+        String(rawDeliveryDate).slice(
+            0,
+            10
+        );
+
+    const deliveryReference =
+        grn?.delivery_reference ||
+        '';
+
+    const notes =
+        grn?.notes ||
+        '';
+
+    const status =
+        grn?.status ||
+        'DRAFT';
+
+    const receivedByName =
+        grn?.received_by_name ||
+        currentUser?.full_name ||
+        '';
+
+
+    function formatQuantity(value) {
+
+        const number =
+            Number(value || 0);
+
+        if (!Number.isFinite(number)) {
+            return '0';
+        }
+
+        return number.toLocaleString(
+            undefined,
+            {
+                maximumFractionDigits: 3
+            }
+        );
+    }
+
+
+    function getExistingLine(
+        purchaseOrderLineId
+    ) {
+
+        return lines.find(
+            line =>
+                String(
+                    line.purchase_order_line_id
+                ) ===
+                String(
+                    purchaseOrderLineId
+                )
+        );
+
+    }
+%>
+
+
+<div class="container-fluid py-4">
+
+    <!-- ============================= -->
+    <!-- HEADER -->
+    <!-- ============================= -->
+
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+
+        <div>
+
+            <div class="text-muted small mb-1">
+                Procurement / Goods Receipts
+            </div>
+
+            <h1 class="h3 mb-1">
+
+                <%= isEdit
+                    ? `Edit Goods Receipt ${grn.grn_number}`
+                    : 'Create Goods Receipt'
+                %>
+
+            </h1>
+
+            <p class="text-muted mb-0">
+
+                <%= isEdit
+                    ? 'Edit the draft Goods Receipt.'
+                    : 'Record physical goods received against a Purchase Order.'
+                %>
+
+            </p>
+
+        </div>
+
+
+        <div class="d-flex gap-2">
+
+            <a
+                href="<%= po
+                    ? `/purchase-orders/${po.id}`
+                    : '/goods-receipts'
+                %>"
+                class="btn btn-outline-secondary"
+            >
+                Back
+            </a>
+
+
+            <% if (
+                isEdit &&
+                status === 'DRAFT'
+            ) { %>
+
+                <form
+                    method="POST"
+                    action="/goods-receipts/<%= grn.id %>/cancel"
+                    onsubmit="return confirm('Cancel this Goods Receipt? This cannot be undone.');"
+                >
+
+                    <input
+                        type="hidden"
+                        name="_csrf"
+                        value="<%= csrfToken %>"
+                    >
+
+                    <button
+                        type="submit"
+                        class="btn btn-outline-danger"
+                    >
+                        Cancel
+                    </button>
+
+                </form>
+
+            <% } %>
+
+        </div>
+
+    </div>
+
+
+    <% if (!po) { %>
+
+        <div class="alert alert-danger">
+
+            No Purchase Order is selected.
+
+            Return to Goods Receipts and create a GRN from
+            a Purchase Order.
+
+        </div>
+
+    <% } else { %>
+
+
+        <!-- ============================= -->
+        <!-- MAIN FORM -->
+        <!-- ============================= -->
+
+        <form
+            id="grn-header-form"
+            method="POST"
+            action="<%= isEdit
+                ? `/goods-receipts/${grn.id}`
+                : '/goods-receipts'
+            %>"
+        >
+
+            <input
+                type="hidden"
+                name="_csrf"
+                value="<%= csrfToken %>"
+            >
+
+            <input
+                type="hidden"
+                name="purchaseOrderId"
+                value="<%= po.id %>"
+            >
+
+
+            <!-- ============================= -->
+            <!-- GRN DETAILS -->
+            <!-- ============================= -->
+
+            <div class="card shadow-sm mb-4">
+
+                <div class="card-header bg-white py-3">
+
+                    <div class="d-flex justify-content-between align-items-center">
+
+                        <h2 class="h5 mb-0">
+                            Goods Receipt Details
+                        </h2>
+
+
+                        <span
+                            class="badge
+                            <% if (status === 'DRAFT') { %>
+                                text-bg-warning
+                            <% } else if (status === 'RECEIVED') { %>
+                                text-bg-success
+                            <% } else { %>
+                                text-bg-secondary
+                            <% } %>"
+                        >
+                            <%= status %>
+                        </span>
+
+                    </div>
+
+                </div>
+
+
+                <div class="card-body">
+
+                    <div class="row g-3">
+
+
+                        <div class="col-12 col-md-6 col-xl-3">
+
+                            <label class="form-label fw-semibold">
+                                GRN Number
+                            </label>
+
+                            <input
+                                type="text"
+                                class="form-control"
+                                value="<%= grn?.grn_number || 'Generated on save' %>"
+                                readonly
+                            >
+
+                        </div>
+
+
+                        <div class="col-12 col-md-6 col-xl-3">
+
+                            <label class="form-label fw-semibold">
+                                Purchase Order
+                            </label>
+
+                            <input
+                                type="text"
+                                class="form-control"
+                                value="<%= po.po_number %>"
+                                readonly
+                            >
+
+                        </div>
+
+
+                        <div class="col-12 col-md-6 col-xl-3">
+
+                            <label class="form-label fw-semibold">
+                                Vendor
+                            </label>
+
+                            <input
+                                type="text"
+                                class="form-control"
+                                value="<%= po.vendor_name || '—' %>"
+                                readonly
+                            >
+
+                        </div>
+
+
+                        <div class="col-12 col-md-6 col-xl-3">
+
+                            <label class="form-label fw-semibold">
+                                Received By
+                            </label>
+
+                            <input
+                                type="text"
+                                class="form-control"
+                                value="<%= receivedByName %>"
+                                readonly
+                            >
+
+                        </div>
+
+
+                        <!-- RECEIVING SITE -->
+
+                        <div class="col-12 col-md-6">
+
+                            <label
+                                for="siteId"
+                                class="form-label fw-semibold"
+                            >
+                                Receiving Site
+                            </label>
+
+                            <input
+                                type="hidden"
+                                name="siteId"
+                                value="<%= selectedSite %>"
+                            >
+
+                            <input
+                                type="text"
+                                class="form-control"
+                                value="<%= po.code || po.site_code || '—' %> — <%= po.site_name || '—' %>"
+                                readonly
+                            >
+
+                            <div class="form-text">
+                                Goods are received into the Purchase Order site.
+                            </div>
+
+                        </div>
+
+
+                        <!-- DELIVERY REFERENCE -->
+
+                        <div class="col-12 col-md-6">
+
+                            <label
+                                for="deliveryReference"
+                                class="form-label fw-semibold"
+                            >
+                                Delivery Reference
+                            </label>
+
+                            <input
+                                type="text"
+                                id="deliveryReference"
+                                name="deliveryReference"
+                                class="form-control"
+                                maxlength="200"
+                                value="<%= deliveryReference %>"
+                                <%= status !== 'DRAFT'
+                                    ? 'readonly'
+                                    : ''
+                                %>
+                                placeholder="Delivery challan / invoice / supplier reference"
+                            >
+
+                        </div>
+
+
+                        <!-- DELIVERY DATE -->
+
+                        <div class="col-12 col-md-6">
+
+                            <label
+                                for="deliveryDate"
+                                class="form-label fw-semibold"
+                            >
+                                Delivery Date
+                                <span class="text-danger">*</span>
+                            </label>
+
+                            <input
+                                type="date"
+                                id="deliveryDate"
+                                name="deliveryDate"
+                                class="form-control"
+                                value="<%= deliveryDate %>"
+                                required
+                                <%= status !== 'DRAFT'
+                                    ? 'readonly'
+                                    : ''
+                                %>
+                            >
+
+                            <div class="form-text">
+                                Date the supplier delivered the goods.
+                            </div>
+
+                        </div>
+
+
+                        <!-- RECEIVED AT -->
+
+                        <div class="col-12 col-md-6">
+
+                            <label class="form-label fw-semibold">
+                                Received At
+                            </label>
+
+                            <input
+                                type="text"
+                                class="form-control"
+                                value="<%= grn?.received_at
+                                    ? new Date(grn.received_at).toLocaleString()
+                                    : 'Not confirmed yet'
+                                %>"
+                                readonly
+                            >
+
+                            <div class="form-text">
+                                Set automatically when the GRN is confirmed.
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- ============================= -->
+            <!-- RECEIPT ITEMS -->
+            <!-- ============================= -->
+
+            <div class="card shadow-sm mb-4">
+
+                <div class="card-header bg-white py-3">
+
+                    <h2 class="h5 mb-1">
+                        Receipt Items
+                    </h2>
+
+                    <p class="text-muted small mb-0">
+                        Enter the number of physical containers/units actually received.
+                    </p>
+
+                </div>
+
+
+                <div class="card-body p-0">
+
+
+                    <% if (!isEdit) { %>
+
+                        <!-- ========================= -->
+                        <!-- NEW GRN -->
+                        <!-- ========================= -->
+
+                        <% if (availableLines.length > 0) { %>
+
+                            <div class="p-3 border-bottom bg-light">
+
+                                <div class="fw-semibold">
+                                    Physical-instance receiving
+                                </div>
+
+                                <div class="small text-muted mt-1">
+
+                                    The receipt quantity is the number of physical
+                                    instances received.
+
+                                    For example:
+
+                                    <strong>
+                                        5 BARREL
+                                    </strong>
+
+                                    of a 20 L barrel item creates
+
+                                    <strong>
+                                        5 physical instances × 20 L
+                                    </strong>.
+
+                                </div>
+
+                            </div>
+
+
+                            <div class="table-responsive">
+
+                                <table class="table table-hover align-middle mb-0">
+
+                                    <thead class="table-light">
+
+                                        <tr>
+
+                                            <th class="ps-3">
+                                                Item
+                                            </th>
+
+                                            <th>
+                                                Ordered
+                                            </th>
+
+                                            <th>
+                                                Previously Received
+                                            </th>
+
+                                            <th>
+                                                Remaining
+                                            </th>
+
+                                            <th style="min-width: 180px;">
+                                                This Receipt
+                                            </th>
+
+                                            <th>
+                                                Physical Unit
+                                            </th>
+
+                                            <th>
+                                                Per Instance
+                                            </th>
+
+                                        </tr>
+
+                                    </thead>
+
+
+                                    <tbody>
+
+                                        <% availableLines.forEach(line => { %>
+
+                                            <tr>
+
+                                                <!-- ITEM -->
+
+                                                <td class="ps-3">
+
+                                                    <div class="fw-semibold">
+                                                        <%= line.item_name %>
+                                                    </div>
+
+                                                    <div class="small text-muted">
+                                                        <%= line.item_code %>
+                                                    </div>
+
+                                                </td>
+
+
+                                                <!-- ORDERED -->
+
+                                                <td>
+
+                                                    <strong>
+                                                        <%= formatQuantity(
+                                                            line.ordered_quantity
+                                                        ) %>
+                                                    </strong>
+
+                                                    <span class="text-muted">
+                                                        <%= line.unit %>
+                                                    </span>
+
+                                                </td>
+
+
+                                                <!-- PREVIOUSLY RECEIVED -->
+
+                                                <td>
+
+                                                    <%= formatQuantity(
+                                                        line.received_quantity
+                                                    ) %>
+
+                                                    <span class="text-muted">
+                                                        <%= line.unit %>
+                                                    </span>
+
+                                                </td>
+
+
+                                                <!-- REMAINING -->
+
+                                                <td>
+
+                                                    <strong>
+                                                        <%= formatQuantity(
+                                                            line.remaining_quantity
+                                                        ) %>
+                                                    </strong>
+
+                                                    <span class="text-muted">
+                                                        <%= line.unit %>
+                                                    </span>
+
+                                                </td>
+
+
+                                                <!-- THIS RECEIPT -->
+
+                                                <td>
+
+                                                    <input
+                                                        type="number"
+                                                        class="form-control receipt-quantity"
+                                                        name="receivedQuantity[line_<%= line.id %>]"
+                                                        min="0"
+                                                        max="<%= line.remaining_quantity %>"
+                                                        step="1"
+                                                        value="0"
+                                                        data-unit="<%= line.unit %>"
+                                                        data-instance-quantity="<%= line.instance_quantity %>"
+                                                        data-instance-quantity-unit="<%= line.instance_quantity_unit %>"
+                                                    >
+
+                                                    <div class="small text-muted mt-1 receipt-preview">
+                                                        0 physical instances
+                                                    </div>
+
+                                                </td>
+
+
+                                                <!-- PHYSICAL UNIT -->
+
+                                                <td>
+
+                                                    <span class="badge text-bg-secondary">
+                                                        <%= line.unit %>
+                                                    </span>
+
+                                                </td>
+
+
+                                                <!-- PER INSTANCE -->
+
+                                                <td>
+
+                                                    <strong>
+                                                        <%= line.instance_quantity %>
+                                                    </strong>
+
+                                                    <%= line.instance_quantity_unit %>
+
+                                                    <div class="small text-muted">
+                                                        per <%= line.unit %>
+                                                    </div>
+
+                                                </td>
+
+                                            </tr>
+
+
+                                            <!-- SUMMARY -->
+
+                                            <tr class="table-light">
+
+                                                <td></td>
+
+                                                <td colspan="6">
+
+                                                    <div class="small text-muted">
+
+                                                        <strong>
+                                                            <%= line.remaining_quantity %>
+                                                            <%= line.unit %>
+                                                        </strong>
+                                                        maximum receivable
+
+                                                        =
+                                                        <%= line.remaining_quantity %>
+                                                        physical instance(s)
+
+                                                        ×
+
+                                                        <%= line.instance_quantity %>
+                                                        <%= line.instance_quantity_unit %>
+                                                        each
+
+                                                    </div>
+
+                                                </td>
+
+                                            </tr>
+
+                                        <% }) %>
+
+                                    </tbody>
+
+                                </table>
+
+                            </div>
+
+
+                            <div class="p-3 border-top bg-light">
+
+                                <div class="small text-muted">
+
+                                    Leave an item at
+                                    <strong>0</strong>
+                                    if nothing from that PO line was received.
+
+                                    Receipt quantities must be whole physical units
+                                    and cannot exceed the remaining PO quantity.
+
+                                </div>
+
+                            </div>
+
+
+                        <% } else { %>
+
+                            <div class="p-4">
+
+                                <div class="alert alert-warning mb-0">
+
+                                    This Purchase Order has no remaining quantity available to receive.
+
+                                </div>
+
+                            </div>
+
+                        <% } %>
+
+
+                    <% } else { %>
+
+
+                        <!-- ========================= -->
+                        <!-- EXISTING DRAFT -->
+                        <!-- ========================= -->
+
+                        <% if (lines.length > 0) { %>
+
+                            <div class="table-responsive">
+
+                                <table class="table table-hover align-middle mb-0">
+
+                                    <thead class="table-light">
+
+                                        <tr>
+
+                                            <th class="ps-3">
+                                                Item
+                                            </th>
+
+                                            <th>
+                                                Ordered
+                                            </th>
+
+                                            <th>
+                                                This Receipt
+                                            </th>
+
+                                            <th>
+                                                Physical Unit
+                                            </th>
+
+                                            <th>
+                                                Per Instance
+                                            </th>
+
+                                            <th class="text-end pe-3">
+                                                Action
+                                            </th>
+
+                                        </tr>
+
+                                    </thead>
+
+
+                                    <tbody>
+
+                                        <% lines.forEach(line => { %>
+
+                                            <tr>
+
+                                                <td class="ps-3">
+
+                                                    <div class="fw-semibold">
+                                                        <%= line.item_name %>
+                                                    </div>
+
+                                                    <div class="small text-muted">
+                                                        <%= line.item_code %>
+                                                    </div>
+
+                                                </td>
+
+
+                                                <td>
+
+                                                    <%= formatQuantity(
+                                                        line.ordered_quantity
+                                                    ) %>
+
+                                                    <span class="text-muted">
+                                                        <%= line.unit %>
+                                                    </span>
+
+                                                </td>
+
+
+                                                <td>
+
+                                                    <strong>
+                                                        <%= formatQuantity(
+                                                            line.received_quantity
+                                                        ) %>
+                                                    </strong>
+
+                                                </td>
+
+
+                                                <td>
+
+                                                    <span class="badge text-bg-secondary">
+                                                        <%= line.unit %>
+                                                    </span>
+
+                                                </td>
+
+
+                                                <td>
+
+                                                    <strong>
+                                                        <%= line.instance_quantity %>
+                                                    </strong>
+
+                                                    <%= line.instance_quantity_unit %>
+
+                                                    <div class="small text-muted">
+                                                        per <%= line.unit %>
+                                                    </div>
+
+                                                </td>
+
+
+                                                <td class="text-end pe-3">
+
+                                                    <button
+                                                        type="submit"
+                                                        class="btn btn-sm btn-outline-danger"
+                                                        formaction="/goods-receipts/<%= grn.id %>/lines/<%= line.id %>/delete"
+                                                        formmethod="POST"
+                                                        onclick="return confirm('Remove this receipt line?');"
+                                                    >
+
+                                                        Remove
+
+                                                    </button>
+
+                                                </td>
+
+                                            </tr>
+
+
+                                            <tr class="table-light">
+
+                                                <td></td>
+
+                                                <td colspan="5">
+
+                                                    <div class="small text-muted">
+
+                                                        <strong>
+                                                            <%= line.received_quantity %>
+                                                            <%= line.unit %>
+                                                        </strong>
+
+                                                        =
+
+                                                        <%= line.received_quantity %>
+                                                        physical instance(s)
+
+                                                        ×
+
+                                                        <%= line.instance_quantity %>
+                                                        <%= line.instance_quantity_unit %>
+                                                        each
+
+                                                    </div>
+
+                                                </td>
+
+                                            </tr>
+
+                                        <% }) %>
+
+                                    </tbody>
+
+                                </table>
+
+                            </div>
+
+                        <% } else { %>
+
+                            <div class="p-4">
+
+                                <div class="alert alert-light border mb-0">
+                                    No receipt lines have been added.
+                                </div>
+
+                            </div>
+
+                        <% } %>
+
+
+                        <% if (availableLines.length > 0) { %>
+
+                            <div class="border-top p-3 p-md-4">
+
+                                <h3 class="h6 mb-3">
+                                    Add / Update Receipt Line
+                                </h3>
+
+
+                                <div class="row g-3">
+
+
+                                    <div class="col-12 col-lg-5">
+
+                                        <label
+                                            for="purchaseOrderLineId"
+                                            class="form-label fw-semibold"
+                                        >
+                                            Purchase Order Item
+                                        </label>
+
+                                        <select
+                                            id="purchaseOrderLineId"
+                                            class="form-select"
+                                        >
+
+                                            <option value="">
+                                                Select item
+                                            </option>
+
+
+                                            <% availableLines.forEach(line => { %>
+
+                                                <option
+                                                    value="<%= line.id %>"
+                                                    data-remaining="<%= line.remaining_quantity %>"
+                                                    data-unit="<%= line.unit %>"
+                                                    data-instance-quantity="<%= line.instance_quantity %>"
+                                                    data-instance-quantity-unit="<%= line.instance_quantity_unit %>"
+                                                >
+
+                                                    <%= line.item_code %>
+                                                    —
+                                                    <%= line.item_name %>
+                                                    —
+                                                    Remaining:
+                                                    <%= formatQuantity(
+                                                        line.remaining_quantity
+                                                    ) %>
+                                                    <%= line.unit %>
+
+                                                </option>
+
+                                            <% }) %>
+
+                                        </select>
+
+                                    </div>
+
+
+                                    <div class="col-12 col-md-6 col-lg-3">
+
+                                        <label
+                                            for="receivedQuantityEdit"
+                                            class="form-label fw-semibold"
+                                        >
+                                            Quantity
+                                        </label>
+
+                                        <input
+                                            type="number"
+                                            id="receivedQuantityEdit"
+                                            class="form-control"
+                                            min="1"
+                                            step="1"
+                                        >
+
+                                        <div
+                                            id="editQuantityHelp"
+                                            class="form-text"
+                                        >
+                                            Select an item first.
+                                        </div>
+
+                                    </div>
+
+
+                                    <div class="col-12 col-md-6 col-lg-4">
+
+                                        <label class="form-label fw-semibold">
+                                            Physical Unit
+                                        </label>
+
+                                        <input
+                                            type="text"
+                                            id="editUnit"
+                                            class="form-control"
+                                            readonly
+                                        >
+
+                                    </div>
+
+
+                                    <div class="col-12">
+
+                                        <div
+                                            id="editInstanceInfo"
+                                            class="alert alert-light border mb-0"
+                                        >
+                                            Select an item to see its
+                                            quantity per physical instance.
+                                        </div>
+
+                                    </div>
+
+
+                                    <div class="col-12">
+
+                                        <label
+                                            for="lineNotesEdit"
+                                            class="form-label fw-semibold"
+                                        >
+                                            Line Notes
+                                        </label>
+
+                                        <input
+                                            type="text"
+                                            id="lineNotesEdit"
+                                            class="form-control"
+                                            maxlength="500"
+                                        >
+
+                                    </div>
+
+
+                                    <div class="col-12">
+
+                                        <button
+                                            type="button"
+                                            id="saveExistingLine"
+                                            class="btn btn-outline-primary"
+                                        >
+                                            Save Receipt Line
+                                        </button>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        <% } %>
+
+                    <% } %>
+
+                </div>
+
+            </div>
+
+
+            <!-- ============================= -->
+            <!-- NOTES -->
+            <!-- ============================= -->
+
+            <div class="card shadow-sm mb-4">
+
+                <div class="card-header bg-white py-3">
+
+                    <h2 class="h5 mb-0">
+                        Notes
+                    </h2>
+
+                </div>
+
+                <div class="card-body">
+
+                    <textarea
+                        name="notes"
+                        class="form-control"
+                        rows="4"
+                        maxlength="2000"
+                        placeholder="Optional notes about this delivery..."
+                        <%= status !== 'DRAFT'
+                            ? 'readonly'
+                            : ''
+                        %>
+                    ><%= notes %></textarea>
+
+                </div>
+
+            </div>
+
+
+            <!-- ============================= -->
+            <!-- DOCUMENTS -->
+            <!-- ============================= -->
+
+            <div class="card shadow-sm mb-4">
+
+                <div class="card-header bg-white py-3">
+
+                    <h2 class="h5 mb-0">
+                        Documents
+                    </h2>
+
+                </div>
+
+                <div class="card-body">
+
+                    <div class="alert alert-light border mb-0">
+
+                        <div class="fw-semibold">
+                            Delivery documents
+                        </div>
+
+                        <div class="small text-muted mt-1">
+
+                            Document upload will be connected
+                            in the procurement document step.
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- ============================= -->
+            <!-- SAVE -->
+            <!-- ============================= -->
+
+            <% if (status === 'DRAFT') { %>
+
+                <div class="card shadow-sm">
+
+                    <div class="card-body">
+
+                        <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3">
+
+                            <div>
+
+                                <div class="fw-semibold">
+                                    Draft Goods Receipt
+                                </div>
+
+                                <div class="small text-muted">
+
+                                    Saving creates the GRN and its
+                                    draft receipt lines.
+
+                                    Inventory is not changed until
+                                    the receipt is confirmed.
+
+                                </div>
+
+                            </div>
+
+
+                            <div class="d-flex gap-2">
+
+                                <a
+                                    href="<%= po
+                                        ? `/purchase-orders/${po.id}`
+                                        : '/goods-receipts'
+                                    %>"
+                                    class="btn btn-outline-secondary"
+                                >
+                                    Cancel
+                                </a>
+
+
+                                <button
+                                    type="submit"
+                                    class="btn btn-primary"
+                                >
+
+                                    <%= isEdit
+                                        ? 'Save Draft'
+                                        : 'Create Goods Receipt'
+                                    %>
+
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            <% } %>
+
+        </form>
+
+    <% } %>
+
+</div>
+
+
+<% if (
+    isEdit &&
+    status === 'DRAFT'
+) { %>
+
+    <div class="container-fluid pb-4">
+
+        <div class="alert alert-warning mb-0">
+
+            <div class="fw-semibold mb-1">
+                Inventory has not been received yet.
+            </div>
+
+            <div>
+
+                This is a draft Goods Receipt.
+
+                Saving it does not create item instances,
+                barcodes, stock movements, or inventory.
+
+            </div>
+
+        </div>
+
+    </div>
+
+<% } %>
+
+
+<% if (isEdit && status === 'DRAFT') { %>
+
+<script nonce="<%= cspNonce %>">
+
+(function ()
+{
+    /*
+     * -------------------------------------------------------
+     * NEW GRN QUANTITY PREVIEWS
+     * -------------------------------------------------------
+     */
+
+    document
+        .querySelectorAll(
+            '.receipt-quantity'
+        )
+        .forEach(
+            function (input) {
+
+                function updatePreview() {
+
+                    const quantity =
+                        Number(
+                            input.value || 0
+                        );
+
+                    const unit =
+                        input.dataset.unit ||
+                        '';
+
+                    const instanceQuantity =
+                        input.dataset.instanceQuantity ||
+                        '';
+
+                    const instanceQuantityUnit =
+                        input.dataset.instanceQuantityUnit ||
+                        '';
+
+                    const preview =
+                        input
+                            .closest('td')
+                            ?.querySelector(
+                                '.receipt-preview'
+                            );
+
+
+                    if (!preview) {
+                        return;
+                    }
+
+
+                    if (
+                        !Number.isInteger(
+                            quantity
+                        ) ||
+                        quantity <= 0
+                    ) {
+
+                        preview.textContent =
+                            '0 physical instances';
+
+                        return;
+
+                    }
+
+
+                    preview.textContent =
+                        `${quantity} ${unit} = `
+                        + `${quantity} physical instance(s) × `
+                        + `${instanceQuantity} ${instanceQuantityUnit}`;
+
+                }
+
+
+                input.addEventListener(
+                    'input',
+                    updatePreview
+                );
+
+
+                updatePreview();
+
+            }
+        );
+
+
+    /*
+     * -------------------------------------------------------
+     * EXISTING DRAFT LINE EDITOR
+     * -------------------------------------------------------
+     */
+
+    const saveButton =
+        document.getElementById(
+            'saveExistingLine'
+        );
+
+
+    const lineSelect =
+        document.getElementById(
+            'purchaseOrderLineId'
+        );
+
+
+    const quantityInput =
+        document.getElementById(
+            'receivedQuantityEdit'
+        );
+
+
+    const unitInput =
+        document.getElementById(
+            'editUnit'
+        );
+
+
+    const instanceInfo =
+        document.getElementById(
+            'editInstanceInfo'
+        );
+
+
+    const quantityHelp =
+        document.getElementById(
+            'editQuantityHelp'
+        );
+
+
+    if (
+        lineSelect &&
+        quantityInput
+    ) {
+
+        lineSelect.addEventListener(
+            'change',
+            function () {
+
+                const option =
+                    lineSelect.options[
+                        lineSelect.selectedIndex
+                    ];
+
+
+                if (
+                    !option ||
+                    !option.value
+                ) {
+
+                    quantityInput.value =
+                        '';
+
+                    quantityInput.removeAttribute(
+                        'max'
+                    );
+
+                    if (unitInput) {
+                        unitInput.value =
+                            '';
+                    }
+
+                    if (instanceInfo) {
+                        instanceInfo.textContent =
+                            'Select an item to see its quantity per physical instance.';
+                    }
+
+                    if (quantityHelp) {
+                        quantityHelp.textContent =
+                            'Select an item first.';
+                    }
+
+                    return;
+
+                }
+
+
+                const remaining =
+                    option.dataset.remaining;
+
+                const unit =
+                    option.dataset.unit;
+
+                const instanceQuantity =
+                    option.dataset.instanceQuantity;
+
+                const instanceQuantityUnit =
+                    option.dataset.instanceQuantityUnit;
+
+
+                quantityInput.value =
+                    '';
+
+                quantityInput.min =
+                    '1';
+
+                quantityInput.step =
+                    '1';
+
+                quantityInput.max =
+                    remaining;
+
+
+                if (unitInput) {
+
+                    unitInput.value =
+                        unit || '';
+
+                }
+
+
+                if (instanceInfo) {
+
+                    instanceInfo.innerHTML =
+                        '<strong>'
+                        + escapeHtml(
+                            unit || ''
+                        )
+                        + '</strong> per physical unit, '
+                        + '<strong>'
+                        + escapeHtml(
+                            instanceQuantity || ''
+                        )
+                        + ' '
+                        + escapeHtml(
+                            instanceQuantityUnit || ''
+                        )
+                        + '</strong> per instance.';
+
+                }
+
+
+                if (quantityHelp) {
+
+                    quantityHelp.textContent =
+                        `Maximum: ${remaining} ${unit}. `
+                        + 'Quantity must be a whole physical unit.';
+
+                }
+
+            }
+        );
+
+    }
+
+
+    if (saveButton) {
+
+        saveButton.addEventListener(
+            'click',
+            function () {
+
+                const lineId =
+                    lineSelect?.value;
+
+
+                const quantity =
+                    quantityInput?.value;
+
+
+                const notes =
+                    document.getElementById(
+                        'lineNotesEdit'
+                    )?.value || '';
+
+
+                if (!lineId) {
+
+                    alert(
+                        'Select a Purchase Order item.'
+                    );
+
+                    return;
+
+                }
+
+
+                const numericQuantity =
+                    Number(quantity);
+
+
+                if (
+                    !Number.isInteger(
+                        numericQuantity
+                    ) ||
+                    numericQuantity <= 0
+                ) {
+
+                    alert(
+                        'Enter a whole number of physical units.'
+                    );
+
+                    return;
+
+                }
+
+
+                const max =
+                    Number(
+                        quantityInput.max
+                    );
+
+
+                if (
+                    Number.isFinite(max) &&
+                    numericQuantity > max
+                ) {
+
+                    alert(
+                        `Quantity cannot exceed ${max} physical units.`
+                    );
+
+                    return;
+
+                }
+
+
+                const form =
+                    document.createElement(
+                        'form'
+                    );
+
+
+                form.method =
+                    'POST';
+
+
+                form.action =
+                    '<%= `/goods-receipts/${grn.id}/lines` %>';
+
+
+                addHidden(
+                    form,
+                    '_csrf',
+                    '<%= csrfToken %>'
+                );
+
+
+                addHidden(
+                    form,
+                    'purchaseOrderLineId',
+                    lineId
+                );
+
+
+                addHidden(
+                    form,
+                    'receivedQuantity',
+                    numericQuantity
+                );
+
+
+                addHidden(
+                    form,
+                    'notes',
+                    notes
+                );
+
+
+                document.body.appendChild(
+                    form
+                );
+
+
+                form.submit();
+
+            }
+        );
+
+    }
+
+
+    function addHidden(
+        form,
+        name,
+        value
+    ) {
+
+        const input =
+            document.createElement(
+                'input'
+            );
+
+        input.type =
+            'hidden';
+
+        input.name =
+            name;
+
+        input.value =
+            value;
+
+        form.appendChild(
+            input
+        );
+
+    }
+
+
+    function escapeHtml(
+        value
+    ) {
+
+        return String(value)
+            .replace(
+                /&/g,
+                '&amp;'
+            )
+            .replace(
+                /</g,
+                '&lt;'
+            )
+            .replace(
+                />/g,
+                '&gt;'
+            )
+            .replace(
+                /"/g,
+                '&quot;'
+            )
+            .replace(
+                /'/g,
+                '&#039;'
+            );
+
+    }
+
+})();
+
+</script><% } %>

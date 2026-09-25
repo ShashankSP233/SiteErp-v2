@@ -1,151 +1,94 @@
-<div class="d-flex justify-content-between align-items-center mb-4">
-
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
   <div>
+    <div class="text-muted small mb-1">Inventory / Item Master</div>
     <h1 class="h3 mb-1">Item Masters</h1>
-
-    <p class="text-muted mb-0">
-      Define the types of physical inventory managed by Site-ERP.
-    </p>
+    <p class="text-muted mb-0">Physical inventory types and their instance definitions.</p>
   </div>
 
   <% if (['admin', 'manager'].includes(currentUser?.role)) { %>
-
-    <a
-      href="/items/new"
-      class="btn btn-primary"
-    >
-      Create Item
-    </a>
-
+    <a href="/items/new" class="btn btn-primary">Create Item</a>
   <% } %>
-
 </div>
 
-
 <div class="card shadow-sm">
-
-  <div class="card-body p-0">
-
-    <% if (!items.length) { %>
-
-      <div class="p-4 text-center text-muted">
-        No item masters have been created yet.
-      </div>
-
-    <% } else { %>
-
-      <div class="table-responsive">
-
-        <table class="table table-hover align-middle mb-0">
-
-          <thead>
-
-            <tr>
-              <th>Code</th>
-              <th>Name</th>
-              <th>Category</th>
-              <th>Unit</th>
-              <th>Type</th>
-              <th>Instances</th>
-              <th>Current Qty</th>
-              <th>Status</th>
-              <th class="text-end">Actions</th>
-            </tr>
-
-          </thead>
-
-          <tbody>
-
-            <% items.forEach(item => { %>
-
-              <tr>
-
-                <td>
-                  <strong>
-                    <%= item.item_code %>
-                  </strong>
-                </td>
-
-                <td>
-                  <%= item.name %>
-                </td>
-
-                <td>
-                  <%= item.category || '—' %>
-                </td>
-
-                <td>
-                  <%= item.unit %>
-                </td>
-
-                <td>
-
-                  <% if (item.is_consumable) { %>
-
-                    <span class="badge text-bg-warning">
-                      Consumable
-                    </span>
-
-                  <% } else { %>
-
-                    <span class="badge text-bg-secondary">
-                      Non-consumable
-                    </span>
-
-                  <% } %>
-
-                </td>
-
-                <td>
-                  <%= Number(item.instance_count) %>
-                </td>
-
-                <td>
-                  <%= Number(item.total_current_quantity) %>
-                  <%= item.unit %>
-                </td>
-
-                <td>
-
-                  <% if (item.status === 'ACTIVE') { %>
-
-                    <span class="badge text-bg-success">
-                      Active
-                    </span>
-
-                  <% } else { %>
-
-                    <span class="badge text-bg-secondary">
-                      <%= item.status %>
-                    </span>
-
-                  <% } %>
-
-                </td>
-
-                <td class="text-end">
-
-                  <a
-                    href="/items/<%= item.id %>/edit"
-                    class="btn btn-sm btn-outline-secondary"
-                  >
-                    Edit
-                  </a>
-
-                </td>
-
-              </tr>
-
-            <% }) %>
-
-          </tbody>
-
-        </table>
-
-      </div>
-
-    <% } %>
-
+  <div class="card-header bg-white py-3">
+    <h2 class="h5 mb-0">Inventory Item Types</h2>
   </div>
 
+  <% if (!items.length) { %>
+    <div class="card-body text-center text-muted py-5">
+      No item masters have been created yet.
+    </div>
+  <% } else { %>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Code</th>
+            <th>Description</th>
+            <th>Physical Unit</th>
+            <th>Per Instance</th>
+            <th>Consumable</th>
+            <th>Partial</th>
+            <th>Tracking</th>
+            <th>Status</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% items.forEach(item => { %>
+            <% const status = String(item.status || '').toUpperCase(); %>
+            <tr>
+              <td>
+                <a href="/items/<%= item.id %>/ledger" class="text-decoration-none">
+                  <strong><%= item.item_code %></strong>
+                </a>
+              </td>
+              <td>
+                <strong class="d-block"><%= item.description || item.name %></strong>
+                <% if (item.description && item.name && item.description !== item.name) { %>
+                  <small class="text-muted"><%= item.name %></small>
+                <% } %>
+              </td>
+              <td><span class="badge text-bg-light border"><%= item.unit || '—' %></span></td>
+              <td class="text-nowrap">
+                <strong><%= item.instance_quantity %></strong>
+                <span class="text-muted"><%= item.instance_quantity_unit || '' %></span>
+              </td>
+              <td>
+                <span class="badge <%= item.is_consumable ? 'text-bg-success' : 'text-bg-secondary' %>">
+                  <%= item.is_consumable ? 'Yes' : 'No' %>
+                </span>
+              </td>
+              <td>
+                <span class="badge <%= item.allows_partial_consumption ? 'text-bg-success' : 'text-bg-secondary' %>">
+                  <%= item.allows_partial_consumption ? 'Yes' : 'No' %>
+                </span>
+              </td>
+              <td>
+                <span class="badge <%= item.requires_instance_tracking ? 'text-bg-success' : 'text-bg-secondary' %>">
+                  <%= item.requires_instance_tracking ? 'Yes' : 'No' %>
+                </span>
+              </td>
+              <td>
+                <% if (status === 'ACTIVE') { %>
+                  <span class="badge text-bg-success">Active</span>
+                <% } else if (status === 'INACTIVE') { %>
+                  <span class="badge text-bg-secondary">Inactive</span>
+                <% } else { %>
+                  <span class="badge text-bg-warning"><%= item.status || 'Unknown' %></span>
+                <% } %>
+              </td>
+              <td class="text-end text-nowrap">
+                <a href="/items/<%= item.id %>/ledger" class="btn btn-sm btn-outline-secondary">Ledger</a>
+                <% if (['admin', 'manager'].includes(currentUser?.role)) { %>
+                  <a href="/items/<%= item.id %>/edit" class="btn btn-sm btn-outline-primary">Edit</a>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
 </div>

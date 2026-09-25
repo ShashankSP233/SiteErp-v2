@@ -1,0 +1,305 @@
+<div class="container-fluid py-4">
+
+    <!-- Header -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+
+        <div>
+
+            <div class="text-muted small mb-1">
+                Procurement / Goods Receipts
+            </div>
+
+            <h1 class="h3 mb-1">
+                Select Purchase Order
+            </h1>
+
+            <p class="text-muted mb-0">
+                Choose the Purchase Order against which the goods are being received.
+            </p>
+
+        </div>
+
+        <a
+            href="/goods-receipts"
+            class="btn btn-outline-secondary"
+        >
+            Back to Goods Receipts
+        </a>
+
+    </div>
+
+
+    <!-- Instructions -->
+    <div class="alert alert-info mb-4">
+
+        <div class="fw-semibold mb-1">
+            Start a Goods Receipt
+        </div>
+
+        <div>
+            Select a Purchase Order below.
+            The selected PO will automatically populate the
+            vendor, PO details and receivable items on the GRN.
+        </div>
+
+    </div>
+
+
+    <!-- Purchase Orders -->
+    <div class="card shadow-sm">
+
+        <div class="card-header bg-white py-3">
+
+            <div class="d-flex justify-content-between align-items-center">
+
+                <h2 class="h5 mb-0">
+                    Open Purchase Orders
+                </h2>
+
+                <span class="badge text-bg-light border">
+                    <%= purchaseOrders.length %>
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <div class="card-body p-0">
+
+            <% if (!purchaseOrders.length) { %>
+
+                <div class="p-4">
+
+                    <div class="alert alert-warning mb-0">
+
+                        <div class="fw-semibold mb-1">
+                            No receivable Purchase Orders
+                        </div>
+
+                        <div>
+                            There are currently no SENT or
+                            PARTIALLY_RECEIVED Purchase Orders
+                            available for receiving.
+                        </div>
+
+                    </div>
+
+                </div>
+
+            <% } else { %>
+
+
+                <!-- Desktop table -->
+                <div class="table-responsive d-none d-md-block">
+
+                    <table class="table table-hover align-middle mb-0">
+
+                        <thead class="table-light">
+
+                            <tr>
+
+                                <th class="ps-3">
+                                    PO Number
+                                </th>
+
+                                <th>
+                                    Vendor
+                                </th>
+
+                                <th>
+                                    Site
+                                </th>
+
+                                <th>
+                                    PO Date
+                                </th>
+
+                                <th>
+                                    Expected Delivery
+                                </th>
+
+                                <th>
+                                    Status
+                                </th>
+
+                                <th class="text-end pe-3">
+                                    Action
+                                </th>
+
+                            </tr>
+
+                        </thead>
+
+
+                        <tbody>
+
+                            <% purchaseOrders.forEach(po => { %>
+
+                                <tr>
+
+                                    <td class="ps-3">
+
+                                        <div class="fw-semibold">
+                                            <%= po.po_number %>
+                                        </div>
+
+                                        <div class="small text-muted">
+                                            PO #<%= po.id %>
+                                        </div>
+
+                                    </td>
+
+
+                                    <td>
+                                        <%= po.vendor_name || '—' %>
+                                    </td>
+
+
+                                    <td>
+                                        <%= po.site_code || '—' %>
+                                    </td>
+
+
+                                    <td>
+                                        <%= po.po_date || '—' %>
+                                    </td>
+
+
+                                    <td>
+                                        <%= po.expected_delivery_date || '—' %>
+                                    </td>
+
+
+                                    <td>
+
+                                        <% if (po.status === 'SENT') { %>
+
+                                            <span class="badge text-bg-primary">
+                                                SENT
+                                            </span>
+
+                                        <% } else if (po.status === 'PARTIALLY_RECEIVED') { %>
+
+                                            <span class="badge text-bg-warning">
+                                                PARTIALLY RECEIVED
+                                            </span>
+
+                                        <% } else { %>
+
+                                            <span class="badge text-bg-secondary">
+                                                <%= po.status %>
+                                            </span>
+
+                                        <% } %>
+
+                                    </td>
+
+
+                                    <td class="text-end pe-3">
+
+                                        <a
+                                            href="/goods-receipts/new?poId=<%= po.id %>"
+                                            class="btn btn-sm btn-primary"
+                                        >
+                                            Select PO
+                                        </a>
+
+                                    </td>
+
+                                </tr>
+
+                            <% }) %>
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+
+                <!-- Mobile cards -->
+                <div class="d-md-none">
+
+                    <% purchaseOrders.forEach(po => { %>
+
+                        <div class="border-bottom p-3">
+
+                            <div class="d-flex justify-content-between align-items-start gap-3 mb-2">
+
+                                <div>
+
+                                    <div class="fw-semibold">
+                                        <%= po.po_number %>
+                                    </div>
+
+                                    <div class="small text-muted">
+                                        <%= po.vendor_name || 'No vendor' %>
+                                    </div>
+
+                                </div>
+
+
+                                <% if (po.status === 'SENT') { %>
+
+                                    <span class="badge text-bg-primary">
+                                        SENT
+                                    </span>
+
+                                <% } else if (po.status === 'PARTIALLY_RECEIVED') { %>
+
+                                    <span class="badge text-bg-warning">
+                                        PARTIALLY RECEIVED
+                                    </span>
+
+                                <% } %>
+
+                            </div>
+
+
+                            <div class="small text-muted mb-3">
+
+                                <div>
+                                    Site:
+                                    <span class="text-body">
+                                        <%= po.site_code || '—' %>
+                                    </span>
+                                </div>
+
+                                <div>
+                                    PO Date:
+                                    <span class="text-body">
+                                        <%= po.po_date || '—' %>
+                                    </span>
+                                </div>
+
+                                <div>
+                                    Expected:
+                                    <span class="text-body">
+                                        <%= po.expected_delivery_date || '—' %>
+                                    </span>
+                                </div>
+
+                            </div>
+
+
+                            <a
+                                href="/goods-receipts/new?poId=<%= po.id %>"
+                                class="btn btn-primary w-100"
+                            >
+                                Select Purchase Order
+                            </a>
+
+                        </div>
+
+                    <% }) %>
+
+                </div>
+
+            <% } %>
+
+        </div>
+
+    </div>
+
+</div>

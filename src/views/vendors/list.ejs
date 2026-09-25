@@ -1,5 +1,261 @@
-<div class="d-flex justify-content-between align-items-center mb-3"><h2 class="mb-0">Vendors</h2><% if (['admin','manager'].includes(currentUser.role)) { %><a class="btn btn-primary" href="/vendors/new">Add Vendor</a><% } %></div>
-<div class="card shadow-sm"><div class="card-body table-responsive"><table class="table table-striped data-table align-middle">
-<thead><tr><th>Name</th><th>Contact</th><th>Mobile</th><th>GSTIN</th><th>Outstanding</th><th></th></tr></thead><tbody>
-<% vendors.forEach(v => { %><tr><td><strong><%= v.name %></strong></td><td><%= v.contact_name || '' %></td><td><%= v.mobile || v.phone || '' %></td><td><%= v.gstin || '' %></td><td>₹<%= Number(v.outstanding||0).toLocaleString('en-IN') %></td><td><% if (['admin','manager'].includes(currentUser.role)) { %><a class="btn btn-sm btn-outline-primary" href="/vendors/<%= v.id %>/edit">Edit</a><% } %></td></tr><% }) %>
-</tbody></table></div></div>
+<div class="container-fluid py-3">
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <div>
+            <h2 class="mb-1">Vendors</h2>
+            <p class="text-muted mb-0">Manage procurement vendors and supplier information.</p>
+        </div>
+
+        <% if (currentUser && ['admin', 'manager'].includes(currentUser.role)) { %>
+            <a href="/vendors/new" class="btn btn-primary">
+                + Add Vendor
+            </a>
+        <% } %>
+    </div>
+
+
+    <div class="card shadow-sm">
+        <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <strong>Vendor List</strong>
+
+            <% if (currentUser && ['admin', 'manager'].includes(currentUser.role)) { %>
+                <% if (showInactive) { %>
+                    <a href="/vendors" class="btn btn-sm btn-outline-secondary">
+                        Hide Inactive
+                    </a>
+                <% } else { %>
+                    <a href="/vendors?showInactive=1" class="btn btn-sm btn-outline-secondary">
+                        Show Inactive
+                    </a>
+                <% } %>
+            <% } %>
+        </div>
+
+        <div class="card-body p-0">
+
+            <% if (!vendors || vendors.length === 0) { %>
+
+                <div class="text-center py-5 px-3">
+                    <h5>No vendors found</h5>
+                    <p class="text-muted mb-3">
+                        No vendors are currently available.
+                    </p>
+
+                    <% if (currentUser && ['admin', 'manager'].includes(currentUser.role)) { %>
+                        <a href="/vendors/new" class="btn btn-primary">
+                            Add First Vendor
+                        </a>
+                    <% } %>
+                </div>
+
+            <% } else { %>
+
+                <!-- Desktop / tablet table -->
+                <div class="table-responsive d-none d-md-block">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Vendor Code</th>
+                                <th>Name</th>
+                                <th>Contact</th>
+                                <th>Phone</th>
+                                <th>Email</th>
+                                <th>Status</th>
+
+                                <% if (currentUser && ['admin', 'manager'].includes(currentUser.role)) { %>
+                                    <th class="text-end">Actions</th>
+                                <% } %>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            <% vendors.forEach(vendor => { %>
+                                <tr>
+                                    <td>
+                                        <strong><%= vendor.vendor_code %></strong>
+                                    </td>
+
+                                    <td>
+                                        <%= vendor.name %>
+                                    </td>
+
+                                    <td>
+                                        <%= vendor.contact_person || '-' %>
+                                    </td>
+
+                                    <td>
+                                        <%= vendor.phone || '-' %>
+                                    </td>
+
+                                    <td>
+                                        <%= vendor.email || '-' %>
+                                    </td>
+
+                                    <td>
+                                        <% if (vendor.is_active) { %>
+                                            <span class="badge bg-success">Active</span>
+                                        <% } else { %>
+                                            <span class="badge bg-secondary">Inactive</span>
+                                        <% } %>
+                                    </td>
+
+                                    <% if (currentUser && ['admin', 'manager'].includes(currentUser.role)) { %>
+                                        <td class="text-end">
+                                            <div class="d-inline-flex gap-1">
+
+                                                <a
+                                                    href="/vendors/<%= vendor.id %>/edit"
+                                                    class="btn btn-sm btn-outline-primary"
+                                                >
+                                                    Edit
+                                                </a>
+
+                                                <form
+                                                    method="POST"
+                                                    action="/vendors/<%= vendor.id %>/status"
+                                                    class="d-inline"
+                                                >
+                                                    <input
+                                                        type="hidden"
+                                                        name="_csrf"
+                                                        value="<%= csrfToken %>"
+                                                    >
+
+                                                    <input
+                                                        type="hidden"
+                                                        name="isActive"
+                                                        value="<%= vendor.is_active ? 'false' : 'true' %>"
+                                                    >
+
+                                                    <% if (vendor.is_active) { %>
+                                                        <button
+                                                            type="submit"
+                                                            class="btn btn-sm btn-outline-danger"
+                                                        >
+                                                            Deactivate
+                                                        </button>
+                                                    <% } else { %>
+                                                        <button
+                                                            type="submit"
+                                                            class="btn btn-sm btn-outline-success"
+                                                        >
+                                                            Activate
+                                                        </button>
+                                                    <% } %>
+                                                </form>
+
+                                            </div>
+                                        </td>
+                                    <% } %>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Mobile cards -->
+                <div class="d-md-none p-3">
+
+                    <% vendors.forEach(vendor => { %>
+
+                        <div class="border rounded p-3 mb-3">
+
+                            <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                                <div>
+                                    <div class="fw-bold">
+                                        <%= vendor.name %>
+                                    </div>
+
+                                    <small class="text-muted">
+                                        <%= vendor.vendor_code %>
+                                    </small>
+                                </div>
+
+                                <% if (vendor.is_active) { %>
+                                    <span class="badge bg-success">Active</span>
+                                <% } else { %>
+                                    <span class="badge bg-secondary">Inactive</span>
+                                <% } %>
+                            </div>
+
+                            <% if (vendor.contact_person) { %>
+                                <div class="mb-1">
+                                    <strong>Contact:</strong>
+                                    <%= vendor.contact_person %>
+                                </div>
+                            <% } %>
+
+                            <% if (vendor.phone) { %>
+                                <div class="mb-1">
+                                    <strong>Phone:</strong>
+                                    <%= vendor.phone %>
+                                </div>
+                            <% } %>
+
+                            <% if (vendor.email) { %>
+                                <div class="mb-2">
+                                    <strong>Email:</strong>
+                                    <%= vendor.email %>
+                                </div>
+                            <% } %>
+
+                            <% if (currentUser && ['admin', 'manager'].includes(currentUser.role)) { %>
+
+                                <div class="d-flex gap-2 mt-3">
+
+                                    <a
+                                        href="/vendors/<%= vendor.id %>/edit"
+                                        class="btn btn-sm btn-outline-primary flex-fill"
+                                    >
+                                        Edit
+                                    </a>
+
+                                    <form
+                                        method="POST"
+                                        action="/vendors/<%= vendor.id %>/status"
+                                        class="flex-fill"
+                                    >
+                                        <input
+                                            type="hidden"
+                                            name="_csrf"
+                                            value="<%= csrfToken %>"
+                                        >
+
+                                        <input
+                                            type="hidden"
+                                            name="isActive"
+                                            value="<%= vendor.is_active ? 'false' : 'true' %>"
+                                        >
+
+                                        <% if (vendor.is_active) { %>
+                                            <button
+                                                type="submit"
+                                                class="btn btn-sm btn-outline-danger w-100"
+                                            >
+                                                Deactivate
+                                            </button>
+                                        <% } else { %>
+                                            <button
+                                                type="submit"
+                                                class="btn btn-sm btn-outline-success w-100"
+                                            >
+                                                Activate
+                                            </button>
+                                        <% } %>
+                                    </form>
+
+                                </div>
+
+                            <% } %>
+
+                        </div>
+
+                    <% }) %>
+
+                </div>
+
+            <% } %>
+
+        </div>
+    </div>
+</div>

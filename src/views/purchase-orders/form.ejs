@@ -1,0 +1,1057 @@
+<div class="container-fluid py-3">
+
+    <div class="mb-4">
+        <h2 class="mb-1">
+            <%= purchaseOrder
+                ? 'Edit Purchase Order'
+                : 'Create Purchase Order' %>
+        </h2>
+
+        <p class="text-muted mb-0">
+            Create an external Purchase Order record for Site-ERP.
+        </p>
+    </div>
+
+
+    <form
+        method="POST"
+        action="<%= purchaseOrder
+            ? '/purchase-orders/' + purchaseOrder.id
+            : '/purchase-orders' %>"
+    >
+
+        <input
+            type="hidden"
+            name="_csrf"
+            value="<%= csrfToken %>"
+        >
+
+
+        <!-- ============================= -->
+        <!-- PURCHASE ORDER HEADER -->
+        <!-- ============================= -->
+
+        <div class="card shadow-sm mb-4">
+
+            <div class="card-header">
+                <strong>Purchase Order Details</strong>
+            </div>
+
+            <div class="card-body">
+
+                <div class="row g-3">
+
+                    <!-- PO NUMBER -->
+                    <div class="col-md-4">
+
+                        <label class="form-label">
+                            PO Number <span class="text-danger">*</span>
+                        </label>
+
+                        <input
+                            type="text"
+                            class="form-control"
+                            name="poNumber"
+                            required
+                            maxlength="100"
+                            value="<%= purchaseOrder?.po_number || '' %>"
+                        >
+
+                    </div>
+
+
+                    <!-- VENDOR -->
+                    <div class="col-md-4">
+
+                        <label class="form-label">
+                            Vendor <span class="text-danger">*</span>
+                        </label>
+
+                        <select
+                            name="vendorId"
+                            class="form-select"
+                            required
+                        >
+
+                            <option value="">
+                                Select Vendor
+                            </option>
+
+                            <% vendors.forEach(vendor => { %>
+
+                                <option
+                                    value="<%= vendor.id %>"
+                                    <%= purchaseOrder &&
+                                        String(purchaseOrder.vendor_id) === String(vendor.id)
+                                        ? 'selected'
+                                        : '' %>
+                                >
+                                    <%= vendor.vendor_code %> -
+                                    <%= vendor.name %>
+                                </option>
+
+                            <% }) %>
+
+                        </select>
+
+                    </div>
+
+
+                    <!-- SITE -->
+                    <div class="col-md-4">
+
+                        <label class="form-label">
+                            Site <span class="text-danger">*</span>
+                        </label>
+
+                        <select
+                            name="siteId"
+                            class="form-select"
+                            required
+                        >
+
+                            <option value="">
+                                Select Site
+                            </option>
+
+                            <% sites.forEach(site => { %>
+
+                                <option
+                                    value="<%= site.id %>"
+                                    <%= purchaseOrder &&
+                                        String(purchaseOrder.site_id) === String(site.id)
+                                        ? 'selected'
+                                        : '' %>
+                                >
+                                    <%= site.code %> -
+                                    <%= site.name %>
+                                </option>
+
+                            <% }) %>
+
+                        </select>
+
+                    </div>
+
+
+                    <!-- PO DATE -->
+                    <div class="col-md-4">
+
+                        <label class="form-label">
+                            PO Date <span class="text-danger">*</span>
+                        </label>
+
+                        <input
+                            type="date"
+                            class="form-control"
+                            name="poDate"
+                            required
+                            value="<%= purchaseOrder?.po_date
+                                ? String(purchaseOrder.po_date).slice(0, 10)
+                                : new Date().toISOString().slice(0, 10) %>"
+                        >
+
+                    </div>
+
+
+                    <!-- EXPECTED DELIVERY -->
+                    <div class="col-md-4">
+
+                        <label class="form-label">
+                            Expected Delivery
+                        </label>
+
+                        <input
+                            type="date"
+                            class="form-control"
+                            name="expectedDeliveryDate"
+                            value="<%= purchaseOrder?.expected_delivery_date
+                                ? String(purchaseOrder.expected_delivery_date).slice(0, 10)
+                                : '' %>"
+                        >
+
+                    </div>
+
+
+                    <!-- REFERENCE -->
+                    <div class="col-md-4">
+
+                        <label class="form-label">
+                            Reference
+                        </label>
+
+                        <input
+                            type="text"
+                            class="form-control"
+                            name="referenceText"
+                            maxlength="1000"
+                            value="<%= purchaseOrder?.reference_text || '' %>"
+                            placeholder="External reference / document number"
+                        >
+
+                    </div>
+
+
+                    <!-- NOTES -->
+                    <div class="col-12">
+
+                        <label class="form-label">
+                            Notes
+                        </label>
+
+                        <textarea
+                            class="form-control"
+                            name="notes"
+                            rows="3"
+                            maxlength="5000"
+                        ><%= purchaseOrder?.notes || '' %></textarea>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- ============================= -->
+        <!-- PURCHASE ORDER ITEMS -->
+        <!-- ============================= -->
+
+        <div class="card shadow-sm mb-4">
+
+            <div class="card-header d-flex justify-content-between align-items-center">
+
+                <strong>Purchase Order Items</strong>
+
+                <button
+                    type="button"
+                    class="btn btn-sm btn-primary"
+                    id="addLineButton"
+                >
+                    + Add Item
+                </button>
+
+            </div>
+
+
+            <div class="card-body">
+
+                <!-- Explanation -->
+                <div class="alert alert-info mb-4">
+
+                    <strong>How quantities work:</strong>
+
+                    <div class="mt-1">
+                        PO quantity represents the number of physical units being ordered.
+                        The physical unit and quantity contained in each instance come from
+                        the Item Master.
+                    </div>
+
+                    <div class="mt-2">
+                        Example:
+                        <strong>5 BARREL</strong> of OIL-20L means
+                        <strong>5 physical barrels × 20 L each</strong>.
+                    </div>
+
+                </div>
+
+
+                <div
+                    id="poLines"
+                    class="d-flex flex-column gap-3"
+                >
+
+                    <% if (purchaseOrder?.lines?.length) { %>
+
+                        <% purchaseOrder.lines.forEach((line, index) => { %>
+
+                            <div class="po-line border rounded p-3">
+
+                                <div class="row g-3 align-items-end">
+
+                                    <!-- ITEM -->
+                                    <div class="col-lg-4 col-md-6">
+
+                                        <label class="form-label">
+                                            Item <span class="text-danger">*</span>
+                                        </label>
+
+                                        <select
+                                            name="lineItemMasterId"
+                                            class="form-select item-select"
+                                            required
+                                        >
+
+                                            <option value="">
+                                                Select Item
+                                            </option>
+
+                                            <% items.forEach(item => { %>
+
+                                                <option
+                                                    value="<%= item.id %>"
+                                                    data-unit="<%= item.unit %>"
+                                                    data-instance-quantity="<%= item.instance_quantity %>"
+                                                    data-instance-quantity-unit="<%= item.instance_quantity_unit %>"
+                                                    <%= String(line.item_master_id) === String(item.id)
+                                                        ? 'selected'
+                                                        : '' %>
+                                                >
+                                                    <%= item.item_code %> -
+                                                    <%= item.name %>
+                                                </option>
+
+                                            <% }) %>
+
+                                        </select>
+
+                                    </div>
+
+
+                                    <!-- ORDER QUANTITY -->
+                                    <div class="col-lg-2 col-md-3">
+
+                                        <label class="form-label">
+                                            Quantity <span class="text-danger">*</span>
+                                        </label>
+
+                                        <input
+                                            type="number"
+                                            name="lineQuantity"
+                                            class="form-control"
+                                            min="1"
+                                            step="1"
+                                            required
+                                            value="<%= line.ordered_quantity %>"
+                                        >
+
+                                    </div>
+
+
+                                    <!-- PHYSICAL UNIT -->
+                                    <div class="col-lg-2 col-md-3">
+
+                                        <label class="form-label">
+                                            Physical Unit
+                                        </label>
+
+                                        <input
+                                            type="text"
+                                            name="lineUnit"
+                                            class="form-control unit-input"
+                                            value="<%= line.unit || line.item_master_unit || '' %>"
+                                            readonly
+                                            tabindex="-1"
+                                        >
+
+                                    </div>
+
+
+                                    <!-- PER INSTANCE -->
+                                    <div class="col-lg-3 col-md-6">
+
+                                        <label class="form-label">
+                                            Per Instance
+                                        </label>
+
+                                        <input
+                                            type="text"
+                                            class="form-control instance-info"
+                                            readonly
+                                            tabindex="-1"
+                                            value="<%=
+                                                line.instance_quantity &&
+                                                line.instance_quantity_unit
+                                                    ? `${line.instance_quantity} ${line.instance_quantity_unit}`
+                                                    : ''
+                                            %>"
+                                        >
+
+                                    </div>
+
+
+                                    <!-- REMOVE -->
+                                    <div class="col-lg-1 col-md-2">
+
+                                        <button
+                                            type="button"
+                                            class="btn btn-outline-danger remove-line w-100"
+                                            title="Remove item"
+                                        >
+                                            ×
+                                        </button>
+
+                                    </div>
+
+
+                                    <!-- NOTES -->
+                                    <div class="col-12">
+
+                                        <label class="form-label">
+                                            Notes
+                                        </label>
+
+                                        <input
+                                            type="text"
+                                            name="lineNotes"
+                                            class="form-control"
+                                            value="<%= line.notes || '' %>"
+                                            placeholder="Optional line notes"
+                                        >
+
+                                    </div>
+
+
+                                    <!-- ITEM SUMMARY -->
+                                    <div class="col-12">
+
+                                        <div class="item-summary small text-muted">
+                                            <% if (
+                                                line.instance_quantity &&
+                                                line.instance_quantity_unit &&
+                                                (line.unit || line.item_master_unit)
+                                            ) { %>
+
+                                                <strong>
+                                                    <%= line.ordered_quantity %>
+                                                    <%= line.unit || line.item_master_unit %>
+                                                </strong>
+
+                                                =
+                                                <strong>
+                                                    <%= line.ordered_quantity %>
+                                                    physical instance(s)
+                                                </strong>
+
+                                                ×
+                                                <strong>
+                                                    <%= line.instance_quantity %>
+                                                    <%= line.instance_quantity_unit %>
+                                                </strong>
+
+                                                per instance
+
+                                            <% } %>
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        <% }) %>
+
+
+                    <% } else { %>
+
+
+                        <!-- INITIAL EMPTY LINE -->
+
+                        <div class="po-line border rounded p-3">
+
+                            <div class="row g-3 align-items-end">
+
+                                <!-- ITEM -->
+                                <div class="col-lg-4 col-md-6">
+
+                                    <label class="form-label">
+                                        Item <span class="text-danger">*</span>
+                                    </label>
+
+                                    <select
+                                        name="lineItemMasterId"
+                                        class="form-select item-select"
+                                        required
+                                    >
+
+                                        <option value="">
+                                            Select Item
+                                        </option>
+
+                                        <% items.forEach(item => { %>
+
+                                            <option
+                                                value="<%= item.id %>"
+                                                data-unit="<%= item.unit %>"
+                                                data-instance-quantity="<%= item.instance_quantity %>"
+                                                data-instance-quantity-unit="<%= item.instance_quantity_unit %>"
+                                            >
+                                                <%= item.item_code %> -
+                                                <%= item.name %>
+                                            </option>
+
+                                        <% }) %>
+
+                                    </select>
+
+                                </div>
+
+
+                                <!-- ORDER QUANTITY -->
+                                <div class="col-lg-2 col-md-3">
+
+                                    <label class="form-label">
+                                        Quantity <span class="text-danger">*</span>
+                                    </label>
+
+                                    <input
+                                        type="number"
+                                        name="lineQuantity"
+                                        class="form-control"
+                                        min="1"
+                                        step="1"
+                                        required
+                                    >
+
+                                </div>
+
+
+                                <!-- PHYSICAL UNIT -->
+                                <div class="col-lg-2 col-md-3">
+
+                                    <label class="form-label">
+                                        Physical Unit
+                                    </label>
+
+                                    <input
+                                        type="text"
+                                        name="lineUnit"
+                                        class="form-control unit-input"
+                                        readonly
+                                        tabindex="-1"
+                                        placeholder="Select item"
+                                    >
+
+                                </div>
+
+
+                                <!-- PER INSTANCE -->
+                                <div class="col-lg-3 col-md-6">
+
+                                    <label class="form-label">
+                                        Per Instance
+                                    </label>
+
+                                    <input
+                                        type="text"
+                                        class="form-control instance-info"
+                                        readonly
+                                        tabindex="-1"
+                                        placeholder="Select item"
+                                    >
+
+                                </div>
+
+
+                                <!-- REMOVE -->
+                                <div class="col-lg-1 col-md-2">
+
+                                    <button
+                                        type="button"
+                                        class="btn btn-outline-danger remove-line w-100"
+                                        title="Remove item"
+                                    >
+                                        ×
+                                    </button>
+
+                                </div>
+
+
+                                <!-- NOTES -->
+                                <div class="col-12">
+
+                                    <label class="form-label">
+                                        Notes
+                                    </label>
+
+                                    <input
+                                        type="text"
+                                        name="lineNotes"
+                                        class="form-control"
+                                        placeholder="Optional line notes"
+                                    >
+
+                                </div>
+
+
+                                <!-- ITEM SUMMARY -->
+                                <div class="col-12">
+
+                                    <div class="item-summary small text-muted"></div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    <% } %>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- ============================= -->
+        <!-- ACTIONS -->
+        <!-- ============================= -->
+
+        <div class="d-flex flex-wrap gap-2 mb-4">
+
+            <button
+                type="submit"
+                class="btn btn-primary"
+            >
+                <%= purchaseOrder
+                    ? 'Update Purchase Order'
+                    : 'Create Purchase Order' %>
+            </button>
+
+
+            <a
+                href="/purchase-orders"
+                class="btn btn-outline-secondary"
+            >
+                Cancel
+            </a>
+
+        </div>
+
+    </form>
+
+</div>
+
+
+<script nonce="<%= cspNonce %>">
+
+(function () {
+
+    const container = document.getElementById('poLines');
+    const addButton = document.getElementById('addLineButton');
+
+
+    /*
+     * Update the display fields for one PO line
+     * based entirely on the selected Item Master.
+     */
+    function updateLineFromItem(line) {
+
+        const select = line.querySelector('.item-select');
+        const unitInput = line.querySelector('.unit-input');
+        const instanceInfo = line.querySelector('.instance-info');
+        const summary = line.querySelector('.item-summary');
+
+        if (!select || !unitInput || !instanceInfo) {
+            return;
+        }
+
+        const selectedOption =
+            select.options[select.selectedIndex];
+
+        if (!selectedOption || !selectedOption.value) {
+
+            unitInput.value = '';
+            instanceInfo.value = '';
+            summary.textContent = '';
+
+            return;
+        }
+
+
+        const physicalUnit =
+            selectedOption.getAttribute('data-unit') || '';
+
+        const instanceQuantity =
+            selectedOption.getAttribute('data-instance-quantity') || '';
+
+        const instanceQuantityUnit =
+            selectedOption.getAttribute('data-instance-quantity-unit') || '';
+
+
+        /*
+         * Physical unit is controlled by the Item Master.
+         */
+        unitInput.value = physicalUnit;
+
+
+        /*
+         * Display the standard quantity inside one
+         * physical instance.
+         */
+        if (
+            instanceQuantity &&
+            instanceQuantityUnit
+        ) {
+
+            instanceInfo.value =
+                `${instanceQuantity} ${instanceQuantityUnit}`;
+
+        } else {
+
+            instanceInfo.value = '';
+
+        }
+
+
+        updateSummary(line);
+
+    }
+
+
+    /*
+     * Update the explanatory summary beneath the line.
+     */
+    function updateSummary(line) {
+
+        const select = line.querySelector('.item-select');
+        const quantityInput = line.querySelector(
+            'input[name="lineQuantity"]'
+        );
+        const unitInput = line.querySelector('.unit-input');
+        const summary = line.querySelector('.item-summary');
+
+        if (
+            !select ||
+            !quantityInput ||
+            !unitInput ||
+            !summary
+        ) {
+            return;
+        }
+
+
+        const selectedOption =
+            select.options[select.selectedIndex];
+
+        if (!selectedOption || !selectedOption.value) {
+
+            summary.textContent = '';
+
+            return;
+        }
+
+
+        const quantity = quantityInput.value;
+
+        const physicalUnit =
+            selectedOption.getAttribute('data-unit') || '';
+
+        const instanceQuantity =
+            selectedOption.getAttribute('data-instance-quantity') || '';
+
+        const instanceQuantityUnit =
+            selectedOption.getAttribute(
+                'data-instance-quantity-unit'
+            ) || '';
+
+
+        if (
+            quantity &&
+            physicalUnit &&
+            instanceQuantity &&
+            instanceQuantityUnit
+        ) {
+
+            summary.innerHTML =
+                '<strong>' +
+                escapeHtml(quantity) +
+                ' ' +
+                escapeHtml(physicalUnit) +
+                '</strong>' +
+                ' = ' +
+                '<strong>' +
+                escapeHtml(quantity) +
+                ' physical instance(s)' +
+                '</strong>' +
+                ' × ' +
+                '<strong>' +
+                escapeHtml(instanceQuantity) +
+                ' ' +
+                escapeHtml(instanceQuantityUnit) +
+                '</strong>' +
+                ' per instance';
+
+        } else {
+
+            summary.textContent = '';
+
+        }
+
+    }
+
+
+    /*
+     * Basic HTML escaping for values inserted into innerHTML.
+     */
+    function escapeHtml(value) {
+
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+
+    }
+
+
+    /*
+     * Create a new PO line.
+     */
+    function createLine() {
+
+        const wrapper =
+            document.createElement('div');
+
+        wrapper.className =
+            'po-line border rounded p-3';
+
+
+        wrapper.innerHTML = `
+
+            <div class="row g-3 align-items-end">
+
+                <div class="col-lg-4 col-md-6">
+
+                    <label class="form-label">
+                        Item <span class="text-danger">*</span>
+                    </label>
+
+                    <select
+                        name="lineItemMasterId"
+                        class="form-select item-select"
+                        required
+                    >
+
+                        <option value="">
+                            Select Item
+                        </option>
+
+                        <% items.forEach(item => { %>
+
+                            <option
+                                value="<%= item.id %>"
+                                data-unit="<%= item.unit %>"
+                                data-instance-quantity="<%= item.instance_quantity %>"
+                                data-instance-quantity-unit="<%= item.instance_quantity_unit %>"
+                            >
+                                <%= item.item_code %> -
+                                <%= item.name %>
+                            </option>
+
+                        <% }) %>
+
+                    </select>
+
+                </div>
+
+
+                <div class="col-lg-2 col-md-3">
+
+                    <label class="form-label">
+                        Quantity <span class="text-danger">*</span>
+                    </label>
+
+                    <input
+                        type="number"
+                        name="lineQuantity"
+                        class="form-control"
+                        min="1"
+                        step="1"
+                        required
+                    >
+
+                </div>
+
+
+                <div class="col-lg-2 col-md-3">
+
+                    <label class="form-label">
+                        Physical Unit
+                    </label>
+
+                    <input
+                        type="text"
+                        name="lineUnit"
+                        class="form-control unit-input"
+                        readonly
+                        tabindex="-1"
+                        placeholder="Select item"
+                    >
+
+                </div>
+
+
+                <div class="col-lg-3 col-md-6">
+
+                    <label class="form-label">
+                        Per Instance
+                    </label>
+
+                    <input
+                        type="text"
+                        class="form-control instance-info"
+                        readonly
+                        tabindex="-1"
+                        placeholder="Select item"
+                    >
+
+                </div>
+
+
+                <div class="col-lg-1 col-md-2">
+
+                    <button
+                        type="button"
+                        class="btn btn-outline-danger remove-line w-100"
+                        title="Remove item"
+                    >
+                        ×
+                    </button>
+
+                </div>
+
+
+                <div class="col-12">
+
+                    <label class="form-label">
+                        Notes
+                    </label>
+
+                    <input
+                        type="text"
+                        name="lineNotes"
+                        class="form-control"
+                        placeholder="Optional line notes"
+                    >
+
+                </div>
+
+
+                <div class="col-12">
+
+                    <div class="item-summary small text-muted"></div>
+
+                </div>
+
+            </div>
+
+        `;
+
+
+        container.appendChild(wrapper);
+
+        attachLineEvents(wrapper);
+
+    }
+
+
+    /*
+     * Attach events to one PO line.
+     */
+    function attachLineEvents(line) {
+
+        const select =
+            line.querySelector('.item-select');
+
+        const quantityInput =
+            line.querySelector(
+                'input[name="lineQuantity"]'
+            );
+
+        const removeButton =
+            line.querySelector('.remove-line');
+
+
+        if (select) {
+
+            select.addEventListener(
+                'change',
+                function () {
+
+                    updateLineFromItem(line);
+
+                }
+            );
+
+        }
+
+
+        if (quantityInput) {
+
+            quantityInput.addEventListener(
+                'input',
+                function () {
+
+                    updateSummary(line);
+
+                }
+            );
+
+        }
+
+
+        if (removeButton) {
+
+            removeButton.addEventListener(
+                'click',
+                function () {
+
+                    const lines =
+                        container.querySelectorAll(
+                            '.po-line'
+                        );
+
+
+                    /*
+                     * Always keep at least one line.
+                     */
+                    if (lines.length <= 1) {
+
+                        return;
+
+                    }
+
+
+                    line.remove();
+
+                }
+            );
+
+        }
+
+
+        /*
+         * Populate the display fields immediately
+         * for existing/edit-mode lines.
+         */
+        updateLineFromItem(line);
+
+    }
+
+
+    /*
+     * Attach events to existing lines.
+     */
+    document
+        .querySelectorAll('.po-line')
+        .forEach(attachLineEvents);
+
+
+    /*
+     * Add new line.
+     */
+    addButton.addEventListener(
+        'click',
+        createLine
+    );
+
+
+})();
+
+</script>

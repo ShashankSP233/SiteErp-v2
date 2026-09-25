@@ -26,6 +26,7 @@
   <div class="card">
     <div class="card-body text-center py-5">
       <h5>No inventory instances yet</h5>
+
       <p class="text-muted mb-3">
         Receive your first physical inventory instance to get started.
       </p>
@@ -52,7 +53,9 @@
               <th>Instance</th>
               <th>Item</th>
               <th>Barcode</th>
-              <th>Quantity</th>
+              <th>Current</th>
+              <th>Allocated</th>
+              <th>Available</th>
               <th>Site</th>
               <th>Condition</th>
               <th>Status</th>
@@ -66,12 +69,14 @@
 
               <tr>
 
+                <!-- Instance -->
                 <td>
                   <strong>
                     <%= instance.instance_code %>
                   </strong>
                 </td>
 
+                <!-- Item -->
                 <td>
                   <div>
                     <strong>
@@ -84,57 +89,103 @@
                   </small>
                 </td>
 
+                <!-- Barcode -->
                 <td>
                   <code>
                     <%= instance.barcode %>
                   </code>
                 </td>
 
+                <!-- Current quantity -->
                 <td>
                   <%= Number(instance.current_quantity).toLocaleString() %>
                   <%= instance.unit %>
                 </td>
 
+                <!-- Quantity allocated to active issues -->
+                <td>
+                  <%= Number(instance.issued_quantity || 0).toLocaleString() %>
+                  <%= instance.unit %>
+                </td>
+
+                <!-- Quantity actually available -->
+                <td>
+                  <strong>
+                    <%= Number(
+                      instance.available_quantity ?? instance.current_quantity
+                    ).toLocaleString() %>
+                    <%= instance.unit %>
+                  </strong>
+                </td>
+
+                <!-- Site -->
                 <td>
                   <% if (instance.site_code) { %>
-                    <strong><%= instance.site_code %></strong>
+
+                    <strong>
+                      <%= instance.site_code %>
+                    </strong>
+
                     <br>
+
                     <small class="text-muted">
                       <%= instance.site_name %>
                     </small>
+
                   <% } else { %>
-                    <span class="text-muted">No site</span>
+
+                    <span class="text-muted">
+                      No site
+                    </span>
+
                   <% } %>
                 </td>
 
+                <!-- Condition -->
                 <td>
+
                   <% if (instance.condition === 'GOOD') { %>
+
                     <span class="badge bg-success">
                       Good
                     </span>
+
                   <% } else { %>
+
                     <span class="badge bg-warning text-dark">
                       <%= instance.condition %>
                     </span>
+
                   <% } %>
+
                 </td>
 
+                <!-- Status -->
                 <td>
+
                   <% if (instance.lifecycle_status === 'ACTIVE') { %>
+
                     <span class="badge bg-primary">
                       Active
                     </span>
+
                   <% } else if (instance.lifecycle_status === 'CONSUMED') { %>
+
                     <span class="badge bg-secondary">
                       Consumed
                     </span>
+
                   <% } else { %>
+
                     <span class="badge bg-warning text-dark">
                       <%= instance.lifecycle_status %>
                     </span>
+
                   <% } %>
+
                 </td>
 
+                <!-- Received -->
                 <td>
                   <small>
                     <%= new Date(instance.created_at).toLocaleString() %>

@@ -1,0 +1,586 @@
+<div class="container-fluid py-3">
+
+    <!-- ============================= -->
+    <!-- PAGE HEADER -->
+    <!-- ============================= -->
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+
+        <div>
+
+            <h2 class="mb-1">
+                Purchase Order
+                <%= purchaseOrder.po_number %>
+            </h2>
+
+            <p class="text-muted mb-0">
+                Purchase Order details and lifecycle status.
+            </p>
+
+        </div>
+
+
+        <div class="d-flex flex-wrap gap-2">
+
+            <a
+                href="/purchase-orders"
+                class="btn btn-outline-secondary"
+            >
+                Back
+            </a>
+
+
+            <% if (
+                currentUser &&
+                ['admin', 'manager'].includes(currentUser.role) &&
+                purchaseOrder.status === 'DRAFT'
+            ) { %>
+
+                <a
+                    href="/purchase-orders/<%= purchaseOrder.id %>/edit"
+                    class="btn btn-outline-primary"
+                >
+                    Edit
+                </a>
+
+            <% } %>
+
+        </div>
+
+    </div>
+
+
+    <!-- ============================= -->
+    <!-- PURCHASE ORDER INFORMATION -->
+    <!-- ============================= -->
+
+    <div class="card shadow-sm mb-4">
+
+        <div class="card-header d-flex justify-content-between align-items-center">
+
+            <strong>
+                Purchase Order Information
+            </strong>
+
+
+            <% if (purchaseOrder.status === 'DRAFT') { %>
+
+                <span class="badge bg-secondary">
+                    Draft
+                </span>
+
+            <% } else if (purchaseOrder.status === 'SENT') { %>
+
+                <span class="badge bg-primary">
+                    Sent
+                </span>
+
+            <% } else if (purchaseOrder.status === 'PARTIALLY_RECEIVED') { %>
+
+                <span class="badge bg-warning text-dark">
+                    Partially Received
+                </span>
+
+            <% } else if (purchaseOrder.status === 'COMPLETED') { %>
+
+                <span class="badge bg-success">
+                    Completed
+                </span>
+
+            <% } else { %>
+
+                <span class="badge bg-danger">
+                    Cancelled
+                </span>
+
+            <% } %>
+
+        </div>
+
+
+        <div class="card-body">
+
+            <div class="row g-4">
+
+                <!-- PO NUMBER -->
+                <div class="col-md-4">
+
+                    <div class="text-muted small">
+                        PO Number
+                    </div>
+
+                    <strong>
+                        <%= purchaseOrder.po_number %>
+                    </strong>
+
+                </div>
+
+
+                <!-- VENDOR -->
+                <div class="col-md-4">
+
+                    <div class="text-muted small">
+                        Vendor
+                    </div>
+
+                    <strong>
+                        <%= purchaseOrder.vendor_code %>
+                        -
+                        <%= purchaseOrder.vendor_name %>
+                    </strong>
+
+                </div>
+
+
+                <!-- SITE -->
+                <div class="col-md-4">
+
+                    <div class="text-muted small">
+                        Site
+                    </div>
+
+                    <strong>
+                        <%= purchaseOrder.code || purchaseOrder.site_code || '-' %>
+                        -
+                        <%= purchaseOrder.site_name || '-' %>
+                    </strong>
+
+                </div>
+
+
+                <!-- PO DATE -->
+                <div class="col-md-4">
+
+                    <div class="text-muted small">
+                        PO Date
+                    </div>
+
+                    <%= purchaseOrder.po_date
+                        ? new Date(purchaseOrder.po_date).toLocaleDateString()
+                        : '-' %>
+
+                </div>
+
+
+                <!-- EXPECTED DELIVERY -->
+                <div class="col-md-4">
+
+                    <div class="text-muted small">
+                        Expected Delivery
+                    </div>
+
+                    <%= purchaseOrder.expected_delivery_date
+                        ? new Date(purchaseOrder.expected_delivery_date).toLocaleDateString()
+                        : '-' %>
+
+                </div>
+
+
+                <!-- CREATED BY -->
+                <div class="col-md-4">
+
+                    <div class="text-muted small">
+                        Created By
+                    </div>
+
+                    <%= purchaseOrder.created_by_name ||
+                        purchaseOrder.creator_name ||
+                        purchaseOrder.creator_username ||
+                        '-' %>
+
+                </div>
+
+
+                <!-- REFERENCE -->
+                <div class="col-md-6">
+
+                    <div class="text-muted small">
+                        Reference
+                    </div>
+
+                    <%= purchaseOrder.reference_text || '-' %>
+
+                </div>
+
+
+                <!-- NOTES -->
+                <div class="col-md-6">
+
+                    <div class="text-muted small">
+                        Notes
+                    </div>
+
+                    <%= purchaseOrder.notes || '-' %>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ============================= -->
+    <!-- ORDERED ITEMS -->
+    <!-- ============================= -->
+
+    <div class="card shadow-sm mb-4">
+
+        <div class="card-header">
+
+            <strong>
+                Ordered Items
+            </strong>
+
+        </div>
+
+
+        <div class="card-body p-0">
+
+            <% if (!purchaseOrder.lines || purchaseOrder.lines.length === 0) { %>
+
+                <div class="text-center text-muted py-5">
+
+                    No items have been added to this Purchase Order.
+
+                </div>
+
+            <% } else { %>
+
+
+                <!-- MODEL EXPLANATION -->
+
+                <div class="p-3 border-bottom bg-light">
+
+                    <div class="small text-muted">
+
+                        <strong>Physical-instance model:</strong>
+
+                        PO quantity represents the number of physical
+                        containers/units being ordered.
+
+                        <span class="d-block mt-1">
+                            The "Per Instance" value describes the standard
+                            quantity contained inside each physical instance.
+                        </span>
+
+                    </div>
+
+                </div>
+
+
+                <div class="table-responsive">
+
+                    <table class="table table-hover align-middle mb-0">
+
+                        <thead class="table-light">
+
+                            <tr>
+
+                                <th>
+                                    #
+                                </th>
+
+                                <th>
+                                    Item Code
+                                </th>
+
+                                <th>
+                                    Item
+                                </th>
+
+                                <th>
+                                    Quantity
+                                </th>
+
+                                <th>
+                                    Physical Unit
+                                </th>
+
+                                <th>
+                                    Per Instance
+                                </th>
+
+                                <th>
+                                    Notes
+                                </th>
+
+                            </tr>
+
+                        </thead>
+
+
+                        <tbody>
+
+                            <% purchaseOrder.lines.forEach((line, index) => { %>
+
+                                <tr>
+
+                                    <!-- NUMBER -->
+                                    <td>
+                                        <%= index + 1 %>
+                                    </td>
+
+
+                                    <!-- ITEM CODE -->
+                                    <td>
+
+                                        <strong>
+                                            <%= line.item_code %>
+                                        </strong>
+
+                                    </td>
+
+
+                                    <!-- ITEM -->
+                                    <td>
+
+                                        <div>
+                                            <%= line.item_name %>
+                                        </div>
+
+                                        <% if (line.item_description) { %>
+
+                                            <div class="small text-muted mt-1">
+                                                <%= line.item_description %>
+                                            </div>
+
+                                        <% } %>
+
+                                    </td>
+
+
+                                    <!-- ORDER QUANTITY -->
+                                    <td>
+
+                                        <strong>
+                                            <%= line.ordered_quantity %>
+                                        </strong>
+
+                                    </td>
+
+
+                                    <!-- PHYSICAL UNIT -->
+                                    <td>
+
+                                        <span class="badge bg-secondary">
+                                            <%= line.unit || line.item_master_unit || '-' %>
+                                        </span>
+
+                                    </td>
+
+
+                                    <!-- QUANTITY PER INSTANCE -->
+                                    <td>
+
+                                        <% if (
+                                            line.instance_quantity !== null &&
+                                            line.instance_quantity !== undefined &&
+                                            line.instance_quantity_unit
+                                        ) { %>
+
+                                            <strong>
+                                                <%= line.instance_quantity %>
+                                            </strong>
+
+                                            <%= line.instance_quantity_unit %>
+
+                                            <div class="small text-muted mt-1">
+
+                                                per
+                                                <%= line.unit || line.item_master_unit || 'instance' %>
+
+                                            </div>
+
+                                        <% } else { %>
+
+                                            <span class="text-muted">
+                                                -
+                                            </span>
+
+                                        <% } %>
+
+                                    </td>
+
+
+                                    <!-- NOTES -->
+                                    <td>
+
+                                        <%= line.notes || '-' %>
+
+                                    </td>
+
+                                </tr>
+
+
+                                <!-- INSTANCE SUMMARY -->
+                                <tr class="table-light">
+
+                                    <td></td>
+
+                                    <td colspan="6">
+
+                                        <% if (
+                                            line.instance_quantity !== null &&
+                                            line.instance_quantity !== undefined &&
+                                            line.instance_quantity_unit &&
+                                            line.ordered_quantity &&
+                                            (line.unit || line.item_master_unit)
+                                        ) { %>
+
+                                            <div class="small text-muted">
+
+                                                <strong>
+                                                    <%= line.ordered_quantity %>
+                                                    <%= line.unit || line.item_master_unit %>
+                                                </strong>
+
+                                                =
+                                                <%= line.ordered_quantity %>
+                                                physical instance(s)
+
+                                                ×
+
+                                                <%= line.instance_quantity %>
+                                                <%= line.instance_quantity_unit %>
+
+                                                per instance
+
+                                            </div>
+
+                                        <% } %>
+
+                                    </td>
+
+                                </tr>
+
+                            <% }) %>
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            <% } %>
+
+        </div>
+
+    </div>
+
+
+    <!-- ============================= -->
+    <!-- STATUS ACTIONS -->
+    <!-- ============================= -->
+
+    <% if (
+        currentUser &&
+        ['admin', 'manager'].includes(currentUser.role)
+    ) { %>
+
+        <div class="card shadow-sm">
+
+            <div class="card-header">
+
+                <strong>
+                    Purchase Order Actions
+                </strong>
+
+            </div>
+
+
+            <div class="card-body">
+
+                <div class="d-flex flex-wrap gap-2">
+
+
+                    <!-- MARK AS SENT -->
+
+                    <% if (purchaseOrder.status === 'DRAFT') { %>
+
+                        <form
+                            method="POST"
+                            action="/purchase-orders/<%= purchaseOrder.id %>/status"
+                        >
+
+                            <input
+                                type="hidden"
+                                name="_csrf"
+                                value="<%= csrfToken %>"
+                            >
+
+                            <input
+                                type="hidden"
+                                name="status"
+                                value="SENT"
+                            >
+
+                            <button
+                                type="submit"
+                                class="btn btn-primary"
+                            >
+                                Mark as Sent
+                            </button>
+
+                        </form>
+
+                    <% } %>
+
+
+                    <!-- CANCEL -->
+
+                    <% if (
+                        purchaseOrder.status === 'DRAFT' ||
+                        purchaseOrder.status === 'SENT'
+                    ) { %>
+
+                        <form
+                            method="POST"
+                            action="/purchase-orders/<%= purchaseOrder.id %>/status"
+                        >
+
+                            <input
+                                type="hidden"
+                                name="_csrf"
+                                value="<%= csrfToken %>"
+                            >
+
+                            <input
+                                type="hidden"
+                                name="status"
+                                value="CANCELLED"
+                            >
+
+                            <button
+                                type="submit"
+                                class="btn btn-outline-danger"
+                            >
+                                Cancel PO
+                            </button>
+
+                        </form>
+
+                    <% } %>
+
+                </div>
+
+
+                <% if (purchaseOrder.status === 'SENT') { %>
+
+                    <div class="alert alert-info mt-3 mb-0">
+
+                        GRN receiving will be connected to this
+                        Purchase Order in the next procurement step.
+
+                    </div>
+
+                <% } %>
+
+            </div>
+
+        </div>
+
+    <% } %>
+
+</div>

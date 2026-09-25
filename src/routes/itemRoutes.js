@@ -66,6 +66,8 @@ router.post(
           description: req.body.description,
           category: req.body.category,
           unit: req.body.unit,
+          instanceQuantity: req.body.instanceQuantity,
+          instanceQuantityUnit: req.body.instanceQuantityUnit,
           isConsumable: req.body.isConsumable === 'on',
           allowsPartialConsumption:
             req.body.allowsPartialConsumption === 'on',
@@ -164,6 +166,12 @@ router.post(
             description: req.body.description,
             category: req.body.category,
             unit: req.body.unit,
+
+            instanceQuantity:
+              req.body.instanceQuantity,
+
+            instanceQuantityUnit:
+              req.body.instanceQuantityUnit,
 
             isConsumable:
               req.body.isConsumable === 'on',

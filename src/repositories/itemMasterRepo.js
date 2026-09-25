@@ -9,6 +9,8 @@ async function listItemMasters() {
       im.description,
       im.category,
       im.unit,
+      im.instance_quantity,
+      im.instance_quantity_unit,
       im.is_consumable,
       im.allows_partial_consumption,
       im.requires_instance_tracking,
@@ -35,7 +37,6 @@ async function listItemMasters() {
   `);
 }
 
-
 async function getItemMasterById(id) {
   return db.one(`
     SELECT
@@ -45,6 +46,8 @@ async function getItemMasterById(id) {
       description,
       category,
       unit,
+      instance_quantity,
+      instance_quantity_unit,
       is_consumable,
       allows_partial_consumption,
       requires_instance_tracking,
@@ -57,13 +60,14 @@ async function getItemMasterById(id) {
   `, [id]);
 }
 
-
 async function createItemMaster({
   itemCode,
   name,
   description,
   category,
   unit,
+  instanceQuantity,
+  instanceQuantityUnit,
   isConsumable = false,
   allowsPartialConsumption = false,
   requiresInstanceTracking = true,
@@ -82,6 +86,19 @@ async function createItemMaster({
     throw new Error('Unit is required.');
   }
 
+  const normalizedInstanceQuantity = Number(instanceQuantity);
+
+  if (
+    !Number.isFinite(normalizedInstanceQuantity) ||
+    normalizedInstanceQuantity <= 0
+  ) {
+    throw new Error('Instance quantity must be greater than zero.');
+  }
+
+  if (!instanceQuantityUnit?.trim()) {
+    throw new Error('Instance quantity unit is required.');
+  }
+
   if (
     allowsPartialConsumption &&
     !isConsumable
@@ -98,13 +115,15 @@ async function createItemMaster({
       description,
       category,
       unit,
+      instance_quantity,
+      instance_quantity_unit,
       is_consumable,
       allows_partial_consumption,
       requires_instance_tracking,
       reorder_level,
       created_by
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     RETURNING id
   `, [
     itemCode.trim().toUpperCase(),
@@ -112,6 +131,8 @@ async function createItemMaster({
     description?.trim() || null,
     category?.trim() || null,
     unit.trim(),
+    normalizedInstanceQuantity,
+    instanceQuantityUnit.trim(),
     Boolean(isConsumable),
     Boolean(allowsPartialConsumption),
     Boolean(requiresInstanceTracking),
@@ -122,12 +143,13 @@ async function createItemMaster({
   return getItemMasterById(result.id);
 }
 
-
 async function updateItemMaster(id, {
   name,
   description,
   category,
   unit,
+  instanceQuantity,
+  instanceQuantityUnit,
   isConsumable,
   allowsPartialConsumption,
   requiresInstanceTracking,
@@ -141,6 +163,19 @@ async function updateItemMaster(id, {
 
   if (!unit?.trim()) {
     throw new Error('Unit is required.');
+  }
+
+  const normalizedInstanceQuantity = Number(instanceQuantity);
+
+  if (
+    !Number.isFinite(normalizedInstanceQuantity) ||
+    normalizedInstanceQuantity <= 0
+  ) {
+    throw new Error('Instance quantity must be greater than zero.');
+  }
+
+  if (!instanceQuantityUnit?.trim()) {
+    throw new Error('Instance quantity unit is required.');
   }
 
   if (
@@ -159,6 +194,8 @@ async function updateItemMaster(id, {
       description = ?,
       category = ?,
       unit = ?,
+      instance_quantity = ?,
+      instance_quantity_unit = ?,
       is_consumable = ?,
       allows_partial_consumption = ?,
       requires_instance_tracking = ?,
@@ -171,6 +208,8 @@ async function updateItemMaster(id, {
     description?.trim() || null,
     category?.trim() || null,
     unit.trim(),
+    normalizedInstanceQuantity,
+    instanceQuantityUnit.trim(),
     Boolean(isConsumable),
     Boolean(allowsPartialConsumption),
     Boolean(requiresInstanceTracking),
@@ -181,7 +220,6 @@ async function updateItemMaster(id, {
 
   return getItemMasterById(id);
 }
-
 
 module.exports = {
   listItemMasters,

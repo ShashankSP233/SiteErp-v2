@@ -1,13 +1,227 @@
-<div class="d-flex justify-content-between align-items-center mb-3"><h2 class="mb-0"><%= vendor.id ? 'Edit Vendor' : 'Add Vendor' %></h2><a class="btn btn-outline-secondary" href="/vendors">Back</a></div>
-<form method="post" action="<%= vendor.id ? '/vendors/'+vendor.id : '/vendors' %>" class="card shadow-sm"><div class="card-body row g-3">
-  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-  <div class="col-md-6"><label class="form-label">Name *</label><input name="name" value="<%= vendor.name || '' %>" class="form-control" required></div>
-  <div class="col-md-6"><label class="form-label">Contact Person</label><input name="contactName" value="<%= vendor.contact_name || '' %>" class="form-control"></div>
-  <div class="col-md-4"><label class="form-label">Mobile</label><input name="mobile" value="<%= vendor.mobile || '' %>" class="form-control"></div>
-  <div class="col-md-4"><label class="form-label">Phone</label><input name="phone" value="<%= vendor.phone || '' %>" class="form-control"></div>
-  <div class="col-md-4"><label class="form-label">Email</label><input name="email" type="email" value="<%= vendor.email || '' %>" class="form-control"></div>
-  <div class="col-md-4"><label class="form-label">GSTIN</label><input name="gstin" value="<%= vendor.gstin || '' %>" class="form-control"></div>
-  <div class="col-md-8"><label class="form-label">Address</label><input name="address" value="<%= vendor.address || '' %>" class="form-control"></div>
-  <div class="col-12"><label class="form-label">Notes</label><textarea name="notes" class="form-control"><%= vendor.notes || '' %></textarea></div>
-  <div class="col-12"><button class="btn btn-primary">Save Vendor</button></div>
-</div></form>
+<div class="container-fluid py-3">
+
+    <div class="mb-4">
+        <h2 class="mb-1">
+            <%= isEdit ? 'Edit Vendor' : 'Add Vendor' %>
+        </h2>
+
+        <p class="text-muted mb-0">
+            <%= isEdit
+                ? 'Update vendor information.'
+                : 'Create a new procurement vendor.'
+            %>
+        </p>
+    </div>
+
+
+
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <strong>Vendor Details</strong>
+        </div>
+
+        <div class="card-body">
+
+            <form method="POST" action="<%= formAction %>">
+
+                <input
+                    type="hidden"
+                    name="_csrf"
+                    value="<%= csrfToken %>"
+                >
+
+                <div class="row g-3">
+
+                    <!-- Vendor Code -->
+                    <div class="col-md-6">
+                        <label for="vendorCode" class="form-label">
+                            Vendor Code <span class="text-danger">*</span>
+                        </label>
+
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="vendorCode"
+                            name="vendorCode"
+                            value="<%= vendor.vendor_code || '' %>"
+                            required
+                            maxlength="100"
+                            autocomplete="off"
+                        >
+
+                        <div class="form-text">
+                            Unique internal code for this vendor.
+                        </div>
+                    </div>
+
+                    <!-- Vendor Name -->
+                    <div class="col-md-6">
+                        <label for="name" class="form-label">
+                            Vendor Name <span class="text-danger">*</span>
+                        </label>
+
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="name"
+                            name="name"
+                            value="<%= vendor.name || '' %>"
+                            required
+                            maxlength="200"
+                        >
+                    </div>
+
+                    <!-- Contact Person -->
+                    <div class="col-md-6">
+                        <label for="contactPerson" class="form-label">
+                            Contact Person
+                        </label>
+
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="contactPerson"
+                            name="contactPerson"
+                            value="<%= vendor.contact_person || '' %>"
+                            maxlength="200"
+                        >
+                    </div>
+
+                    <!-- Email -->
+                    <div class="col-md-6">
+                        <label for="email" class="form-label">
+                            Email
+                        </label>
+
+                        <input
+                            type="email"
+                            class="form-control"
+                            id="email"
+                            name="email"
+                            value="<%= vendor.email || '' %>"
+                            maxlength="254"
+                        >
+                    </div>
+
+                    <!-- Phone -->
+                    <div class="col-md-6">
+                        <label for="phone" class="form-label">
+                            Phone
+                        </label>
+
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="phone"
+                            name="phone"
+                            value="<%= vendor.phone || '' %>"
+                            maxlength="50"
+                        >
+                    </div>
+
+                    <!-- Tax Identifier -->
+                    <div class="col-md-6">
+                        <label for="taxIdentifier" class="form-label">
+                            Tax Identifier
+                        </label>
+
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="taxIdentifier"
+                            name="taxIdentifier"
+                            value="<%= vendor.tax_identifier || '' %>"
+                            maxlength="100"
+                        >
+                    </div>
+
+                    <!-- Address -->
+                    <div class="col-12">
+                        <label for="address" class="form-label">
+                            Address
+                        </label>
+
+                        <textarea
+                            class="form-control"
+                            id="address"
+                            name="address"
+                            rows="3"
+                            maxlength="1000"
+                        ><%= vendor.address || '' %></textarea>
+                    </div>
+
+                    <!-- Notes -->
+                    <div class="col-12">
+                        <label for="notes" class="form-label">
+                            Notes
+                        </label>
+
+                        <textarea
+                            class="form-control"
+                            id="notes"
+                            name="notes"
+                            rows="3"
+                            maxlength="2000"
+                        ><%= vendor.notes || '' %></textarea>
+                    </div>
+
+                    <% if (isEdit) { %>
+
+                        <div class="col-12">
+
+                            <div class="form-check">
+                                <input
+                                    type="hidden"
+                                    name="isActive"
+                                    value="false"
+                                >
+
+                                <input
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    id="isActive"
+                                    name="isActive"
+                                    value="true"
+                                    <%= vendor.is_active ? 'checked' : '' %>
+                                >
+
+                                <label
+                                    class="form-check-label"
+                                    for="isActive"
+                                >
+                                    Vendor is active
+                                </label>
+                            </div>
+
+                        </div>
+
+                    <% } %>
+
+                </div>
+
+                <hr class="my-4">
+
+                <div class="d-flex flex-wrap gap-2">
+
+                    <button
+                        type="submit"
+                        class="btn btn-primary"
+                    >
+                        <%= isEdit ? 'Update Vendor' : 'Create Vendor' %>
+                    </button>
+
+                    <a
+                        href="/vendors"
+                        class="btn btn-outline-secondary"
+                    >
+                        Cancel
+                    </a>
+
+                </div>
+
+            </form>
+
+        </div>
+    </div>
+
+</div>

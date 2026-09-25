@@ -1,351 +1,161 @@
-<div class="mb-4">
-
-  <h1 class="h3 mb-1">
-    <%= item.id ? 'Edit Item Master' : 'Create Item Master' %>
-  </h1>
-
-  <p class="text-muted mb-0">
-    Define the properties shared by all physical instances of this item.
-  </p>
-
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <div class="text-muted small mb-1">Inventory / Item Master</div>
+    <h1 class="h3 mb-1"><%= item.id ? 'Edit Item Master' : 'Create Item Master' %></h1>
+    <p class="text-muted mb-0">Define the properties shared by all physical instances of this item.</p>
+  </div>
+  <a class="btn btn-outline-secondary" href="/items">Back to Items</a>
 </div>
 
+<form method="POST" action="<%= item.id ? '/items/' + item.id : '/items' %>">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
-<div class="card shadow-sm">
-
-  <div class="card-body">
-
-    <form
-      method="POST"
-      action="<%= item.id ? '/items/' + item.id : '/items' %>"
-    >
-
-      <input
-        type="hidden"
-        name="_csrf"
-        value="<%= csrfToken %>"
-      >
-
-
+  <section class="card shadow-sm mb-4">
+    <div class="card-header bg-white py-3">
+      <h2 class="h5 mb-0">Item Identity</h2>
+    </div>
+    <div class="card-body">
       <div class="row g-3">
-
-
-        <!-- ITEM CODE -->
-
-        <div class="col-md-6">
-
-          <label class="form-label">
-            Item Code
-          </label>
-
+        <div class="col-12 col-md-4">
+          <label class="form-label" for="itemCode">Item Code</label>
           <% if (item.id) { %>
-
-            <input
-              type="text"
-              class="form-control"
-              value="<%= item.item_code %>"
-              disabled
-            >
-
+            <input type="text" id="itemCode" class="form-control" value="<%= item.item_code %>" disabled>
+            <div class="form-text">Code is permanent and cannot be changed.</div>
           <% } else { %>
-
-            <input
-              type="text"
-              name="itemCode"
-              class="form-control"
-              placeholder="CEMENT-001"
-              required
-              maxlength="50"
-            >
-
+            <input type="text" id="itemCode" name="itemCode" class="form-control" placeholder="CEMENT-50KG" required maxlength="50">
           <% } %>
-
         </div>
 
-
-        <!-- NAME -->
-
-        <div class="col-md-6">
-
-          <label class="form-label">
-            Item Name
-          </label>
-
-          <input
-            type="text"
-            name="name"
-            class="form-control"
-            value="<%= item.name || '' %>"
-            required
-            maxlength="200"
-          >
-
+        <div class="col-12 col-md-4">
+          <label class="form-label" for="name">Item Name <span class="text-danger">*</span></label>
+          <input type="text" id="name" name="name" class="form-control" value="<%= item.name || '' %>" required maxlength="200">
+          <div class="form-text">Short name used in inventory lists.</div>
         </div>
 
-
-        <!-- CATEGORY -->
-
-        <div class="col-md-6">
-
-          <label class="form-label">
-            Category
-          </label>
-
-          <input
-            type="text"
-            name="category"
-            class="form-control"
-            value="<%= item.category || '' %>"
-            placeholder="Construction Materials"
-          >
-
+        <div class="col-12 col-md-4">
+          <label class="form-label" for="category">Category</label>
+          <input type="text" id="category" name="category" class="form-control" value="<%= item.category || '' %>" placeholder="Construction Materials">
         </div>
-
-
-        <!-- UNIT -->
-
-        <div class="col-md-6">
-
-          <label class="form-label">
-            Unit
-          </label>
-
-          <input
-            type="text"
-            name="unit"
-            class="form-control"
-            value="<%= item.unit || '' %>"
-            placeholder="BAG, L, PCS, KG..."
-            required
-          >
-
-        </div>
-
-
-        <!-- DESCRIPTION -->
 
         <div class="col-12">
+          <label class="form-label" for="description">Description</label>
+          <textarea id="description" name="description" class="form-control" rows="3" placeholder="Describe the inventory type."><%= item.description || '' %></textarea>
+        </div>
+      </div>
+    </div>
+  </section>
 
-          <label class="form-label">
-            Description
-          </label>
-
-          <textarea
-            name="description"
-            class="form-control"
-            rows="3"
-          ><%= item.description || '' %></textarea>
-
+  <section class="card shadow-sm mb-4">
+    <div class="card-header bg-white py-3">
+      <h2 class="h5 mb-0">Physical Instance Definition</h2>
+    </div>
+    <div class="card-body">
+      <p class="text-muted small mb-3">
+        These values describe one physical container/unit received into inventory.
+      </p>
+      <div class="row g-3">
+        <div class="col-12 col-md-4">
+          <label class="form-label" for="unit">Physical Unit <span class="text-danger">*</span></label>
+          <input type="text" id="unit" name="unit" class="form-control" value="<%= item.unit || '' %>" placeholder="BAG, BARREL, TANK" required maxlength="50">
+          <div class="form-text">Physical container or unit received into inventory, e.g. BAG, BARREL, TANK.</div>
         </div>
 
+        <div class="col-12 col-md-4">
+          <label class="form-label" for="instanceQuantity">Quantity per Instance <span class="text-danger">*</span></label>
+          <input type="number" id="instanceQuantity" name="instanceQuantity" class="form-control" value="<%= item.instance_quantity ?? '' %>" min="0.001" step="0.001" required>
+          <div class="form-text">Standard quantity contained in one physical instance.</div>
+        </div>
 
-        <!-- CONSUMABLE -->
+        <div class="col-12 col-md-4">
+          <label class="form-label" for="instanceQuantityUnit">Quantity Unit <span class="text-danger">*</span></label>
+          <input type="text" id="instanceQuantityUnit" name="instanceQuantityUnit" class="form-control" value="<%= item.instance_quantity_unit || '' %>" placeholder="KG, L" required maxlength="50">
+          <div class="form-text">Measurement unit of the instance contents, e.g. KG, L.</div>
+        </div>
+      </div>
 
-        <div class="col-md-4">
+      <div class="alert alert-info mt-3 mb-0">
+        Example: a BARREL with quantity per instance 20 and quantity unit L represents one physical instance containing 20 L. Receiving 5 BARREL creates 5 such instances.
+      </div>
+    </div>
+  </section>
 
+  <section class="card shadow-sm mb-4">
+    <div class="card-header bg-white py-3">
+      <h2 class="h5 mb-0">Inventory Behavior</h2>
+    </div>
+    <div class="card-body">
+      <div class="row g-4">
+        <div class="col-12 col-md-4">
           <div class="form-check">
-
-            <input
-              class="form-check-input"
-              type="checkbox"
-              name="isConsumable"
-              id="isConsumable"
-              <%= item.is_consumable ? 'checked' : '' %>
-            >
-
-            <label
-              class="form-check-label"
-              for="isConsumable"
-            >
-              Consumable item
-            </label>
-
+            <input class="form-check-input" type="checkbox" name="isConsumable" id="isConsumable" <%= item.is_consumable ? 'checked' : '' %>>
+            <label class="form-check-label fw-semibold" for="isConsumable">Consumable</label>
           </div>
-
-          <div class="form-text">
-            Can be consumed during operations.
-          </div>
-
+          <div class="form-text">Enable when inventory contents are consumed/used rather than simply issued and returned.</div>
         </div>
 
-
-        <!-- PARTIAL CONSUMPTION -->
-
-        <div class="col-md-4">
-
+        <div class="col-12 col-md-4">
           <div class="form-check">
-
-            <input
-              class="form-check-input"
-              type="checkbox"
-              name="allowsPartialConsumption"
-              id="allowsPartialConsumption"
-              <%= item.allows_partial_consumption ? 'checked' : '' %>
-            >
-
-            <label
-              class="form-check-label"
-              for="allowsPartialConsumption"
-            >
-              Allows partial consumption
-            </label>
-
+            <input class="form-check-input" type="checkbox" name="allowsPartialConsumption" id="allowsPartialConsumption" <%= item.allows_partial_consumption ? 'checked' : '' %>>
+            <label class="form-check-label fw-semibold" for="allowsPartialConsumption">Allow Partial Consumption</label>
           </div>
-
-          <div class="form-text">
-            Example: consume 5 L from a 20 L barrel.
-          </div>
-
+          <div class="form-text">Allows part of an instance to be consumed while keeping the same physical instance and barcode.</div>
         </div>
 
-
-        <!-- INSTANCE TRACKING -->
-
-        <div class="col-md-4">
-
+        <div class="col-12 col-md-4">
           <div class="form-check">
-
-            <input
-              class="form-check-input"
-              type="checkbox"
-              name="requiresInstanceTracking"
-              id="requiresInstanceTracking"
-              <%= item.id
-                ? (item.requires_instance_tracking ? 'checked' : '')
-                : 'checked' %>
-            >
-
-            <label
-              class="form-check-label"
-              for="requiresInstanceTracking"
-            >
-              Track physical instances
-            </label>
-
+            <input class="form-check-input" type="checkbox" name="requiresInstanceTracking" id="requiresInstanceTracking" <%= item.id ? (item.requires_instance_tracking ? 'checked' : '') : 'checked' %>>
+            <label class="form-check-label fw-semibold" for="requiresInstanceTracking">Require Instance Tracking</label>
           </div>
-
-          <div class="form-text">
-            Each physical item receives its own barcode.
-          </div>
-
+          <div class="form-text">Creates a permanent physical instance identity and barcode for each received unit.</div>
         </div>
+      </div>
+    </div>
+  </section>
 
-
-        <!-- REORDER LEVEL -->
-
-        <div class="col-md-4">
-
-          <label class="form-label">
-            Reorder Level
-          </label>
-
-          <input
-            type="number"
-            name="reorderLevel"
-            class="form-control"
-            min="0"
-            step="0.001"
-            value="<%= item.reorder_level ?? 0 %>"
-          >
-
+  <section class="card shadow-sm mb-4">
+    <div class="card-header bg-white py-3">
+      <h2 class="h5 mb-0">Stock and Business Details</h2>
+    </div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-12 col-md-4">
+          <label class="form-label" for="reorderLevel">Reorder Level</label>
+          <input type="number" id="reorderLevel" name="reorderLevel" class="form-control" min="0" step="0.001" value="<%= item.reorder_level ?? 0 %>">
         </div>
-
 
         <% if (item.id) { %>
-
-          <div class="col-md-4">
-
-            <label class="form-label">
-              Status
-            </label>
-
-            <select
-              name="status"
-              class="form-select"
-            >
-
-              <option
-                value="ACTIVE"
-                <%= item.status === 'ACTIVE' ? 'selected' : '' %>
-              >
-                Active
-              </option>
-
-              <option
-                value="INACTIVE"
-                <%= item.status === 'INACTIVE' ? 'selected' : '' %>
-              >
-                Inactive
-              </option>
-
-              <option
-                value="DISCONTINUED"
-                <%= item.status === 'DISCONTINUED' ? 'selected' : '' %>
-              >
-                Discontinued
-              </option>
-
+          <div class="col-12 col-md-4">
+            <label class="form-label" for="status">Status</label>
+            <select id="status" name="status" class="form-select">
+              <option value="ACTIVE" <%= item.status === 'ACTIVE' ? 'selected' : '' %>>Active</option>
+              <option value="INACTIVE" <%= item.status === 'INACTIVE' ? 'selected' : '' %>>Inactive</option>
+              <option value="DISCONTINUED" <%= item.status === 'DISCONTINUED' ? 'selected' : '' %>>Discontinued</option>
             </select>
-
           </div>
-
         <% } %>
-
-
       </div>
+    </div>
+  </section>
 
-
-      <div class="d-flex gap-2 mt-4">
-
-        <button
-          type="submit"
-          class="btn btn-primary"
-        >
-          <%= item.id ? 'Save Changes' : 'Create Item' %>
-        </button>
-
-        <a
-          href="/items"
-          class="btn btn-outline-secondary"
-        >
-          Cancel
-        </a>
-
-      </div>
-
-    </form>
-
+  <div class="d-flex gap-2 mb-4">
+    <button type="submit" class="btn btn-primary"><%= item.id ? 'Save Changes' : 'Create Item' %></button>
+    <a href="/items" class="btn btn-outline-secondary">Cancel</a>
   </div>
-
-</div>
-
+</form>
 
 <script nonce="<%= cspNonce %>">
+  (() => {
+    const consumable = document.getElementById('isConsumable');
+    const partial = document.getElementById('allowsPartialConsumption');
 
-  const consumable =
-    document.getElementById('isConsumable');
+    if (!consumable || !partial) return;
 
-  const partial =
-    document.getElementById('allowsPartialConsumption');
-
-  if (consumable && partial) {
-
-    function updatePartialState() {
-
+    const updatePartialState = () => {
       partial.disabled = !consumable.checked;
+      if (!consumable.checked) partial.checked = false;
+    };
 
-      if (!consumable.checked) {
-        partial.checked = false;
-      }
-
-    }
-
-    consumable.addEventListener(
-      'change',
-      updatePartialState
-    );
-
+    consumable.addEventListener('change', updatePartialState);
     updatePartialState();
-  }
-
+  })();
 </script>
