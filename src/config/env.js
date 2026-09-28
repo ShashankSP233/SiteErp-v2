@@ -15,7 +15,7 @@ if (isProduction) {
   }
 }
 
-if (!process.env.DATABASE_URL && isProduction) {
+if (!process.env.ERP_DATABASE_URL && isProduction) {
   throw new Error('DATABASE_URL must be set in production (Supabase/Postgres connection string).');
 }
 
@@ -25,13 +25,13 @@ module.exports = {
   appName: process.env.APP_NAME || 'Site ERP',
   port: Number(process.env.PORT || 3000),
   sessionSecret,
-  databaseUrl: process.env.DATABASE_URL || '',
+  databaseUrl: process.env.ERP_DATABASE_URL || '',
   pgSsl: (() => {
     const raw = String(process.env.PGSSL || 'auto').trim().toLowerCase();
     if (['true', '1', 'require', 'on', 'yes'].includes(raw)) return true;
     if (['false', '0', 'disable', 'off', 'no'].includes(raw)) return false;
     // auto: local Postgres usually has no SSL; hosted (Supabase, etc.) needs it.
-    const url = process.env.DATABASE_URL || '';
+    const url = process.env.ERP_DATABASE_URL || '';
     const isLocal = /@\[?(localhost|127\.0\.0\.1|::1)\]?[:\/]/i.test(url) || /(^|[?&;\s])host=\s*(localhost|127\.0\.0\.1)/i.test(url);
     return !isLocal;
   })(),
