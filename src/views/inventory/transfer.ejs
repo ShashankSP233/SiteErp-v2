@@ -1,93 +1,188 @@
-<div class="d-flex justify-content-between align-items-start mb-4">
+  <div class="d-flex justify-content-between align-items-start mb-4">
 
-  <div>
+    <div>
 
-    <h1 class="h3 mb-1">
-      <%= transfer.transfer_number %>
-    </h1>
+      <h1 class="h3 mb-1">
+        <%= transfer.transfer_number %>
+      </h1>
 
-    <p class="mb-1">
+      <p class="mb-1">
 
-      <strong>
-        <%= transfer.from_site_code %>
-      </strong>
+        <strong>
+          <%= transfer.from_site_code %>
+        </strong>
 
-      →
-      
-      <strong>
-        <%= transfer.to_site_code %>
-      </strong>
+        →
+        
+        <strong>
+          <%= transfer.to_site_code %>
+        </strong>
 
-    </p>
+      </p>
 
-    <span class="text-muted">
-      <%= transfer.from_site_name %>
-      →
-      <%= transfer.to_site_name %>
-    </span>
+      <span class="text-muted">
+        <%= transfer.from_site_name %>
+        →
+        <%= transfer.to_site_name %>
+      </span>
+
+    </div>
+
+
+    <div class="d-flex gap-2">
+      <a
+        href="/inventory/transfers"
+        class="btn btn-outline-secondary"
+      >
+        All Transfers
+      </a>
+
+      <% if (
+        ['IN_TRANSIT', 'PARTIALLY_RECEIVED'].includes(transfer.status) &&
+        items.some(item => item.status === 'IN_TRANSIT')
+      ) { %>
+        <form
+          method="POST"
+          action="/inventory/stock-receive/<%= transfer.id %>/close"
+          onsubmit="return confirm('Close this Stock Inward and mark all remaining unreceived items as MIA?');"
+        >
+          <input
+            type="hidden"
+            name="_csrf"
+            value="<%= csrfToken %>"
+          >
+
+          <button
+            type="submit"
+            class="btn btn-danger"
+          >
+            Close Inward
+          </button>
+        </form>
+      <% } %>
+    </div>
 
   </div>
 
 
-  <a
-    href="/inventory/transfers"
-    class="btn btn-outline-secondary"
-  >
-    All Transfers
-  </a>
+  <div class="row g-3 mb-4">
 
-</div>
+    <div class="col-md-3">
+
+      <div class="card">
+
+        <div class="card-body">
+
+          <small class="text-muted">
+            Status
+          </small>
+
+          <div class="mt-2">
+
+            <% if (transfer.status === 'DRAFT') { %>
+
+              <span class="badge bg-secondary fs-6">
+                Draft
+              </span>
+
+            <% } else if (transfer.status === 'IN_TRANSIT') { %>
+
+              <span class="badge bg-warning text-dark fs-6">
+                In Transit
+              </span>
+
+            <% } else if (
+              transfer.status === 'PARTIALLY_RECEIVED'
+            ) { %>
+
+              <span class="badge bg-warning text-dark fs-6">
+                Partially Received
+              </span>
+
+            <% } else if (
+              transfer.status === 'RECEIVED'
+            ) { %>
+
+              <span class="badge bg-success fs-6">
+                Received
+              </span>
+
+            <% } else { %>
+
+              <span class="badge bg-secondary fs-6">
+                <%= transfer.status %>
+              </span>
+
+            <% } %>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
 
 
-<div class="row g-3 mb-4">
+    <div class="col-md-3">
 
-  <div class="col-md-3">
+      <div class="card">
 
-    <div class="card">
+        <div class="card-body">
 
-      <div class="card-body">
+          <small class="text-muted">
+            Instances
+          </small>
 
-        <small class="text-muted">
-          Status
-        </small>
+          <h4 class="mb-0 mt-2">
+            <%= items.length %>
+          </h4>
 
-        <div class="mt-2">
+        </div>
 
-          <% if (transfer.status === 'DRAFT') { %>
+      </div>
 
-            <span class="badge bg-secondary fs-6">
-              Draft
-            </span>
+    </div>
 
-          <% } else if (transfer.status === 'IN_TRANSIT') { %>
 
-            <span class="badge bg-warning text-dark fs-6">
-              In Transit
-            </span>
+    <div class="col-md-3">
 
-          <% } else if (
-            transfer.status === 'PARTIALLY_RECEIVED'
-          ) { %>
+      <div class="card">
 
-            <span class="badge bg-warning text-dark fs-6">
-              Partially Received
-            </span>
+        <div class="card-body">
 
-          <% } else if (
-            transfer.status === 'RECEIVED'
-          ) { %>
+          <small class="text-muted">
+            Received
+          </small>
 
-            <span class="badge bg-success fs-6">
-              Received
-            </span>
+          <h4 class="mb-0 mt-2 text-success">
+            <%= items.filter(
+              item => item.status === 'RECEIVED'
+            ).length %>
+          </h4>
 
-          <% } else { %>
+        </div>
 
-            <span class="badge bg-secondary fs-6">
-              <%= transfer.status %>
-            </span>
+      </div>
 
-          <% } %>
+    </div>
+
+
+    <div class="col-md-3">
+
+      <div class="card">
+
+        <div class="card-body">
+
+          <small class="text-muted">
+            Still In Transit
+          </small>
+
+          <h4 class="mb-0 mt-2 text-warning">
+            <%= items.filter(
+              item => item.status === 'IN_TRANSIT'
+            ).length %>
+          </h4>
 
         </div>
 
@@ -98,107 +193,253 @@
   </div>
 
 
-  <div class="col-md-3">
+  <% if (transfer.notes) { %>
 
-    <div class="card">
+    <div class="alert alert-secondary">
+
+      <strong>
+        Transfer Note:
+      </strong>
+
+      <%= transfer.notes %>
+
+    </div>
+
+  <% } %>
+
+
+  <% if (transfer.status === 'DRAFT') { %>
+
+    <!-- ======================================================
+        ADD PHYSICAL INSTANCE
+        ====================================================== -->
+
+    <div class="card mb-4">
+
+      <div class="card-header">
+        <strong>Scan Inventory for Dispatch</strong>
+      </div>
 
       <div class="card-body">
 
-        <small class="text-muted">
-          Instances
-        </small>
+        <form
+          method="post"
+          action="/inventory/transfers/<%= transfer.id %>/items"
+        >
 
-        <h4 class="mb-0 mt-2">
-          <%= items.length %>
-        </h4>
+          <input
+            type="hidden"
+            name="_csrf"
+            value="<%= csrfToken %>"
+          >
+
+
+          <div class="row g-3 align-items-end">
+
+            <div class="col-md-8">
+
+              <label
+                class="form-label"
+                for="instanceCode"
+              >
+                Instance Code / Barcode
+              </label>
+
+              <input
+                type="text"
+                class="form-control form-control-lg"
+                id="instanceCode"
+                name="instanceCode"
+                autocomplete="off"
+                autofocus
+                placeholder="Scan barcode or enter instance code"
+                required
+              >
+
+              <div class="form-text">
+                A scanner gun can be used directly because it behaves
+                like a keyboard.
+              </div>
+
+            </div>
+
+
+            <div class="col-md-4">
+
+              <button
+                type="submit"
+                class="btn btn-primary btn-lg w-100"
+              >
+                Add Instance
+              </button>
+
+            </div>
+
+          </div>
+
+        </form>
 
       </div>
 
     </div>
 
-  </div>
+
+    <!-- ======================================================
+        DISPATCH
+        ====================================================== -->
+
+    <div class="card mb-4">
+
+      <div class="card-header d-flex justify-content-between">
+
+        <strong>
+          Instances to Dispatch
+        </strong>
+
+        <span class="text-muted">
+          <%= items.length %> instance(s)
+        </span>
+
+      </div>
 
 
-  <div class="col-md-3">
+      <div class="card-body p-0">
 
-    <div class="card">
+        <% if (!items.length) { %>
 
-      <div class="card-body">
+          <div class="p-4 text-center text-muted">
+            No physical instances have been scanned yet.
+          </div>
 
-        <small class="text-muted">
-          Received
-        </small>
+        <% } else { %>
 
-        <h4 class="mb-0 mt-2 text-success">
-          <%= items.filter(
-            item => item.status === 'RECEIVED'
-          ).length %>
-        </h4>
+          <div class="table-responsive">
+
+            <table class="table table-hover mb-0">
+
+              <thead class="table-light">
+
+                <tr>
+                  <th>Instance</th>
+                  <th>Item</th>
+                  <th>Quantity</th>
+                  <th>Status</th>
+                </tr>
+
+              </thead>
+
+              <tbody>
+
+                <% items.forEach(item => { %>
+
+                  <tr>
+
+                    <td>
+                      <strong>
+                        <%= item.instance_code %>
+                      </strong>
+
+                      <br>
+
+                      <small class="text-muted">
+                        <%= item.barcode %>
+                      </small>
+                    </td>
+
+                    <td>
+                      <strong>
+                        <%= item.item_code %>
+                      </strong>
+
+                      <br>
+
+                      <small class="text-muted">
+                        <%= item.item_name %>
+                      </small>
+                    </td>
+
+                    <td>
+                      <%= Number(
+                        item.quantity
+                      ).toLocaleString() %>
+                      <%= item.unit %>
+                    </td>
+
+                    <td>
+                      <span class="badge bg-secondary">
+                        Ready
+                      </span>
+                    </td>
+
+                  </tr>
+
+                <% }) %>
+
+              </tbody>
+
+            </table>
+
+          </div>
+
+
+          <div class="p-3 border-top">
+
+            <form
+              method="post"
+              action="/inventory/transfers/<%= transfer.id %>/dispatch"
+              onsubmit="return confirm('Dispatch this transfer? All scanned instances will move to IN TRANSIT.');"
+            >
+
+              <input
+                type="hidden"
+                name="_csrf"
+                value="<%= csrfToken %>"
+              >
+
+              <button
+                type="submit"
+                class="btn btn-warning"
+                <%= items.length ? '' : 'disabled' %>
+              >
+                Dispatch Transfer
+              </button>
+
+            </form>
+
+          </div>
+
+        <% } %>
 
       </div>
 
     </div>
 
-  </div>
+
+  <% } else { %>
 
 
-  <div class="col-md-3">
-
-    <div class="card">
-
-      <div class="card-body">
-
-        <small class="text-muted">
-          Still In Transit
-        </small>
-
-        <h4 class="mb-0 mt-2 text-warning">
-          <%= items.filter(
-            item => item.status === 'IN_TRANSIT'
-          ).length %>
-        </h4>
-
-      </div>
-
-    </div>
-
-  </div>
-
-</div>
-
-
-<% if (transfer.notes) { %>
-
-  <div class="alert alert-secondary">
-
-    <strong>
-      Transfer Note:
-    </strong>
-
-    <%= transfer.notes %>
-
-  </div>
-
-<% } %>
-
-
-<% if (transfer.status === 'DRAFT') { %>
-
-  <!-- ======================================================
-       ADD PHYSICAL INSTANCE
-       ====================================================== -->
+    <!-- ======================================================
+        RECEIVING / STOCK INWARD
+        ====================================================== -->
 
   <div class="card mb-4">
 
     <div class="card-header">
-      <strong>Scan Inventory for Dispatch</strong>
+      <strong>Stock Inward</strong>
     </div>
 
     <div class="card-body">
 
+      <p class="text-muted">
+        Scan each physical inventory instance that has actually
+        arrived at this site. You can also type the instance code
+        or barcode manually.
+      </p>
+
+
       <form
         method="post"
-        action="/inventory/transfers/<%= transfer.id %>/items"
+        action="/inventory/transfers/<%= transfer.id %>/receive-scan"
       >
 
         <input
@@ -210,11 +451,11 @@
 
         <div class="row g-3 align-items-end">
 
-          <div class="col-md-8">
+          <div class="col-md-9">
 
             <label
               class="form-label"
-              for="instanceCode"
+              for="scannedCode"
             >
               Instance Code / Barcode
             </label>
@@ -222,8 +463,8 @@
             <input
               type="text"
               class="form-control form-control-lg"
-              id="instanceCode"
-              name="instanceCode"
+              id="scannedCode"
+              name="scannedCode"
               autocomplete="off"
               autofocus
               placeholder="Scan barcode or enter instance code"
@@ -231,20 +472,20 @@
             >
 
             <div class="form-text">
-              A scanner gun can be used directly because it behaves
-              like a keyboard.
+              Scan one physical item at a time. The system will
+              verify that the scanned instance belongs to this STN.
             </div>
 
           </div>
 
 
-          <div class="col-md-4">
+          <div class="col-md-3">
 
             <button
               type="submit"
-              class="btn btn-primary btn-lg w-100"
+              class="btn btn-success btn-lg w-100"
             >
-              Add Instance
+              Receive Item
             </button>
 
           </div>
@@ -258,20 +499,16 @@
   </div>
 
 
-  <!-- ======================================================
-       DISPATCH
-       ====================================================== -->
-
-  <div class="card mb-4">
+  <div class="card">
 
     <div class="card-header d-flex justify-content-between">
 
       <strong>
-        Instances to Dispatch
+        Transfer Items
       </strong>
 
       <span class="text-muted">
-        <%= items.length %> instance(s)
+        Scan each item physically received
       </span>
 
     </div>
@@ -279,329 +516,118 @@
 
     <div class="card-body p-0">
 
-      <% if (!items.length) { %>
+      <div class="table-responsive">
 
-        <div class="p-4 text-center text-muted">
-          No physical instances have been scanned yet.
-        </div>
+        <table class="table table-hover mb-0 align-middle">
 
-      <% } else { %>
+          <thead class="table-light">
 
-        <div class="table-responsive">
+            <tr>
+              <th>Instance</th>
+              <th>Item</th>
+              <th>Quantity</th>
+              <th>Status</th>
+              <th>Received At</th>
+            </tr>
 
-          <table class="table table-hover mb-0">
+          </thead>
 
-            <thead class="table-light">
+
+          <tbody>
+
+            <% items.forEach(item => { %>
 
               <tr>
-                <th>Instance</th>
-                <th>Item</th>
-                <th>Quantity</th>
-                <th>Status</th>
+
+                <td>
+
+                  <strong>
+                    <%= item.instance_code %>
+                  </strong>
+
+                  <br>
+
+                  <small class="text-muted">
+                    <%= item.barcode %>
+                  </small>
+
+                </td>
+
+
+                <td>
+
+                  <strong>
+                    <%= item.item_code %>
+                  </strong>
+
+                  <br>
+
+                  <small class="text-muted">
+                    <%= item.item_name %>
+                  </small>
+
+                </td>
+
+
+                <td>
+
+                  <%= Number(
+                    item.quantity
+                  ).toLocaleString() %>
+
+                  <%= item.unit %>
+
+                </td>
+
+
+                <td>
+
+                  <% if (item.status === 'RECEIVED') { %>
+
+                    <span class="badge bg-success">
+                      Received
+                    </span>
+
+                  <% } else { %>
+
+                    <span class="badge bg-warning text-dark">
+                      In Transit
+                    </span>
+
+                  <% } %>
+
+                </td>
+
+
+                <td>
+
+                  <% if (item.received_at) { %>
+
+                    <small>
+                      <%= new Date(
+                        item.received_at
+                      ).toLocaleString() %>
+                    </small>
+
+                  <% } else { %>
+
+                    —
+
+                  <% } %>
+
+                </td>
+
               </tr>
 
-            </thead>
+            <% }) %>
 
-            <tbody>
+          </tbody>
 
-              <% items.forEach(item => { %>
-
-                <tr>
-
-                  <td>
-                    <strong>
-                      <%= item.instance_code %>
-                    </strong>
-
-                    <br>
-
-                    <small class="text-muted">
-                      <%= item.barcode %>
-                    </small>
-                  </td>
-
-                  <td>
-                    <strong>
-                      <%= item.item_code %>
-                    </strong>
-
-                    <br>
-
-                    <small class="text-muted">
-                      <%= item.item_name %>
-                    </small>
-                  </td>
-
-                  <td>
-                    <%= Number(
-                      item.quantity
-                    ).toLocaleString() %>
-                    <%= item.unit %>
-                  </td>
-
-                  <td>
-                    <span class="badge bg-secondary">
-                      Ready
-                    </span>
-                  </td>
-
-                </tr>
-
-              <% }) %>
-
-            </tbody>
-
-          </table>
-
-        </div>
-
-
-        <div class="p-3 border-top">
-
-          <form
-            method="post"
-            action="/inventory/transfers/<%= transfer.id %>/dispatch"
-            onsubmit="return confirm('Dispatch this transfer? All scanned instances will move to IN TRANSIT.');"
-          >
-
-            <input
-              type="hidden"
-              name="_csrf"
-              value="<%= csrfToken %>"
-            >
-
-            <button
-              type="submit"
-              class="btn btn-warning"
-              <%= items.length ? '' : 'disabled' %>
-            >
-              Dispatch Transfer
-            </button>
-
-          </form>
-
-        </div>
-
-      <% } %>
-
-    </div>
-
-  </div>
-
-
-<% } else { %>
-
-
-  <!-- ======================================================
-       RECEIVING / STOCK INWARD
-       ====================================================== -->
-
- <div class="card mb-4">
-
-  <div class="card-header">
-    <strong>Stock Inward</strong>
-  </div>
-
-  <div class="card-body">
-
-    <p class="text-muted">
-      Scan each physical inventory instance that has actually
-      arrived at this site. You can also type the instance code
-      or barcode manually.
-    </p>
-
-
-    <form
-      method="post"
-      action="/inventory/transfers/<%= transfer.id %>/receive-scan"
-    >
-
-      <input
-        type="hidden"
-        name="_csrf"
-        value="<%= csrfToken %>"
-      >
-
-
-      <div class="row g-3 align-items-end">
-
-        <div class="col-md-9">
-
-          <label
-            class="form-label"
-            for="scannedCode"
-          >
-            Instance Code / Barcode
-          </label>
-
-          <input
-            type="text"
-            class="form-control form-control-lg"
-            id="scannedCode"
-            name="scannedCode"
-            autocomplete="off"
-            autofocus
-            placeholder="Scan barcode or enter instance code"
-            required
-          >
-
-          <div class="form-text">
-            Scan one physical item at a time. The system will
-            verify that the scanned instance belongs to this STN.
-          </div>
-
-        </div>
-
-
-        <div class="col-md-3">
-
-          <button
-            type="submit"
-            class="btn btn-success btn-lg w-100"
-          >
-            Receive Item
-          </button>
-
-        </div>
+        </table>
 
       </div>
 
-    </form>
-
-  </div>
-
-</div>
-
-
-<div class="card">
-
-  <div class="card-header d-flex justify-content-between">
-
-    <strong>
-      Transfer Items
-    </strong>
-
-    <span class="text-muted">
-      Scan each item physically received
-    </span>
-
-  </div>
-
-
-  <div class="card-body p-0">
-
-    <div class="table-responsive">
-
-      <table class="table table-hover mb-0 align-middle">
-
-        <thead class="table-light">
-
-          <tr>
-            <th>Instance</th>
-            <th>Item</th>
-            <th>Quantity</th>
-            <th>Status</th>
-            <th>Received At</th>
-          </tr>
-
-        </thead>
-
-
-        <tbody>
-
-          <% items.forEach(item => { %>
-
-            <tr>
-
-              <td>
-
-                <strong>
-                  <%= item.instance_code %>
-                </strong>
-
-                <br>
-
-                <small class="text-muted">
-                  <%= item.barcode %>
-                </small>
-
-              </td>
-
-
-              <td>
-
-                <strong>
-                  <%= item.item_code %>
-                </strong>
-
-                <br>
-
-                <small class="text-muted">
-                  <%= item.item_name %>
-                </small>
-
-              </td>
-
-
-              <td>
-
-                <%= Number(
-                  item.quantity
-                ).toLocaleString() %>
-
-                <%= item.unit %>
-
-              </td>
-
-
-              <td>
-
-                <% if (item.status === 'RECEIVED') { %>
-
-                  <span class="badge bg-success">
-                    Received
-                  </span>
-
-                <% } else { %>
-
-                  <span class="badge bg-warning text-dark">
-                    In Transit
-                  </span>
-
-                <% } %>
-
-              </td>
-
-
-              <td>
-
-                <% if (item.received_at) { %>
-
-                  <small>
-                    <%= new Date(
-                      item.received_at
-                    ).toLocaleString() %>
-                  </small>
-
-                <% } else { %>
-
-                  —
-
-                <% } %>
-
-              </td>
-
-            </tr>
-
-          <% }) %>
-
-        </tbody>
-
-      </table>
-
     </div>
 
   </div>
-
-</div>
-<% } %>
+  <% } %>

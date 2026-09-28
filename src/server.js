@@ -115,6 +115,7 @@ app.use(require('./routes/inventoryAdjustmentRoutes'));
 app.use(require('./routes/inventoryAuditRoutes'));
 app.use(require('./routes/stockTransferRoutes'));
 app.use(require('./routes/stockReceiveRoutes'));
+app.use(require('./routes/stockTransferListRoutes'));
 app.use(require('./routes/vendorRoutes'));
 app.use(require('./routes/poRoutes'));
 app.use(require('./routes/grnRoutes'));

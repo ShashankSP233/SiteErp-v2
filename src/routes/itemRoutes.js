@@ -2,7 +2,10 @@ const express = require('express');
 
 const itemMasterRepo = require('../repositories/itemMasterRepo');
 const { logAudit } = require('../repositories/auditRepo');
-const { requireAuth, requireRole } = require('../middleware/auth');
+const {
+  requireAuth,
+  requireRole
+} = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -16,12 +19,68 @@ router.get(
   requireAuth,
   async (req, res, next) => {
     try {
-      const items = await itemMasterRepo.listItemMasters();
+      const items =
+        await itemMasterRepo.listItemMasters();
 
       res.render('items/list', {
         title: 'Items',
         items
       });
+
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+
+// ============================================================
+// ITEM MASTER DETAIL
+// ============================================================
+//
+// Shows:
+//   - Item Master information
+//   - All physical instances
+//   - Current quantity
+//   - Location
+//   - Lifecycle status
+//
+// This includes inactive/consumed/MIA/lost/disposed
+// instances as well as active inventory.
+// ============================================================
+
+router.get(
+  '/items/:id/ledger',
+  requireAuth,
+  async (req, res, next) => {
+    try {
+      const itemMaster =
+        await itemMasterRepo.getItemMasterById(
+          req.params.id
+        );
+
+      if (!itemMaster) {
+        return res.status(404).render(
+          'errors/404',
+          {
+            title: 'Item Master Not Found'
+          }
+        );
+      }
+
+      const instances =
+        await itemMasterRepo.getItemMasterInstances(
+          req.params.id
+        );
+
+      res.render(
+        'items/detail',
+        {
+          title: `Item Master - ${itemMaster.item_code}`,
+          itemMaster,
+          instances
+        }
+      );
 
     } catch (err) {
       next(err);
@@ -56,27 +115,37 @@ router.post(
   requireAuth,
   requireRole('admin', 'manager'),
   async (req, res) => {
-
     try {
 
-      const item = await itemMasterRepo.createItemMaster(
-        {
-          itemCode: req.body.itemCode,
-          name: req.body.name,
-          description: req.body.description,
-          category: req.body.category,
-          unit: req.body.unit,
-          instanceQuantity: req.body.instanceQuantity,
-          instanceQuantityUnit: req.body.instanceQuantityUnit,
-          isConsumable: req.body.isConsumable === 'on',
-          allowsPartialConsumption:
-            req.body.allowsPartialConsumption === 'on',
-          requiresInstanceTracking:
-            req.body.requiresInstanceTracking !== 'off',
-          reorderLevel: req.body.reorderLevel
-        },
-        req.session.user.id
-      );
+      const item =
+        await itemMasterRepo.createItemMaster(
+          {
+            itemCode: req.body.itemCode,
+            name: req.body.name,
+            description: req.body.description,
+            category: req.body.category,
+            unit: req.body.unit,
+
+            instanceQuantity:
+              req.body.instanceQuantity,
+
+            instanceQuantityUnit:
+              req.body.instanceQuantityUnit,
+
+            isConsumable:
+              req.body.isConsumable === 'on',
+
+            allowsPartialConsumption:
+              req.body.allowsPartialConsumption === 'on',
+
+            requiresInstanceTracking:
+              req.body.requiresInstanceTracking !== 'off',
+
+            reorderLevel:
+              req.body.reorderLevel
+          },
+          req.session.user.id
+        );
 
 
       await logAudit({
@@ -100,7 +169,8 @@ router.post(
 
     } catch (err) {
 
-      req.session.error = err.message;
+      req.session.error =
+        err.message;
 
       res.redirect('/items/new');
     }
@@ -117,7 +187,6 @@ router.get(
   requireAuth,
   requireRole('admin', 'manager'),
   async (req, res, next) => {
-
     try {
 
       const item =
@@ -155,17 +224,23 @@ router.post(
   requireAuth,
   requireRole('admin', 'manager'),
   async (req, res) => {
-
     try {
 
       const item =
         await itemMasterRepo.updateItemMaster(
           req.params.id,
           {
-            name: req.body.name,
-            description: req.body.description,
-            category: req.body.category,
-            unit: req.body.unit,
+            name:
+              req.body.name,
+
+            description:
+              req.body.description,
+
+            category:
+              req.body.category,
+
+            unit:
+              req.body.unit,
 
             instanceQuantity:
               req.body.instanceQuantity,
@@ -212,7 +287,8 @@ router.post(
 
     } catch (err) {
 
-      req.session.error = err.message;
+      req.session.error =
+        err.message;
 
       res.redirect(
         `/items/${req.params.id}/edit`

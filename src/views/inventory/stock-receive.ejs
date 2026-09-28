@@ -207,6 +207,30 @@
                     Receive
                   </a>
 
+                  <% if (Number(transfer.in_transit_count) > 0) { %>
+
+                    <form
+                      method="POST"
+                      action="/inventory/stock-receive/<%= transfer.id %>/close"
+                      class="d-inline"
+                      onsubmit="return confirm('Close this Stock Inward and mark all remaining unreceived items as MIA?');"
+                    >
+                      <input
+                        type="hidden"
+                        name="_csrf"
+                        value="<%= csrfToken %>"
+                      >
+
+                      <button
+                        type="submit"
+                        class="btn btn-sm btn-danger"
+                      >
+                        Close Inward
+                      </button>
+                    </form>
+
+                  <% } %>
+
                 </td>
 
               </tr>

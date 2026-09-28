@@ -221,9 +221,59 @@ async function updateItemMaster(id, {
   return getItemMasterById(id);
 }
 
+async function getItemMasterInstances(itemMasterId) {
+  return db.many(`
+    SELECT
+      ii.id,
+      ii.instance_code,
+      ii.barcode,
+
+      ii.original_quantity,
+      ii.current_quantity,
+      ii.unit,
+
+      ii.site_id,
+      s.code AS site_code,
+      s.name AS site_name,
+
+      ii.lifecycle_status,
+      ii.condition,
+
+      ii.batch_number,
+      ii.serial_number,
+      ii.manufacture_date,
+      ii.expiry_date,
+
+      ii.received_grn_id,
+
+      ii.created_at,
+      ii.updated_at
+
+    FROM item_instances ii
+
+    LEFT JOIN sites s
+      ON s.id = ii.site_id
+
+    WHERE ii.item_master_id = ?
+
+    ORDER BY
+      CASE
+        WHEN ii.lifecycle_status = 'ACTIVE' THEN 1
+        WHEN ii.lifecycle_status = 'IN_TRANSIT' THEN 2
+        WHEN ii.lifecycle_status = 'MIA' THEN 3
+        WHEN ii.lifecycle_status = 'LOST' THEN 4
+        WHEN ii.lifecycle_status = 'CONSUMED' THEN 5
+        WHEN ii.lifecycle_status = 'DISPOSED' THEN 6
+        ELSE 7
+      END,
+      ii.instance_code ASC
+  `, [itemMasterId]);
+}
+
 module.exports = {
   listItemMasters,
   getItemMasterById,
+  getItemMasterInstances,
   createItemMaster,
   updateItemMaster
 };

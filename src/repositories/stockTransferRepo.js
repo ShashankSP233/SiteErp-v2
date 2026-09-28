@@ -1534,7 +1534,174 @@ async function receiveTransferItemByScan({
     };
   });
 }
+/**
+ * Close Stock Inward.
+ *
+ * Any transfer item that is still IN_TRANSIT is considered
+ * missing and is marked MIA.
+ *
+ * MIA instances:
+ *   - remain the same physical inventory instance
+ *   - keep their quantity
+ *   - have no site assignment
+ *   - have lifecycle_status = MIA
+ *
+ * No TRANSFER_IN movement is created for MIA items because
+ * they were never physically received at the destination.
+ */
+async function closeInward({
+  transferId,
+  user
+}) {
+  const id = Number(transferId);
 
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new Error('Invalid transfer.');
+  }
+
+  return db.tx(async tx => {
+
+    /*
+     * Lock the transfer so two users cannot close the
+     * same inward operation simultaneously.
+     */
+    const transfer = await tx.one(
+      `SELECT
+         id,
+         transfer_number,
+         from_site_id,
+         to_site_id,
+         status
+       FROM stock_transfers
+       WHERE id = ?
+       FOR UPDATE`,
+      [id]
+    );
+
+    if (!transfer) {
+      throw new Error(
+        'Stock transfer not found.'
+      );
+    }
+
+    if (
+      ![
+        'IN_TRANSIT',
+        'PARTIALLY_RECEIVED'
+      ].includes(transfer.status)
+    ) {
+      throw new Error(
+        `This transfer cannot be closed from status ${transfer.status}.`
+      );
+    }
+
+    /*
+     * The user closing inward must have access to the
+     * destination site.
+     */
+    await assertSiteAccess(
+      tx,
+      user,
+      transfer.to_site_id
+    );
+
+    /*
+     * Lock every item that has not yet been received.
+     */
+    const missingItems = await tx.many(
+      `SELECT
+         sti.id,
+         sti.instance_id,
+         sti.quantity,
+         sti.status,
+
+         ii.instance_code,
+         ii.barcode,
+         ii.lifecycle_status,
+         ii.site_id
+
+       FROM stock_transfer_items sti
+
+       JOIN item_instances ii
+         ON ii.id = sti.instance_id
+
+       WHERE sti.transfer_id = ?
+         AND sti.status = 'IN_TRANSIT'
+
+       FOR UPDATE`,
+      [transfer.id]
+    );
+
+    if (!missingItems.length) {
+      throw new Error(
+        'There are no outstanding items to mark as MIA.'
+      );
+    }
+
+    /*
+     * Mark every unreceived transfer item as MIA.
+     */
+    for (const item of missingItems) {
+
+      /*
+       * The physical instance is now officially missing.
+       *
+       * It stays the same instance and keeps its quantity,
+       * but it no longer belongs to a site.
+       */
+      await tx.query(
+        `UPDATE item_instances
+         SET
+           site_id = NULL,
+           lifecycle_status = 'MIA',
+           updated_at = now()
+         WHERE id = ?`,
+        [item.instance_id]
+      );
+
+      /*
+       * Mark the transfer item as MIA.
+       */
+      await tx.query(
+        `UPDATE stock_transfer_items
+         SET
+           status = 'MIA',
+           mia_by = ?,
+           mia_at = now(),
+           mia_reason = ?,
+           updated_at = now()
+         WHERE id = ?`,
+        [
+          user.id,
+          'Not received during Stock Inward.',
+          item.id
+        ]
+      );
+    }
+
+    /*
+     * The inward operation is now closed.
+     *
+     * The transfer can contain:
+     *   RECEIVED + MIA
+     */
+    const updatedTransfer = await tx.one(
+      `UPDATE stock_transfers
+       SET
+         status = 'CLOSED',
+         completed_at = now(),
+         updated_at = now()
+       WHERE id = ?
+       RETURNING *`,
+      [transfer.id]
+    );
+
+    return {
+      transfer: updatedTransfer,
+      mia: missingItems
+    };
+  });
+}
 module.exports = {
   getTransferSourceSites,
   getTransferDestinationSites,
@@ -1545,5 +1712,6 @@ module.exports = {
   dispatchTransfer,
   receiveTransferItems,
   listIncomingTransfersForUser,
-  receiveTransferItemByScan
+  receiveTransferItemByScan,
+  closeInward
 };

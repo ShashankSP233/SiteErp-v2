@@ -1,7 +1,8 @@
 const express = require('express');
 
 const {
-  listIncomingTransfersForUser
+  listIncomingTransfersForUser,
+  closeInward
 } = require('../repositories/stockTransferRepo');
 
 const {
@@ -30,6 +31,27 @@ router.get(
           transfers
         }
       );
+
+    } catch (error) {
+      next(error);
+    }
+
+  }
+);
+
+router.post(
+  '/inventory/stock-receive/:transferId/close',
+  requireAuth,
+  async (req, res, next) => {
+
+    try {
+
+      await closeInward({
+        transferId: req.params.transferId,
+        user: req.session.user
+      });
+
+      res.redirect('/inventory/stock-receive');
 
     } catch (error) {
       next(error);
