@@ -60,6 +60,22 @@ try {
   app.use('/vendor/bootstrap', express.static(bootstrapDist));
 } catch (_) { console.warn('[warn] bootstrap not found — run "npm install".'); }
 
+try {
+  const jsBarcodeDist = path.join(
+    path.dirname(require.resolve('jsbarcode/package.json')),
+    'dist'
+  );
+
+  app.use(
+    '/vendor/jsbarcode',
+    express.static(jsBarcodeDist)
+  );
+} catch (_) {
+  console.warn(
+    '[warn] jsbarcode not found — run "npm install".'
+  );
+}
+
 // Sessions: Postgres-backed in pg mode (multi-instance safe); in-memory for the
 // local PGlite test mode (fine for a single local process).
 const sessionOptions = {
@@ -102,6 +118,7 @@ app.use(require('./routes/stockReceiveRoutes'));
 app.use(require('./routes/vendorRoutes'));
 app.use(require('./routes/poRoutes'));
 app.use(require('./routes/grnRoutes'));
+app.use(require('./routes/labelRoutes'));
 
 
 // V1 modules temporarily disabled while V2 is rebuilt.

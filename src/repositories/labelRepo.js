@@ -1,81 +1,320 @@
-const db = require('../config/db');
-const clean = (v) => { if (v === undefined || v === null) return null; const s = String(v).trim(); return s || null; };
-const MAX_UNIT_LABELS = 1000; // safety cap for per-unit generation in one receipt
+const db = require("../config/db");
 
-function fmtCode(itemCode, year, serial) {
-  return `${itemCode}-${String(year).slice(-2)}-${String(serial).padStart(4, '0')}`;
-}
-// Per-(item, calendar year) running serial; continues across receipts, resets each year.
-async function nextLabelSerial(c, itemCode, year) {
-  const row = await c.one(
-    `INSERT INTO sequence_counters(name, financial_year, last_number) VALUES (?,?,1)
-     ON CONFLICT (name, financial_year) DO UPDATE SET last_number = sequence_counters.last_number + 1
-     RETURNING last_number`, ['LBL:' + itemCode, String(year)]);
-  return Number(row.last_number);
-}
+/**
+ * Barcode/label repository for the V2 inventory model.
+ *
+ * IMPORTANT:
+ * A barcode is the permanent identity of an item instance.
+ * This repository does NOT generate a new barcode and does NOT
+ * create a separate labels table.
+ *
+ * V2 identity:
+ *
+ *   item_instances.instance_code
+ *   item_instances.barcode
+ *
+ * The label system simply retrieves those existing instances
+ * and passes them to the printable label view.
+ */
 
-async function insertLabel(c, o) {
-  await c.query(
-    `INSERT INTO labels(label_code, item_id, item_code, year, serial, qty, label_mode, transaction_id, location, created_by)
-     VALUES (?,?,?,?,?,?,?,?,?,?)`,
-    [o.code, o.itemId, o.itemCode, o.year, o.serial, o.qty, o.labelMode, o.transactionId || null, clean(o.location), o.userId || null]);
-}
-
-// Generate labels for a received quantity. Per-unit -> one label per unit;
-// per-batch -> a single label carrying the quantity. Runs inside caller's tx.
-async function generateReceiptLabels(c, { itemId, itemCode, qty, labelMode, transactionId, location, userId }) {
-  const year = new Date().getFullYear();
-  const codes = [];
-  if (labelMode === 'batch') {
-    const serial = await nextLabelSerial(c, itemCode, year);
-    const code = fmtCode(itemCode, year, serial);
-    await insertLabel(c, { code, itemId, itemCode, year, serial, qty: Number(qty), labelMode, transactionId, location, userId });
-    codes.push(code);
-  } else {
-    const n = Math.min(Math.floor(Number(qty)), MAX_UNIT_LABELS);
-    for (let i = 0; i < n; i++) {
-      const serial = await nextLabelSerial(c, itemCode, year);
-      const code = fmtCode(itemCode, year, serial);
-      await insertLabel(c, { code, itemId, itemCode, year, serial, qty: 1, labelMode, transactionId, location, userId });
-      codes.push(code);
-    }
+/**
+ * Build the site-access condition for a user.
+ *
+ * Admin:
+ *   Can access every instance.
+ *
+ * Manager / Operator / Viewer:
+ *   Can access instances belonging to their currently assigned sites.
+ *
+ * Instances with site_id NULL are intentionally not returned to
+ * non-admin users.
+ */
+function buildSiteAccess(user, params) {
+  if (!user) {
+    throw new Error("User is required.");
   }
-  return codes;
+
+  if (user.role === "admin") {
+    return {
+      clause: "",
+      params,
+    };
+  }
+
+  params.push(user.id);
+
+  return {
+    clause: `
+      JOIN site_assignments sa
+        ON sa.site_id = ii.site_id
+       AND sa.user_id = ?
+       AND sa.assigned_until IS NULL
+    `,
+    params,
+  };
 }
 
-// Manual generation (label existing stock) — opens its own transaction.
-async function generateForItem({ itemId, qty, location, userId }) {
-  return db.tx(async (c) => {
-    const it = await c.one('SELECT id, item_code, label_mode FROM items WHERE id=?', [itemId]);
-    if (!it) throw new Error('Item not found.');
-    if (!it.item_code) throw new Error('Item has no code.');
-    if (!(Number(qty) > 0)) throw new Error('Quantity must be greater than zero.');
-    return generateReceiptLabels(c, { itemId: it.id, itemCode: it.item_code, qty, labelMode: it.label_mode || 'unit', location, userId });
-  });
-}
+/**
+ * List physical inventory instances that the user is allowed to print.
+ *
+ * Optional filters:
+ *   itemMasterId
+ *   instanceId
+ *   onlyActive
+ *   limit
+ */
+async function listLabels({
+  user,
+  itemMasterId = null,
+  instanceId = null,
+  onlyActive = false,
+  limit = 500,
+} = {}) {
+  if (!user) {
+    throw new Error("User is required.");
+  }
 
-async function listLabels({ itemId, onlyUnprinted, limit = 500 } = {}) {
-  const where = [], params = [];
-  if (itemId) { where.push('l.item_id=?'); params.push(itemId); }
-  if (onlyUnprinted) where.push('l.printed_at IS NULL');
-  const sql = `SELECT l.*, i.description FROM labels l JOIN items i ON i.id=l.item_id
-     ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-     ORDER BY l.created_at DESC, l.id DESC LIMIT ?`;
-  params.push(limit);
+  const params = [];
+
+  const access = buildSiteAccess(user, params);
+
+  const where = [];
+
+  if (itemMasterId !== null && itemMasterId !== undefined) {
+    where.push("ii.item_master_id = ?");
+    params.push(Number(itemMasterId));
+  }
+
+  if (instanceId !== null && instanceId !== undefined) {
+    where.push("ii.id = ?");
+    params.push(Number(instanceId));
+  }
+
+  if (onlyActive) {
+    where.push("ii.lifecycle_status = 'ACTIVE'");
+  }
+
+  const sql = `
+    SELECT
+      ii.id AS instance_id,
+      ii.instance_code,
+      ii.barcode,
+
+      ii.original_quantity,
+      ii.current_quantity,
+      ii.unit,
+
+      ii.lifecycle_status,
+      ii.condition,
+
+      ii.batch_number,
+      ii.serial_number,
+      ii.manufacture_date,
+      ii.expiry_date,
+
+      ii.site_id,
+      s.code AS site_code,
+      s.name AS site_name,
+
+      im.id AS item_master_id,
+      im.item_code,
+      im.name AS item_name,
+      im.description AS item_description,
+      im.unit AS item_unit,
+      im.instance_quantity,
+      im.instance_quantity_unit,
+
+      ii.created_at,
+      ii.updated_at
+
+    FROM item_instances ii
+
+    JOIN item_masters im
+      ON im.id = ii.item_master_id
+
+    LEFT JOIN sites s
+      ON s.id = ii.site_id
+
+    ${access.clause}
+
+    ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+
+    ORDER BY
+      ii.created_at DESC,
+      ii.id DESC
+
+    LIMIT ?
+  `;
+
+  params.push(Math.min(Number(limit) || 500, 5000));
+
   return db.many(sql, params);
 }
-async function getByCodes(codes) {
-  if (!codes || !codes.length) return [];
-  const ph = codes.map(() => '?').join(',');
-  return db.many(`SELECT l.*, i.description FROM labels l JOIN items i ON i.id=l.item_id WHERE l.label_code IN (${ph}) ORDER BY l.item_code, l.serial`, codes);
-}
-async function getByCode(code) {
-  return db.one(`SELECT l.*, i.description, i.label_mode AS item_label_mode FROM labels l JOIN items i ON i.id=l.item_id WHERE l.label_code=?`, [clean(code)]);
-}
-async function markPrinted(codes) {
-  if (!codes || !codes.length) return;
-  const ph = codes.map(() => '?').join(',');
-  await db.query(`UPDATE labels SET printed_at=CURRENT_TIMESTAMP WHERE label_code IN (${ph}) AND printed_at IS NULL`, codes);
+
+/**
+ * Get one physical instance for label printing.
+ *
+ * Site access is enforced here as well as in listLabels().
+ * This is important because a user could otherwise manually
+ * change the instance ID in the URL.
+ */
+async function getByInstanceId(instanceId, user) {
+  if (!user) {
+    throw new Error("User is required.");
+  }
+
+  const params = [Number(instanceId)];
+
+  let accessJoin = "";
+
+  if (user.role !== "admin") {
+    params.push(user.id);
+
+    accessJoin = `
+      JOIN site_assignments sa
+        ON sa.site_id = ii.site_id
+       AND sa.user_id = ?
+       AND sa.assigned_until IS NULL
+    `;
+  }
+
+  return db.one(
+    `
+      SELECT
+        ii.id AS instance_id,
+        ii.instance_code,
+        ii.barcode,
+
+        ii.original_quantity,
+        ii.current_quantity,
+        ii.unit,
+
+        ii.lifecycle_status,
+        ii.condition,
+
+        ii.batch_number,
+        ii.serial_number,
+        ii.manufacture_date,
+        ii.expiry_date,
+
+        ii.site_id,
+        s.code AS site_code,
+        s.name AS site_name,
+
+        im.id AS item_master_id,
+        im.item_code,
+        im.name AS item_name,
+        im.description AS item_description,
+        im.unit AS item_unit,
+        im.instance_quantity,
+        im.instance_quantity_unit,
+
+        ii.created_at,
+        ii.updated_at
+
+      FROM item_instances ii
+
+      JOIN item_masters im
+        ON im.id = ii.item_master_id
+
+      LEFT JOIN sites s
+        ON s.id = ii.site_id
+
+      ${accessJoin}
+
+      WHERE ii.id = ?
+    `,
+    params,
+  );
 }
 
-module.exports = { generateReceiptLabels, generateForItem, listLabels, getByCodes, getByCode, markPrinted, fmtCode };
+/**
+ * Resolve an instance by either:
+ *
+ *   instance_code
+ *   barcode
+ *
+ * This intentionally uses the V2 physical instance identity.
+ */
+async function getByCodeOrBarcode(code, user) {
+  if (!user) {
+    throw new Error("User is required.");
+  }
+
+  const value = String(code || "").trim();
+
+  if (!value) {
+    return null;
+  }
+
+  const params = [value, value];
+
+  let accessJoin = "";
+
+  if (user.role !== "admin") {
+    params.push(user.id);
+
+    accessJoin = `
+      JOIN site_assignments sa
+        ON sa.site_id = ii.site_id
+       AND sa.user_id = ?
+       AND sa.assigned_until IS NULL
+    `;
+  }
+
+  return db.one(
+    `
+      SELECT
+        ii.id AS instance_id,
+        ii.instance_code,
+        ii.barcode,
+
+        ii.original_quantity,
+        ii.current_quantity,
+        ii.unit,
+
+        ii.lifecycle_status,
+        ii.condition,
+
+        ii.batch_number,
+        ii.serial_number,
+        ii.manufacture_date,
+        ii.expiry_date,
+
+        ii.site_id,
+        s.code AS site_code,
+        s.name AS site_name,
+
+        im.id AS item_master_id,
+        im.item_code,
+        im.name AS item_name,
+        im.description AS item_description,
+        im.unit AS item_unit,
+        im.instance_quantity,
+        im.instance_quantity_unit
+
+      FROM item_instances ii
+
+      JOIN item_masters im
+        ON im.id = ii.item_master_id
+
+      LEFT JOIN sites s
+        ON s.id = ii.site_id
+
+      ${accessJoin}
+
+      WHERE
+        ii.instance_code = ?
+        OR ii.barcode = ?
+
+      LIMIT 1
+    `,
+    params,
+  );
+}
+
+module.exports = {
+  listLabels,
+  getByInstanceId,
+  getByCodeOrBarcode,
+};

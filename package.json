@@ -1,7 +1,7 @@
 {
   "name": "site-erp",
   "version": "6.4.1",
-  "description": "Site ERP: multi-site inventory, procurement (PO->GRN), bills/payments/approvals, vendors \u2014 PostgreSQL/Supabase (SQLite for local testing).",
+  "description": "Site ERP: multi-site inventory, procurement (PO->GRN), bills/payments/approvals, vendors — PostgreSQL/Supabase (SQLite for local testing).",
   "main": "src/server.js",
   "scripts": {
     "start": "node --experimental-sqlite --no-warnings=ExperimentalWarning src/server.js",
@@ -21,6 +21,7 @@
     "express-ejs-layouts": "^2.5.1",
     "express-session": "^1.18.1",
     "helmet": "^8.0.0",
+    "jsbarcode": "^3.12.3",
     "morgan": "^1.10.0",
     "multer": "^2.0.1",
     "pg": "^8.13.1"

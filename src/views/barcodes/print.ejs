@@ -1,22 +1,515 @@
-<!doctype html><html><head><meta charset="utf-8"><title>Barcode Labels</title>
-<style>
-  body{font-family:Arial,sans-serif;margin:10px}
-  .toolbar{margin-bottom:10px} @media print{.toolbar{display:none}}
-  .grid{display:flex;flex-wrap:wrap;gap:6px}
-  .label{border:1px solid #999;border-radius:4px;padding:6px 8px;width:230px;box-sizing:border-box;page-break-inside:avoid;text-align:center}
-  .label .desc{font-size:10px;color:#333;margin:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .label .meta{font-size:9px;color:#666}
-  button{padding:6px 12px;cursor:pointer}
-</style></head><body>
-<div class="toolbar"><button onclick="window.print()">Print / Save as PDF</button> <span style="font-size:12px;color:#666"><%= labels.length %> label(s)</span></div>
-<div class="grid">
-<% labels.forEach(l => { %>
-  <div class="label">
-    <div class="desc"><%= l.item_code %></div>
-    <div data-barcode="<%= l.label_code %>" data-mw="2" data-h="38"></div>
-    <div class="meta"><%= l.description %><% if (Number(l.qty) > 1) { %> · Qty <%= l.qty %><% } %><% if (l.location) { %> · <%= l.location %><% } %></div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <title>Print Barcode Labels</title>
+
+  <style>
+    @page {
+      size: A4 landscape;
+      margin: 0;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      background: #eee;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    .print-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+
+      padding: 12px;
+      margin: 12px;
+
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+    }
+
+    .print-toolbar button {
+      padding: 8px 14px;
+
+      border: 1px solid #222;
+      border-radius: 4px;
+
+      background: #fff;
+      cursor: pointer;
+    }
+
+    .print-toolbar .primary {
+      background: #111;
+      color: #fff;
+    }
+
+
+    /*
+    * A4 LANDSCAPE
+    *
+    * Page:
+    *   297mm × 210mm
+    *
+    * Outer margin:
+    *   8mm on every side
+    *
+    * Available area:
+    *   281mm × 194mm
+    *
+    * 4 columns × 4 rows
+    *
+    * Gap:
+    *   3mm
+    *
+    * Label:
+    *   68mm × 46.25mm
+    *
+    * 4 × 68mm + 3 × 3mm = 281mm
+    * 4 × 46.25mm + 3 × 3mm = 194mm
+    */
+
+
+    .labels-container {
+      width: 281mm;
+      height: 194mm;
+
+      display: grid;
+
+      grid-template-columns:
+        repeat(4, 68mm);
+
+      grid-template-rows:
+        repeat(4, 46.25mm);
+
+      column-gap: 3mm;
+      row-gap: 3mm;
+
+      margin: 8mm auto 0;
+      padding: 0;
+
+      background: #fff;
+    }
+
+
+    /*
+    * Individual label
+    */
+
+    .label {
+      width: 68mm;
+      height: 46.25mm;
+
+      padding: 3mm;
+
+      background: #fff;
+
+      border: 0.25mm solid #222;
+      border-radius: 2mm;
+
+      display: flex;
+      flex-direction: column;
+
+      overflow: hidden;
+
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+
+    /*
+    * Header
+    */
+
+    .label-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+
+      gap: 2mm;
+    }
+
+
+    .item-code {
+      font-size: 9pt;
+      font-weight: 700;
+
+      line-height: 1.05;
+    }
+
+
+    .item-name {
+      margin-top: 0.8mm;
+
+      font-size: 6.5pt;
+
+      line-height: 1.1;
+    }
+
+
+    .instance-code {
+      margin-top: 1.5mm;
+
+      font-size: 7.5pt;
+      font-weight: 700;
+
+      line-height: 1.05;
+
+      word-break: break-word;
+    }
+
+
+    .site {
+      margin-top: 1mm;
+
+      font-size: 6pt;
+
+      line-height: 1.05;
+    }
+
+
+    /*
+    * Barcode
+    *
+    * Physically larger than the previous version.
+    */
+
+    .barcode-wrapper {
+      width: 100%;
+
+      margin-top: 2.5mm;
+
+      display: flex;
+      flex-direction: column;
+
+      align-items: center;
+      justify-content: center;
+    }
+
+
+    .barcode {
+      width: 58mm;
+      height: 18mm;
+
+      display: block;
+    }
+
+
+    .barcode-value {
+      width: 100%;
+
+      margin-top: 0.8mm;
+
+      text-align: center;
+
+      font-family: monospace;
+
+      font-size: 5.5pt;
+      line-height: 1;
+
+      white-space: nowrap;
+
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+
+    /*
+    * Footer
+    */
+
+    .label-footer {
+      margin-top: auto;
+
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+
+      gap: 2mm;
+
+      font-size: 6pt;
+
+      line-height: 1.05;
+
+      color: #555;
+    }
+
+
+    .quantity {
+      white-space: nowrap;
+    }
+
+
+    .status {
+      text-align: right;
+
+      white-space: nowrap;
+    }
+
+
+    /*
+    * PRINT
+    */
+
+    @media print {
+
+      html,
+      body {
+        width: 297mm;
+        height: 210mm;
+
+        margin: 0;
+        padding: 0;
+
+        background: #fff;
+      }
+
+
+      .print-toolbar {
+        display: none !important;
+      }
+
+
+      .labels-container {
+        width: 281mm;
+        height: 194mm;
+
+        margin: 8mm 8mm 0;
+        padding: 0;
+
+        display: grid;
+
+        grid-template-columns:
+          repeat(4, 68mm);
+
+        grid-template-rows:
+          repeat(4, 46.25mm);
+
+        column-gap: 3mm;
+        row-gap: 3mm;
+
+        background: #fff;
+      }
+
+
+      .label {
+        width: 68mm;
+        height: 46.25mm;
+
+        padding: 3mm;
+
+        border: 0.25mm solid #000;
+        border-radius: 2mm;
+
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+
+
+      .barcode {
+        width: 58mm;
+        height: 18mm;
+      }
+
+    }
+
+
+    /*
+    * Screen preview
+    *
+    * On smaller screens, allow horizontal scrolling
+    * instead of changing the physical print dimensions.
+    */
+
+    @media screen and (max-width: 1200px) {
+
+      .labels-container {
+        margin-left: 8mm;
+        margin-right: 8mm;
+      }
+
+    }
+
+  </style>
+</head>
+
+<body>
+
+  <div class="print-toolbar">
+    <button
+      type="button"
+      class="primary"
+      id="printLabelsButton"
+    >
+      Print Labels
+    </button>
+
+    <button
+      type="button"
+      id="closeLabelsButton"
+    >
+      Close
+    </button>
+
+    <div class="info">
+      <%= labels.length %>
+      label<%= labels.length === 1 ? '' : 's' %>
+    </div>
   </div>
-<% }) %>
-</div>
-<script src="/js/barcode.js"></script>
-</body></html>
+
+  <% if (!labels.length) { %>
+
+    <div class="empty">
+      No inventory instances were selected for printing.
+    </div>
+
+  <% } else { %>
+
+    <div class="labels-container">
+
+      <% labels.forEach(function(label) { %>
+
+        <div class="label">
+
+          <div>
+            <div class="label-header">
+              <div>
+                <div class="item-code">
+                  <%= label.item_code %>
+                </div>
+
+                <div class="item-name">
+                  <%= label.item_name %>
+                </div>
+              </div>
+            </div>
+
+            <div class="instance-code">
+              <%= label.instance_code %>
+            </div>
+
+            <% if (label.site_name) { %>
+              <div class="site">
+                Site:
+                <%= label.site_name %>
+
+                <% if (label.site_code) { %>
+                  (<%= label.site_code %>)
+                <% } %>
+              </div>
+            <% } %>
+          </div>
+
+          <div class="barcode-wrapper">
+
+            <svg
+              class="barcode"
+              data-barcode="<%= label.barcode %>"
+              aria-label="Barcode <%= label.barcode %>"
+            ></svg>
+
+            <div class="barcode-value">
+              <%= label.barcode %>
+            </div>
+
+          </div>
+
+          <div class="label-footer">
+
+            <div class="quantity">
+              Qty:
+              <%= label.current_quantity %>
+              <%= label.unit || label.item_unit || '' %>
+            </div>
+
+            <div class="status">
+              <%= label.lifecycle_status || '' %>
+            </div>
+
+          </div>
+
+        </div>
+
+      <% }); %>
+
+    </div>
+
+  <% } %>
+
+<script src="/vendor/jsbarcode/JsBarcode.all.min.js"></script>
+
+<script nonce="<%= cspNonce %>">
+  document.addEventListener('DOMContentLoaded', function () {
+
+    // Generate every barcode.
+    document
+      .querySelectorAll('svg[data-barcode]')
+      .forEach(function (element) {
+        const value = element.dataset.barcode;
+
+        if (!value) {
+          return;
+        }
+
+        JsBarcode(element, value, {
+          format: 'CODE128',
+          displayValue: false,
+
+          /*
+          * Keep the barcode inside the fixed
+          * 58mm × 18mm label area.
+          */
+          width: 1.5,
+          height: 68,
+
+          margin: 0,
+
+          /*
+          * Do not add JsBarcode text.
+          * Site-ERP renders the barcode value separately.
+          */
+          text: ''
+        });
+      });
+
+    // Attach the print handler ONCE.
+    const printButton =
+      document.getElementById('printLabelsButton');
+
+    if (printButton) {
+      printButton.addEventListener('click', function () {
+        window.print();
+      });
+    }
+
+    // Attach the close handler ONCE.
+    const closeButton =
+      document.getElementById('closeLabelsButton');
+
+    if (closeButton) {
+      closeButton.addEventListener('click', function () {
+        if (window.history.length > 1) {
+          window.history.back();
+        } else {
+          window.location.href = '/inventory/labels';
+        }
+      });
+    }
+
+  });
+</script>
+
+</body>
+</html>

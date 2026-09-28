@@ -1,62 +1,233 @@
 const express = require('express');
 const label = require('../repositories/labelRepo');
-const inv = require('../repositories/inventoryRepo');
-const { logAudit } = require('../repositories/auditRepo');
 const { requireAuth, requireRole } = require('../middleware/auth');
-const { toCsv } = require('../utils/csv');
+
 const router = express.Router();
 
-router.get('/barcodes', requireAuth, async (req, res, next) => {
-  try {
-    const itemId = req.query.itemId ? Number(req.query.itemId) : null;
-    const [labels, items] = await Promise.all([
-      label.listLabels({ itemId, onlyUnprinted: req.query.unprinted === '1', limit: 500 }),
-      inv.listItems(true)
-    ]);
-    res.render('barcodes/index', { title: 'Print Barcodes', labels, items, itemId, unprinted: req.query.unprinted === '1' });
-  } catch (e) { next(e); }
-});
+/**
+ * Barcode / Label management
+ *
+ * V2 does not create a separate "labels" record.
+ * Each physical item instance already has:
+ *
+ *   instance_code
+ *   barcode
+ *
+ * The label system only retrieves those permanent identities
+ * and renders them for printing.
+ */
 
-router.post('/barcodes/generate', requireAuth, requireRole('admin', 'manager', 'operator'), async (req, res) => {
-  try {
-    const codes = await label.generateForItem({ itemId: Number(req.body.itemId), qty: req.body.qty, location: req.body.location, userId: req.session.user.id });
-    await logAudit({ userId: req.session.user.id, action: 'GENERATE_LABELS', entity: 'labels', entityId: req.body.itemId, details: { count: codes.length, qty: req.body.qty }, ip: req.ip });
-    req.session.success = `${codes.length} label(s) generated.`;
-    res.redirect('/barcodes?itemId=' + Number(req.body.itemId));
-  } catch (err) { req.session.error = err.message; res.redirect('/barcodes'); }
-});
+/**
+ * Barcode label listing page.
+ *
+ * GET /inventory/labels
+ *
+ * Optional:
+ *   ?itemMasterId=123
+ *   ?unprinted=1
+ */
+router.get(
+  '/inventory/labels',
+  requireAuth,
+  async (req, res, next) => {
+    try {
+      const itemMasterId = req.query.itemMasterId
+        ? Number(req.query.itemMasterId)
+        : null;
 
-router.post('/barcodes/print', requireAuth, async (req, res, next) => {
-  try {
-    let codes = req.body.codes || [];
-    if (!Array.isArray(codes)) codes = [codes];
-    if (!codes.length) { req.session.error = 'Select at least one label to print.'; return res.redirect('/barcodes'); }
-    const labels = await label.getByCodes(codes);
-    await label.markPrinted(codes);
-    res.render('barcodes/print', { title: 'Barcode Labels', labels, layout: false });
-  } catch (e) { next(e); }
-});
+      if (
+        itemMasterId !== null &&
+        (!Number.isInteger(itemMasterId) || itemMasterId <= 0)
+      ) {
+        return res.status(400).render('errors/400', {
+          title: 'Invalid item master',
+          message: 'Invalid item master ID.',
+        });
+      }
 
-router.get('/barcodes/print/item/:id', requireAuth, async (req, res, next) => {
-  try {
-    const labels = await label.listLabels({ itemId: Number(req.params.id), limit: 1000 });
-    if (labels.length) await label.markPrinted(labels.map(l => l.label_code));
-    res.render('barcodes/print', { title: 'Barcode Labels', labels, layout: false });
-  } catch (e) { next(e); }
-});
+      const labels = await label.listLabels({
+        user: req.session.user,
+        itemMasterId,
+        onlyActive: req.query.active === '1',
+        limit: 500,
+      });
 
-router.get('/barcodes/export.csv', requireAuth, async (req, res, next) => {
-  try {
-    const itemId = req.query.itemId ? Number(req.query.itemId) : null;
-    const rows = (await label.listLabels({ itemId, limit: 100000 })).map(l => ({
-      label_code: l.label_code, item_code: l.item_code, description: l.description, year: l.year,
-      serial: l.serial, qty: l.qty, label_mode: l.label_mode, location: l.location || '', status: l.status,
-      created_at: l.created_at, printed: l.printed_at ? 'yes' : 'no'
-    }));
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename="barcode-labels.csv"');
-    res.send(toCsv(rows));
-  } catch (e) { next(e); }
-});
+      res.render('barcodes/index', {
+        title: 'Barcode Labels',
+        labels,
+        itemMasterId,
+        activeOnly: req.query.active === '1',
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+/**
+ * Printable labels for selected physical instances.
+ *
+ * POST /inventory/labels/print
+ *
+ * The selected values are instance IDs.
+ * Access is checked again in the repository, so manually
+ * submitting another user's instance ID cannot bypass site access.
+ */
+router.post(
+  '/inventory/labels/print',
+  requireAuth,
+  requireRole('admin', 'manager', 'operator'),
+  async (req, res, next) => {
+    try {
+      let instanceIds = req.body.instanceIds || [];
+
+      if (!Array.isArray(instanceIds)) {
+        instanceIds = [instanceIds];
+      }
+
+      instanceIds = [
+        ...new Set(
+          instanceIds
+            .map((value) => Number(value))
+            .filter((value) => Number.isInteger(value) && value > 0)
+        ),
+      ];
+
+      if (!instanceIds.length) {
+        req.session.error = 'Select at least one inventory instance to print.';
+        return res.redirect('/inventory/labels');
+      }
+
+      const labels = [];
+
+      for (const instanceId of instanceIds) {
+        const instance = await label.getByInstanceId(
+          instanceId,
+          req.session.user
+        );
+
+        if (instance) {
+          labels.push(instance);
+        }
+      }
+
+      if (!labels.length) {
+        req.session.error =
+          'No accessible inventory instances were selected.';
+        return res.redirect('/inventory/labels');
+      }
+
+      res.render('barcodes/print', {
+        title: 'Barcode Labels',
+        labels,
+        layout: false,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+/**
+ * Print one physical instance directly.
+ *
+ * GET /inventory/labels/print/:instanceId
+ *
+ * Useful from the Inventory Instances page.
+ */
+router.get(
+  '/inventory/labels/print/:instanceId',
+  requireAuth,
+  requireRole('admin', 'manager', 'operator'),
+  async (req, res, next) => {
+    try {
+      const instanceId = Number(req.params.instanceId);
+
+      if (!Number.isInteger(instanceId) || instanceId <= 0) {
+        return res.status(400).render('errors/400', {
+          title: 'Invalid inventory instance',
+          message: 'Invalid inventory instance ID.',
+        });
+      }
+
+      const instance = await label.getByInstanceId(
+        instanceId,
+        req.session.user
+      );
+
+      if (!instance) {
+        return res.status(404).render('errors/404', {
+          title: 'Inventory instance not found',
+          message: 'The inventory instance was not found or is not accessible.',
+        });
+      }
+
+      res.render('barcodes/print', {
+        title: 'Barcode Label',
+        labels: [instance],
+        layout: false,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+/**
+ * Resolve an instance by scanner/manual barcode input.
+ *
+ * GET /inventory/labels/resolve?code=...
+ *
+ * This is intentionally small for now.
+ * Later Phase 5 scanning will use the same repository resolver
+ * as the common scanning subsystem.
+ */
+router.get(
+  '/inventory/labels/resolve',
+  requireAuth,
+  async (req, res, next) => {
+    try {
+      const code = String(req.query.code || '').trim();
+
+      if (!code) {
+        return res.status(400).json({
+          ok: false,
+          error: 'Barcode or instance code is required.',
+        });
+      }
+
+      const instance = await label.getByCodeOrBarcode(
+        code,
+        req.session.user
+      );
+
+      if (!instance) {
+        return res.status(404).json({
+          ok: false,
+          error: 'Inventory instance not found.',
+        });
+      }
+
+      return res.json({
+        ok: true,
+        instance: {
+          id: instance.instance_id,
+          instance_code: instance.instance_code,
+          barcode: instance.barcode,
+          item_code: instance.item_code,
+          item_name: instance.item_name,
+          current_quantity: instance.current_quantity,
+          unit: instance.unit,
+          lifecycle_status: instance.lifecycle_status,
+          site_id: instance.site_id,
+          site_code: instance.site_code,
+          site_name: instance.site_name,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
 module.exports = router;
