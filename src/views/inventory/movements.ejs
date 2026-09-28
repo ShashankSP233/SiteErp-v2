@@ -1,0 +1,478 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 mb-1">
+      Inventory Movement Ledger
+    </h1>
+
+    <p class="text-muted mb-0">
+      Complete movement history for physical inventory instances.
+    </p>
+  </div>
+
+  <a
+    href="/inventory/instances"
+    class="btn btn-outline-secondary"
+  >
+    View Inventory
+  </a>
+</div>
+
+
+<div class="card mb-4">
+
+  <div class="card-header">
+    <strong>Filters</strong>
+  </div>
+
+  <div class="card-body">
+
+    <form
+      method="get"
+      action="/inventory/movements"
+    >
+
+      <div class="row g-3">
+
+        <div class="col-md-3">
+
+          <label
+            class="form-label"
+            for="instanceCode"
+          >
+            Inventory Instance
+          </label>
+
+          <input
+            type="text"
+            class="form-control"
+            id="instanceCode"
+            name="instanceCode"
+            value="<%= filters.instanceCode || '' %>"
+            placeholder="e.g. OIL-20L-0007"
+          >
+
+        </div>
+
+
+        <div class="col-md-2">
+
+          <label
+            class="form-label"
+            for="movementType"
+          >
+            Movement Type
+          </label>
+
+          <select
+            class="form-select"
+            id="movementType"
+            name="movementType"
+          >
+
+            <option value="">
+              All types
+            </option>
+
+            <% movementTypes.forEach(type => { %>
+
+              <option
+                value="<%= type %>"
+                <%= filters.movementType === type
+                  ? 'selected'
+                  : '' %>
+              >
+                <%= type.replaceAll('_', ' ') %>
+              </option>
+
+            <% }) %>
+
+          </select>
+
+        </div>
+
+
+        <div class="col-md-2">
+
+          <label
+            class="form-label"
+            for="siteId"
+          >
+            Site
+          </label>
+
+          <select
+            class="form-select"
+            id="siteId"
+            name="siteId"
+          >
+
+            <option value="">
+              All accessible sites
+            </option>
+
+            <% sites.forEach(site => { %>
+
+              <option
+                value="<%= site.id %>"
+                <%= String(filters.siteId || '') ===
+                    String(site.id)
+                    ? 'selected'
+                    : '' %>
+              >
+                <%= site.code %> — <%= site.name %>
+              </option>
+
+            <% }) %>
+
+          </select>
+
+        </div>
+
+
+        <div class="col-md-2">
+
+          <label
+            class="form-label"
+            for="dateFrom"
+          >
+            From
+          </label>
+
+          <input
+            type="date"
+            class="form-control"
+            id="dateFrom"
+            name="dateFrom"
+            value="<%= filters.dateFrom || '' %>"
+          >
+
+        </div>
+
+
+        <div class="col-md-2">
+
+          <label
+            class="form-label"
+            for="dateTo"
+          >
+            To
+          </label>
+
+          <input
+            type="date"
+            class="form-control"
+            id="dateTo"
+            name="dateTo"
+            value="<%= filters.dateTo || '' %>"
+          >
+
+        </div>
+
+
+        <div class="col-md-1 d-flex align-items-end">
+
+          <button
+            type="submit"
+            class="btn btn-primary w-100"
+          >
+            Filter
+          </button>
+
+        </div>
+
+      </div>
+
+
+      <div class="mt-3">
+
+        <a
+          href="/inventory/movements"
+          class="btn btn-sm btn-outline-secondary"
+        >
+          Clear Filters
+        </a>
+
+      </div>
+
+    </form>
+
+  </div>
+
+</div>
+
+
+<div class="card">
+
+  <div class="card-header d-flex justify-content-between align-items-center">
+
+    <strong>
+      Movement History
+    </strong>
+
+    <span class="text-muted small">
+      Showing up to 500 movements
+    </span>
+
+  </div>
+
+
+  <div class="card-body p-0">
+
+    <% if (!movements.length) { %>
+
+      <div class="p-4 text-center text-muted">
+        No inventory movements match the selected filters.
+      </div>
+
+    <% } else { %>
+
+      <div class="table-responsive">
+
+        <table class="table table-hover table-sm mb-0 align-middle">
+
+          <thead class="table-light">
+
+            <tr>
+
+              <th>Date</th>
+              <th>Instance</th>
+              <th>Item</th>
+              <th>Movement</th>
+              <th>Quantity</th>
+              <th>Effect on Stock</th>
+              <th>From</th>
+              <th>To</th>
+              <th>Reference</th>
+              <th>Reason</th>
+              <th>Performed By</th>
+
+            </tr>
+
+          </thead>
+
+
+          <tbody>
+
+            <% movements.forEach(movement => { %>
+
+              <tr>
+
+                <td>
+                  <small>
+                    <%= new Date(
+                      movement.created_at
+                    ).toLocaleString() %>
+                  </small>
+                </td>
+
+
+                <td>
+
+                  <a
+                    href="/inventory/movements?instanceCode=<%= encodeURIComponent(movement.instance_code) %>"
+                  >
+                    <strong>
+                      <%= movement.instance_code %>
+                    </strong>
+                  </a>
+
+                  <br>
+
+                  <small class="text-muted">
+                    <%= movement.barcode %>
+                  </small>
+
+                </td>
+
+
+                <td>
+
+                  <strong>
+                    <%= movement.item_code %>
+                  </strong>
+
+                  <br>
+
+                  <small class="text-muted">
+                    <%= movement.item_name %>
+                  </small>
+
+                </td>
+
+
+                <td>
+
+                  <% if (movement.movement_type === 'RECEIVE') { %>
+
+                    <span class="badge bg-success">
+                      RECEIVE
+                    </span>
+
+                  <% } else if (movement.movement_type === 'CONSUME') { %>
+
+                    <span class="badge bg-danger">
+                      CONSUME
+                    </span>
+
+                  <% } else if (
+                    movement.movement_type.startsWith('ADJUSTMENT')
+                  ) { %>
+
+                    <span class="badge bg-warning text-dark">
+                      <%= movement.movement_type %>
+                    </span>
+
+                  <% } else { %>
+
+                    <span class="badge bg-secondary">
+                      <%= movement.movement_type %>
+                    </span>
+
+                  <% } %>
+
+                </td>
+
+
+                <td>
+
+                  <strong>
+                    <%= Number(
+                      movement.quantity
+                    ).toLocaleString() %>
+
+                    <%= movement.unit %>
+                  </strong>
+
+                </td>
+
+
+                <td>
+
+                  <% const effect =
+                    Number(
+                      movement.quantity_effect || 0
+                    ); %>
+
+                  <% if (effect > 0) { %>
+
+                    <span class="text-success fw-semibold">
+                      +<%= effect.toLocaleString() %>
+                      <%= movement.unit %>
+                    </span>
+
+                  <% } else if (effect < 0) { %>
+
+                    <span class="text-danger fw-semibold">
+                      <%= effect.toLocaleString() %>
+                      <%= movement.unit %>
+                    </span>
+
+                  <% } else { %>
+
+                    <span class="text-muted">
+                      No quantity change
+                    </span>
+
+                  <% } %>
+
+                </td>
+
+
+                <td>
+
+                  <% if (movement.from_site_code) { %>
+
+                    <strong>
+                      <%= movement.from_site_code %>
+                    </strong>
+
+                    <br>
+
+                    <small class="text-muted">
+                      <%= movement.from_site_name %>
+                    </small>
+
+                  <% } else { %>
+
+                    —
+
+                  <% } %>
+
+                </td>
+
+
+                <td>
+
+                  <% if (movement.to_site_code) { %>
+
+                    <strong>
+                      <%= movement.to_site_code %>
+                    </strong>
+
+                    <br>
+
+                    <small class="text-muted">
+                      <%= movement.to_site_name %>
+                    </small>
+
+                  <% } else { %>
+
+                    —
+
+                  <% } %>
+
+                </td>
+
+
+                <td>
+
+                  <% if (movement.reference_id) { %>
+
+                    <code>
+                      <%= movement.reference_id %>
+                    </code>
+
+                    <% if (movement.reference_type) { %>
+
+                      <br>
+
+                      <small class="text-muted">
+                        <%= movement.reference_type %>
+                      </small>
+
+                    <% } %>
+
+                  <% } else { %>
+
+                    —
+
+                  <% } %>
+
+                </td>
+
+
+                <td>
+                  <%= movement.reason || '—' %>
+                </td>
+
+
+                <td>
+                  <%= movement.performed_by_name ||
+                      movement.performed_by_username %>
+                </td>
+
+              </tr>
+
+            <% }) %>
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    <% } %>
+
+  </div>
+
+</div>

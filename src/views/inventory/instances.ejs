@@ -60,6 +60,7 @@
               <th>Condition</th>
               <th>Status</th>
               <th>Received</th>
+              <th class="text-end">Actions</th>
             </tr>
           </thead>
 
@@ -191,7 +192,36 @@
                     <%= new Date(instance.created_at).toLocaleString() %>
                   </small>
                 </td>
+                
+                <td class="text-end">
+                  <a
+                    href="/inventory/movements?instanceCode=<%= encodeURIComponent(instance.instance_code) %>"
+                    class="btn btn-sm btn-outline-secondary"
+                  >
+                    History
+                  </a>
+                </td>
+                <td class="text-end">
 
+                  <% if (['admin', 'manager'].includes(currentUser.role) &&
+                        instance.lifecycle_status === 'ACTIVE') { %>
+
+                    <a
+                      href="/inventory/adjustment?instanceCode=<%= encodeURIComponent(instance.instance_code) %>"
+                      class="btn btn-sm btn-outline-primary"
+                    >
+                      Adjust
+                    </a>
+
+                  <% } else { %>
+
+                    <span class="text-muted">
+                      —
+                    </span>
+
+                  <% } %>
+
+                </td>
               </tr>
 
             <% }) %>

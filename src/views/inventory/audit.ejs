@@ -1,0 +1,249 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 mb-1"><%= audit.name %></h1>
+    <p class="text-muted mb-0">
+      <strong><%= audit.site_code %></strong> — <%= audit.site_name %>
+      · <%= audit.audit_type.replaceAll('_', ' ') %>
+    </p>
+  </div>
+
+  <div class="d-flex gap-2">
+    <a href="/inventory/audits" class="btn btn-outline-secondary">
+      All Audits
+    </a>
+
+    <% if (audit.status === 'IN_PROGRESS' && ['admin', 'manager'].includes(currentUser.role)) { %>
+      <form
+        method="post"
+        action="/inventory/audits/<%= audit.id %>/complete"
+        onsubmit="return confirm('Complete this audit? Uncounted expected instances will be marked Missing. Inventory quantities will not be changed.');"
+        class="m-0"
+      >
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button class="btn btn-success">
+          Complete Audit
+        </button>
+      </form>
+    <% } %>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-muted small">Expected Instances</div>
+        <div class="fs-3 fw-semibold">
+          <%= items.filter(i => i.result === 'NOT_COUNTED' || ['MATCHED','MISSING'].includes(i.result)).length %>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-muted small">Matched</div>
+        <div class="fs-3 fw-semibold text-success">
+          <%= items.filter(i => i.result === 'MATCHED').length %>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-muted small">Missing</div>
+        <div class="fs-3 fw-semibold text-danger">
+          <%= items.filter(i => i.result === 'MISSING').length %>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-muted small">Unexpected / Unknown / Duplicate</div>
+        <div class="fs-3 fw-semibold text-warning">
+          <%= items.filter(i => ['UNEXPECTED','UNKNOWN','DUPLICATE'].includes(i.result)).length %>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<% if (audit.status === 'IN_PROGRESS') { %>
+  <div class="card mb-4">
+    <div class="card-header">
+      <strong>Record Physical Count</strong>
+    </div>
+
+    <div class="card-body">
+      <form method="post" action="/inventory/audits/<%= audit.id %>/count">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+        <div class="row g-3 align-items-end">
+          <div class="col-md-4">
+            <label class="form-label" for="scannedCode">
+              Instance / Barcode *
+            </label>
+            <input
+              id="scannedCode"
+              name="scannedCode"
+              class="form-control"
+              placeholder="Scan or enter instance code"
+              autocomplete="off"
+              autofocus
+              required
+            >
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label" for="countedQuantity">
+              Physical Quantity *
+            </label>
+            <input
+              id="countedQuantity"
+              name="countedQuantity"
+              class="form-control"
+              type="number"
+              min="0"
+              step="0.001"
+              required
+            >
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label" for="countNotes">
+              Notes
+            </label>
+            <input
+              id="countNotes"
+              name="notes"
+              class="form-control"
+              placeholder="Optional"
+            >
+          </div>
+
+          <div class="col-md-2">
+            <button class="btn btn-primary w-100">
+              Record Count
+            </button>
+          </div>
+        </div>
+
+        <div class="form-text mt-2">
+          This records the physical count only. It does not change inventory quantity.
+        </div>
+      </form>
+    </div>
+  </div>
+<% } %>
+
+<div class="card">
+  <div class="card-header">
+    <strong>Audit Items</strong>
+  </div>
+
+  <div class="card-body p-0">
+    <div class="table-responsive" style="max-height: 65vh; overflow: auto;">
+      <table class="table table-hover table-sm mb-0 align-middle">
+        <thead class="table-light sticky-top">
+          <tr>
+            <th>Instance</th>
+            <th>Item</th>
+            <th>Expected</th>
+            <th>Physical</th>
+            <th>Difference</th>
+            <th>Result</th>
+            <th>Counted By</th>
+            <th>Counted At</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <% items.forEach(item => { %>
+            <tr>
+              <td>
+                <strong><%= item.instance_code || item.scanned_code || '—' %></strong>
+                <% if (item.barcode && item.barcode !== item.instance_code) { %>
+                  <br><small class="text-muted"><%= item.barcode %></small>
+                <% } %>
+              </td>
+
+              <td>
+                <% if (item.item_code) { %>
+                  <strong><%= item.item_code %></strong>
+                  <br>
+                  <small class="text-muted"><%= item.item_name %></small>
+                <% } else { %>
+                  <span class="text-muted">Not resolved</span>
+                <% } %>
+              </td>
+
+              <td>
+                <% if (item.expected_quantity !== null && item.expected_quantity !== undefined) { %>
+                  <%= Number(item.expected_quantity).toLocaleString() %>
+                  <%= item.unit || '' %>
+                <% } else { %>
+                  —
+                <% } %>
+              </td>
+
+              <td>
+                <% if (item.counted_quantity !== null && item.counted_quantity !== undefined) { %>
+                  <%= Number(item.counted_quantity).toLocaleString() %>
+                  <%= item.unit || '' %>
+                <% } else { %>
+                  —
+                <% } %>
+              </td>
+
+              <td>
+                <% if (item.counted_quantity !== null && item.expected_quantity !== null) { %>
+                  <% const diff = Number(item.counted_quantity) - Number(item.expected_quantity); %>
+                  <span class="<%= diff === 0 ? 'text-success' : 'text-danger' %> fw-semibold">
+                    <%= diff > 0 ? '+' : '' %><%= diff.toLocaleString() %>
+                    <%= item.unit || '' %>
+                  </span>
+                <% } else { %>
+                  —
+                <% } %>
+              </td>
+
+              <td>
+                <% if (item.result === 'MATCHED') { %>
+                  <span class="badge bg-success">Matched</span>
+                <% } else if (item.result === 'MISSING') { %>
+                  <span class="badge bg-danger">Missing</span>
+                <% } else if (item.result === 'UNEXPECTED') { %>
+                  <span class="badge bg-warning text-dark">Unexpected</span>
+                <% } else if (item.result === 'UNKNOWN') { %>
+                  <span class="badge bg-danger">Unknown</span>
+                <% } else if (item.result === 'DUPLICATE') { %>
+                  <span class="badge bg-secondary">Duplicate</span>
+                <% } else { %>
+                  <span class="badge bg-secondary">Not Counted</span>
+                <% } %>
+              </td>
+
+              <td>
+                <%= item.counted_by_name || '—' %>
+              </td>
+
+              <td>
+                <% if (item.counted_at) { %>
+                  <small><%= new Date(item.counted_at).toLocaleString() %></small>
+                <% } else { %>
+                  —
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

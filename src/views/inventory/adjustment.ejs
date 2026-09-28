@@ -1,0 +1,326 @@
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+
+  <div>
+    <div class="text-muted small mb-1">
+      Inventory / Quantity Adjustment
+    </div>
+
+    <h1 class="h3 mb-1">
+      Adjust Inventory
+    </h1>
+
+    <p class="text-muted mb-0">
+      Correct the recorded quantity of an existing physical inventory instance.
+    </p>
+  </div>
+
+  <a
+    href="/inventory/instances"
+    class="btn btn-outline-secondary"
+  >
+    View Inventory
+  </a>
+
+</div>
+
+
+
+
+<div class="row g-4">
+
+  <!-- Adjustment form -->
+  <div class="col-12 col-lg-7">
+
+    <div class="card shadow-sm">
+
+      <div class="card-header bg-white py-3">
+        <h2 class="h5 mb-0">
+          Record Quantity Adjustment
+        </h2>
+      </div>
+
+      <div class="card-body">
+
+        <form
+          method="POST"
+          action="/inventory/adjustment"
+        >
+
+          <input
+            type="hidden"
+            name="_csrf"
+            value="<%= csrfToken %>"
+          >
+
+
+          <!-- Instance -->
+          <div class="mb-3">
+
+            <label
+              for="instanceCode"
+              class="form-label fw-semibold"
+            >
+              Inventory Instance
+              <span class="text-danger">*</span>
+            </label>
+
+            <input
+              type="text"
+              id="instanceCode"
+              name="instanceCode"
+              class="form-control"
+              value="<%= form.instanceCode || '' %>"
+              placeholder="Example: OIL-20L-0001"
+              autocomplete="off"
+              required
+            >
+
+            <div class="form-text">
+              Enter the physical instance code.
+              Tomorrow this field can also be connected to the barcode scanner.
+            </div>
+
+          </div>
+
+
+          <!-- Adjustment type -->
+          <div class="mb-3">
+
+            <label
+              for="adjustmentType"
+              class="form-label fw-semibold"
+            >
+              Adjustment Type
+              <span class="text-danger">*</span>
+            </label>
+
+            <select
+              id="adjustmentType"
+              name="adjustmentType"
+              class="form-select"
+              required
+            >
+
+              <option
+                value="ADJUSTMENT_OUT"
+                <%= form.adjustmentType === 'ADJUSTMENT_OUT' ? 'selected' : '' %>
+              >
+                Adjustment OUT — reduce quantity
+              </option>
+
+              <option
+                value="ADJUSTMENT_IN"
+                <%= form.adjustmentType === 'ADJUSTMENT_IN' ? 'selected' : '' %>
+              >
+                Adjustment IN — increase quantity
+              </option>
+
+            </select>
+
+          </div>
+
+
+          <!-- Quantity -->
+          <div class="mb-3">
+
+            <label
+              for="quantity"
+              class="form-label fw-semibold"
+            >
+              Quantity
+              <span class="text-danger">*</span>
+            </label>
+
+            <input
+              type="number"
+              id="quantity"
+              name="quantity"
+              class="form-control"
+              min="0.001"
+              step="0.001"
+              value="<%= form.quantity || '' %>"
+              required
+            >
+
+            <div class="form-text">
+              The unit is determined by the inventory instance.
+            </div>
+
+          </div>
+
+
+          <!-- Reason -->
+          <div class="mb-4">
+
+            <label
+              for="reason"
+              class="form-label fw-semibold"
+            >
+              Reason
+              <span class="text-danger">*</span>
+            </label>
+
+            <textarea
+              id="reason"
+              name="reason"
+              class="form-control"
+              rows="4"
+              maxlength="500"
+              required
+              placeholder="Explain why the recorded inventory quantity needs to be adjusted."
+            ><%= form.reason || '' %></textarea>
+
+            <div class="form-text">
+              A reason is required for every inventory adjustment.
+            </div>
+
+          </div>
+
+
+          <div class="alert alert-warning">
+
+            <div class="fw-semibold mb-1">
+              Important
+            </div>
+
+            <ul class="mb-0 small">
+
+              <li>
+                Adjustment OUT cannot remove quantity already allocated to an active issue.
+              </li>
+
+              <li>
+                Adjustment IN cannot exceed the original quantity configured for the physical instance.
+              </li>
+
+              <li>
+                Every adjustment creates an inventory movement record.
+              </li>
+
+              <li>
+                Adjustments are restricted to administrators and managers.
+              </li>
+
+            </ul>
+
+          </div>
+
+
+          <div class="d-flex justify-content-end gap-2">
+
+            <a
+              href="/inventory/instances"
+              class="btn btn-secondary"
+            >
+              Cancel
+            </a>
+
+            <button
+              type="submit"
+              class="btn btn-primary"
+            >
+              Record Adjustment
+            </button>
+
+          </div>
+
+        </form>
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- Quick reference -->
+  <div class="col-12 col-lg-5">
+
+    <div class="card shadow-sm">
+
+      <div class="card-header bg-white py-3">
+
+        <h2 class="h5 mb-0">
+          Active Inventory
+        </h2>
+
+      </div>
+
+      <div class="card-body p-0">
+
+        <% if (!instances || !instances.length) { %>
+
+          <div class="p-4 text-center text-muted">
+            No active inventory instances available.
+          </div>
+
+        <% } else { %>
+
+          <div
+            class="list-group list-group-flush"
+            style="max-height: 500px; overflow-y: auto;"
+          >
+
+            <% instances.forEach(instance => { %>
+
+              <a
+                href="/inventory/adjustment?instanceCode=<%= encodeURIComponent(instance.instance_code) %>"
+                class="list-group-item list-group-item-action"
+              >
+
+                <div class="d-flex justify-content-between align-items-start gap-3">
+
+                  <div>
+
+                    <strong>
+                      <%= instance.instance_code %>
+                    </strong>
+
+                    <small class="d-block text-muted">
+                      <%= instance.item_code %>
+                      —
+                      <%= instance.item_name %>
+                    </small>
+
+                    <small class="d-block text-muted">
+                      Site:
+                      <%= instance.site_code || '—' %>
+                    </small>
+
+                  </div>
+
+                  <div class="text-end">
+
+                    <strong>
+                      <%= Number(instance.current_quantity).toLocaleString() %>
+                      <%= instance.unit %>
+                    </strong>
+
+                    <small class="d-block text-muted">
+                      Available:
+                      <%= Number(
+                        instance.available_quantity ??
+                        instance.current_quantity
+                      ).toLocaleString() %>
+                      <%= instance.unit %>
+                    </small>
+
+                  </div>
+
+                </div>
+
+              </a>
+
+            <% }) %>
+
+          </div>
+
+        <% } %>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</div>

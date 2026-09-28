@@ -1,0 +1,226 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+
+  <div>
+
+    <h1 class="h3 mb-1">
+      Stock Receive
+    </h1>
+
+    <p class="text-muted mb-0">
+      Stock Transfer Notes directed to your site and awaiting receipt.
+    </p>
+
+  </div>
+
+</div>
+
+
+<% if (!transfers.length) { %>
+
+  <div class="card">
+
+    <div class="card-body text-center py-5">
+
+      <h5>
+        No incoming stock transfers
+      </h5>
+
+      <p class="text-muted mb-0">
+        There are currently no stock transfers waiting to be received
+        at your site.
+      </p>
+
+    </div>
+
+  </div>
+
+<% } else { %>
+
+  <div class="card">
+
+    <div class="card-header">
+
+      <strong>
+        Incoming Stock Transfer Notes
+      </strong>
+
+    </div>
+
+
+    <div class="card-body p-0">
+
+      <div class="table-responsive">
+
+        <table class="table table-hover mb-0 align-middle">
+
+          <thead class="table-light">
+
+            <tr>
+
+              <th>STN</th>
+
+              <th>From</th>
+
+              <th>To</th>
+
+              <th>Status</th>
+
+              <th>Instances</th>
+
+              <th>Dispatched</th>
+
+              <th></th>
+
+            </tr>
+
+          </thead>
+
+
+          <tbody>
+
+            <% transfers.forEach(transfer => { %>
+
+              <tr>
+
+                <td>
+
+                  <strong>
+                    <%= transfer.transfer_number %>
+                  </strong>
+
+                  <% if (transfer.notes) { %>
+
+                    <br>
+
+                    <small class="text-muted">
+                      <%= transfer.notes %>
+                    </small>
+
+                  <% } %>
+
+                </td>
+
+
+                <td>
+
+                  <strong>
+                    <%= transfer.from_site_code %>
+                  </strong>
+
+                  <br>
+
+                  <small class="text-muted">
+                    <%= transfer.from_site_name %>
+                  </small>
+
+                </td>
+
+
+                <td>
+
+                  <strong>
+                    <%= transfer.to_site_code %>
+                  </strong>
+
+                  <br>
+
+                  <small class="text-muted">
+                    <%= transfer.to_site_name %>
+                  </small>
+
+                </td>
+
+
+                <td>
+
+                  <% if (
+                    transfer.status === 'IN_TRANSIT'
+                  ) { %>
+
+                    <span class="badge bg-warning text-dark">
+                      In Transit
+                    </span>
+
+                  <% } else if (
+                    transfer.status === 'PARTIALLY_RECEIVED'
+                  ) { %>
+
+                    <span class="badge bg-warning text-dark">
+                      Partially Received
+                    </span>
+
+                  <% } %>
+
+                </td>
+
+
+                <td>
+
+                  <strong>
+                    <%= transfer.received_count %>
+                  </strong>
+
+                  /
+                  <%= transfer.item_count %>
+
+                  <% if (
+                    Number(transfer.in_transit_count) > 0
+                  ) { %>
+
+                    <br>
+
+                    <small class="text-warning">
+                      <%= transfer.in_transit_count %>
+                      pending
+                    </small>
+
+                  <% } %>
+
+                </td>
+
+
+                <td>
+
+                  <% if (transfer.dispatched_at) { %>
+
+                    <small>
+                      <%= new Date(
+                        transfer.dispatched_at
+                      ).toLocaleString() %>
+                    </small>
+
+                  <% } else { %>
+
+                    —
+
+                  <% } %>
+
+                </td>
+
+
+                <td class="text-end">
+
+                  <a
+                    href="/inventory/transfers/<%= transfer.id %>"
+                    class="btn btn-sm btn-success"
+                  >
+                    Receive
+                  </a>
+
+                </td>
+
+              </tr>
+
+            <% }) %>
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+  </div>
+
+<% } %>

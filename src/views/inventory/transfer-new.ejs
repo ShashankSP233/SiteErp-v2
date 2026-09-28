@@ -1,0 +1,200 @@
+<div class="mb-4">
+
+  <h1 class="h3 mb-1">
+    Create Stock Transfer
+  </h1>
+
+  <p class="text-muted mb-0">
+    Create a Stock Transfer Note and then scan the physical
+    inventory instances being dispatched.
+  </p>
+
+</div>
+
+
+<div class="card">
+
+  <div class="card-header">
+    <strong>Transfer Details</strong>
+  </div>
+
+
+  <div class="card-body">
+
+    <form
+      method="post"
+      action="/inventory/transfers"
+    >
+
+      <input
+        type="hidden"
+        name="_csrf"
+        value="<%= csrfToken %>"
+      >
+
+
+      <div class="row g-3">
+
+        <div class="col-md-6">
+
+          <label
+            class="form-label"
+            for="fromSiteId"
+          >
+            From Site *
+          </label>
+
+          <select
+            class="form-select"
+            id="fromSiteId"
+            name="fromSiteId"
+            required
+          >
+
+            <option value="">
+              Select source site
+            </option>
+
+            <% sourceSites.forEach(site => { %>
+
+              <option
+                value="<%= site.id %>"
+                <%= String(form.fromSiteId || '') ===
+                    String(site.id)
+                    ? 'selected'
+                    : '' %>
+              >
+                <%= site.code %> —
+                <%= site.name %>
+              </option>
+
+            <% }) %>
+
+          </select>
+
+          <div class="form-text">
+            You can only dispatch inventory from a site
+            you are assigned to.
+          </div>
+
+        </div>
+
+
+        <div class="col-md-6">
+
+          <label
+            class="form-label"
+            for="toSiteId"
+          >
+            To Site *
+          </label>
+
+          <select
+            class="form-select"
+            id="toSiteId"
+            name="toSiteId"
+            required
+          >
+
+            <option value="">
+              Select destination site
+            </option>
+
+            <% destinationSites.forEach(site => { %>
+
+              <option
+                value="<%= site.id %>"
+                <%= String(form.toSiteId || '') ===
+                    String(site.id)
+                    ? 'selected'
+                    : '' %>
+              >
+                <%= site.code %> —
+                <%= site.name %>
+              </option>
+
+            <% }) %>
+
+          </select>
+
+        </div>
+
+
+        <div class="col-12">
+
+          <label
+            class="form-label"
+            for="notes"
+          >
+            Transfer Note
+          </label>
+
+          <textarea
+            class="form-control"
+            id="notes"
+            name="notes"
+            rows="3"
+            placeholder="Reason, transport details, challan reference, etc."
+          ><%= form.notes || '' %></textarea>
+
+        </div>
+
+      </div>
+
+
+      <div class="alert alert-info mt-4 mb-0">
+
+        <strong>How this works:</strong>
+
+        <ol class="mb-0 mt-2">
+
+          <li>
+            Create the transfer.
+          </li>
+
+          <li>
+            Scan/add every physical instance being sent.
+          </li>
+
+          <li>
+            Dispatch the transfer.
+          </li>
+
+          <li>
+            The scanned instances become
+            <strong>IN TRANSIT</strong>.
+          </li>
+
+          <li>
+            The destination site performs Stock Inward
+            after physically receiving them.
+          </li>
+
+        </ol>
+
+      </div>
+
+
+      <div class="mt-4">
+
+        <button
+          type="submit"
+          class="btn btn-primary"
+        >
+          Create Transfer
+        </button>
+
+        <a
+          href="/inventory/transfers"
+          class="btn btn-outline-secondary"
+        >
+          Cancel
+        </a>
+
+      </div>
+
+    </form>
+
+  </div>
+
+</div>

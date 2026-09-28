@@ -1,0 +1,206 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+
+  <div>
+    <h1 class="h3 mb-1">
+      Stock Transfers
+    </h1>
+
+    <p class="text-muted mb-0">
+      Transfer physical inventory between sites.
+    </p>
+  </div>
+
+  <% if (['admin', 'manager', 'operator'].includes(currentUser.role)) { %>
+
+    <a
+      href="/inventory/transfers/new"
+      class="btn btn-primary"
+    >
+      New Stock Transfer
+    </a>
+
+  <% } %>
+
+</div>
+
+
+<% if (!transfers.length) { %>
+
+  <div class="card">
+    <div class="card-body text-center py-5">
+
+      <h5>
+        No stock transfers yet
+      </h5>
+
+      <p class="text-muted">
+        Create a Stock Transfer Note to move physical inventory
+        between sites.
+      </p>
+
+    </div>
+  </div>
+
+<% } else { %>
+
+  <div class="card">
+
+    <div class="card-body p-0">
+
+      <div class="table-responsive">
+
+        <table class="table table-hover mb-0 align-middle">
+
+          <thead class="table-light">
+
+            <tr>
+              <th>Transfer</th>
+              <th>From</th>
+              <th>To</th>
+              <th>Status</th>
+              <th>Instances</th>
+              <th>Created</th>
+              <th></th>
+            </tr>
+
+          </thead>
+
+          <tbody>
+
+            <% transfers.forEach(transfer => { %>
+
+              <tr>
+
+                <td>
+                  <strong>
+                    <%= transfer.transfer_number %>
+                  </strong>
+                </td>
+
+
+                <td>
+                  <strong>
+                    <%= transfer.from_site_code %>
+                  </strong>
+
+                  <br>
+
+                  <small class="text-muted">
+                    <%= transfer.from_site_name %>
+                  </small>
+                </td>
+
+
+                <td>
+                  <strong>
+                    <%= transfer.to_site_code %>
+                  </strong>
+
+                  <br>
+
+                  <small class="text-muted">
+                    <%= transfer.to_site_name %>
+                  </small>
+                </td>
+
+
+                <td>
+
+                  <% if (transfer.status === 'DRAFT') { %>
+
+                    <span class="badge bg-secondary">
+                      Draft
+                    </span>
+
+                  <% } else if (transfer.status === 'IN_TRANSIT') { %>
+
+                    <span class="badge bg-warning text-dark">
+                      In Transit
+                    </span>
+
+                  <% } else if (
+                    transfer.status === 'PARTIALLY_RECEIVED'
+                  ) { %>
+
+                    <span class="badge bg-warning text-dark">
+                      Partially Received
+                    </span>
+
+                  <% } else if (
+                    transfer.status === 'RECEIVED'
+                  ) { %>
+
+                    <span class="badge bg-success">
+                      Received
+                    </span>
+
+                  <% } else { %>
+
+                    <span class="badge bg-secondary">
+                      <%= transfer.status %>
+                    </span>
+
+                  <% } %>
+
+                </td>
+
+
+                <td>
+
+                  <strong>
+                    <%= transfer.received_count %>
+                  </strong>
+                  /
+                  <%= transfer.item_count %>
+
+                  <% if (
+                    Number(transfer.in_transit_count) > 0
+                  ) { %>
+
+                    <br>
+
+                    <small class="text-warning">
+                      <%= transfer.in_transit_count %>
+                      still in transit
+                    </small>
+
+                  <% } %>
+
+                </td>
+
+
+                <td>
+                  <small>
+                    <%= new Date(
+                      transfer.created_at
+                    ).toLocaleString() %>
+                  </small>
+                </td>
+
+
+                <td class="text-end">
+
+                  <a
+                    href="/inventory/transfers/<%= transfer.id %>"
+                    class="btn btn-sm btn-outline-primary"
+                  >
+                    Open
+                  </a>
+
+                </td>
+
+              </tr>
+
+            <% }) %>
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+  </div>
+
+<% } %>

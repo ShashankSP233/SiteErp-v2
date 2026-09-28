@@ -45,6 +45,18 @@
             </a>
           </li>
 
+          <li>
+            <a class="dropdown-item" href="/inventory/movements">
+              Movement Ledger
+            </a>
+          </li>
+          <li>
+            <a class="dropdown-item" href="/inventory/audits">
+              Inventory Audits
+            </a>
+          </li>
+         
+
           <% if (['admin', 'manager', 'operator'].includes(currentUser.role)) { %>
             <li>
               <a class="dropdown-item" href="/inventory/receive">
@@ -57,7 +69,56 @@
                 Issue Inventory
               </a>
             </li>
+
+          <% if (['admin', 'manager'].includes(currentUser.role)) { %>
+            <li>
+              <a
+                class="dropdown-item"
+                href="/inventory/adjustment"
+              >
+                Adjust Inventory
+              </a>
+            </li>
+
           <% } %>
+          <% } %>
+
+        </ul>
+      </li>
+
+
+      <!-- Transfer -->
+
+      <li class="nav-item dropdown">
+        <a
+          class="nav-link dropdown-toggle"
+          href="#"
+          role="button"
+          data-bs-toggle="dropdown"
+          aria-expanded="false"
+        >
+          Stock
+        </a>
+
+        <ul class="dropdown-menu">
+
+          <li>
+            <a
+              class="dropdown-item"
+              href="/inventory/transfers"
+            >
+              Stock Transfers
+            </a>
+          </li>
+
+          <li>
+            <a
+              class="dropdown-item"
+              href="/inventory/stock-receive"
+            >
+              Stock Receive
+            </a>
+          </li>
 
         </ul>
       </li>

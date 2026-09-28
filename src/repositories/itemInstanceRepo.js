@@ -76,177 +76,6 @@ function buildInstanceCode(itemCode, number) {
 }
 
 /**
- * Create one physical inventory instance and its RECEIVE movement
- * using an existing database transaction.
- *
- * IMPORTANT:
- * The caller owns the transaction.
- */
-async function receiveInstanceWithinTransaction(
-  tx,
-  {
-    itemMasterId,
-    quantity,
-    siteId,
-    performedBy,
-    batchNumber = null,
-    serialNumber = null,
-    manufactureDate = null,
-    expiryDate = null,
-    reason = null,
-  },
-) {
-  if (!Number.isFinite(Number(quantity)) || Number(quantity) <= 0) {
-    throw new Error("Quantity must be greater than zero.");
-  }
-
-  const qty = Number(quantity);
-
-  // Lock and validate the item master.
-  const itemMaster = await tx.one(
-    `SELECT
-        id,
-        item_code,
-        name,
-        unit,
-        instance_quantity,
-        instance_quantity_unit,
-        is_consumable,
-        allows_partial_consumption,
-        requires_instance_tracking,
-        status
-      FROM item_masters
-      WHERE id = ?
-      FOR UPDATE`,
-    [itemMasterId],
-  );
-
-  if (itemMaster.status !== "ACTIVE") {
-    throw new Error("Cannot receive inventory for an inactive item master.");
-  }
-
-  if (!itemMaster.requires_instance_tracking) {
-    throw new Error(
-      "This item master is not configured for physical instance tracking.",
-    );
-  }
-
-  // Validate the destination site.
-  const site = await tx.one(
-    `SELECT
-       id,
-       code,
-       name,
-       site_type,
-       status
-     FROM sites
-     WHERE id = ?
-     FOR UPDATE`,
-    [siteId],
-  );
-
-  if (site.status !== "ACTIVE") {
-    throw new Error("Cannot receive inventory into an inactive site.");
-  }
-
-  // Allocate a unique instance number.
-  const instanceNumber = await allocateInstanceNumber(tx, itemMaster.id);
-
-  const instanceCode = buildInstanceCode(itemMaster.item_code, instanceNumber);
-
-  // The barcode is the permanent identity of this physical instance.
-  const barcode = instanceCode;
-
-  // Create the physical instance.
-  const instance = await tx.one(
-    `INSERT INTO item_instances (
-       item_master_id,
-       instance_code,
-       barcode,
-       original_quantity,
-       current_quantity,
-       unit,
-       site_id,
-       lifecycle_status,
-       condition,
-       batch_number,
-       serial_number,
-       manufacture_date,
-       expiry_date
-     )
-     VALUES (
-       ?,
-       ?,
-       ?,
-       ?,
-       ?,
-       ?,
-       ?,
-       'ACTIVE',
-       'GOOD',
-       ?,
-       ?,
-       ?,
-       ?
-     )
-     RETURNING *`,
-    [
-      itemMaster.id,
-      instanceCode,
-      barcode,
-      qty,
-      qty,
-      itemMaster.instance_quantity_unit,
-      site.id,
-      batchNumber || null,
-      serialNumber || null,
-      manufactureDate || null,
-      expiryDate || null,
-    ],
-  );
-
-  // Create the corresponding inventory movement.
-  await tx.query(
-    `INSERT INTO inventory_movements (
-       instance_id,
-       movement_type,
-       quantity,
-       from_site_id,
-       to_site_id,
-       reference_type,
-       reference_id,
-       reason,
-       performed_by
-     )
-     VALUES (
-       ?,
-       'RECEIVE',
-       ?,
-       NULL,
-       ?,
-       'DIRECT_RECEIVE',
-       ?,
-       ?,
-       ?
-     )`,
-    [
-      instance.id,
-      qty,
-      site.id,
-      instanceCode,
-      reason || "Inventory received",
-      performedBy,
-    ],
-  );
-
-  return {
-    instance,
-    itemMaster,
-    site,
-  };
-}
-
-/**
  * Create multiple physical inventory instances and their RECEIVE movements
  * using an existing database transaction.
  *
@@ -448,17 +277,9 @@ async function receiveInstancesWithinTransaction(
   };
 }
 
-/**
- * Create one physical inventory instance and its RECEIVE movement.
- *
- * This public helper starts its own transaction.
- *
- * Use receiveInstanceWithinTransaction() when the caller already
- * has an active transaction.
- */
-async function receiveInstance({
+async function receiveInstances({
   itemMasterId,
-  quantity,
+  instanceCount,
   siteId,
   performedBy,
   batchNumber = null,
@@ -468,9 +289,9 @@ async function receiveInstance({
   reason = null,
 }) {
   return db.tx(async (tx) => {
-    return receiveInstanceWithinTransaction(tx, {
+    return receiveInstancesWithinTransaction(tx, {
       itemMasterId,
-      quantity,
+      instanceCount,
       siteId,
       performedBy,
       batchNumber,
@@ -481,7 +302,6 @@ async function receiveInstance({
     });
   });
 }
-
 /**
  * List inventory instances accessible to a user.
  *
@@ -592,8 +412,7 @@ module.exports = {
   getItemMasterForInstance,
   allocateInstanceNumber,
   buildInstanceCode,
-  receiveInstanceWithinTransaction,
   receiveInstancesWithinTransaction,
-  receiveInstance,
+  receiveInstances,
   listInstancesForUser,
 };
