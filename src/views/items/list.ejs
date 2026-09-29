@@ -10,6 +10,29 @@
   <% } %>
 </div>
 
+<form method="get" action="/items" class="card card-body shadow-sm mb-3">
+  <label for="item-search" class="form-label fw-semibold">
+    Search Item Masters
+  </label>
+
+  <div class="d-flex gap-2">
+    <input
+      id="item-search"
+      type="search"
+      name="q"
+      class="form-control"
+      placeholder="Search item code, name, or description"
+      value="<%= q || '' %>"
+    >
+
+    <button type="submit" class="btn btn-primary">Search</button>
+
+    <% if (q) { %>
+      <a href="/items" class="btn btn-outline-secondary">Clear</a>
+    <% } %>
+  </div>
+</form>
+
 <div class="card shadow-sm">
   <div class="card-header bg-white py-3">
     <h2 class="h5 mb-0">Inventory Item Types</h2>
@@ -17,7 +40,12 @@
 
   <% if (!items.length) { %>
     <div class="card-body text-center text-muted py-5">
-      No item masters have been created yet.
+      <% if (q) { %>
+        No Item Masters match “<%= q %>”.
+        <a href="/items" class="d-block mt-2">Clear search</a>
+      <% } else { %>
+        No item masters have been created yet.
+      <% } %>
     </div>
   <% } else { %>
     <div class="table-responsive">
@@ -35,41 +63,52 @@
             <th class="text-end">Actions</th>
           </tr>
         </thead>
+
         <tbody>
           <% items.forEach(item => { %>
             <% const status = String(item.status || '').toUpperCase(); %>
+
             <tr>
               <td>
                 <a href="/items/<%= item.id %>/ledger" class="text-decoration-none">
                   <strong><%= item.item_code %></strong>
                 </a>
               </td>
+
               <td>
                 <strong class="d-block"><%= item.description || item.name %></strong>
                 <% if (item.description && item.name && item.description !== item.name) { %>
                   <small class="text-muted"><%= item.name %></small>
                 <% } %>
               </td>
-              <td><span class="badge text-bg-light border"><%= item.unit || '—' %></span></td>
+
+              <td>
+                <span class="badge text-bg-light border"><%= item.unit || '—' %></span>
+              </td>
+
               <td class="text-nowrap">
                 <strong><%= item.instance_quantity %></strong>
                 <span class="text-muted"><%= item.instance_quantity_unit || '' %></span>
               </td>
+
               <td>
                 <span class="badge <%= item.is_consumable ? 'text-bg-success' : 'text-bg-secondary' %>">
                   <%= item.is_consumable ? 'Yes' : 'No' %>
                 </span>
               </td>
+
               <td>
                 <span class="badge <%= item.allows_partial_consumption ? 'text-bg-success' : 'text-bg-secondary' %>">
                   <%= item.allows_partial_consumption ? 'Yes' : 'No' %>
                 </span>
               </td>
+
               <td>
                 <span class="badge <%= item.requires_instance_tracking ? 'text-bg-success' : 'text-bg-secondary' %>">
                   <%= item.requires_instance_tracking ? 'Yes' : 'No' %>
                 </span>
               </td>
+
               <td>
                 <% if (status === 'ACTIVE') { %>
                   <span class="badge text-bg-success">Active</span>
@@ -79,10 +118,16 @@
                   <span class="badge text-bg-warning"><%= item.status || 'Unknown' %></span>
                 <% } %>
               </td>
+
               <td class="text-end text-nowrap">
-                <a href="/items/<%= item.id %>/ledger" class="btn btn-sm btn-outline-secondary">Ledger</a>
+                <a href="/items/<%= item.id %>/ledger" class="btn btn-sm btn-outline-secondary">
+                  Ledger
+                </a>
+
                 <% if (['admin', 'manager'].includes(currentUser?.role)) { %>
-                  <a href="/items/<%= item.id %>/edit" class="btn btn-sm btn-outline-primary">Edit</a>
+                  <a href="/items/<%= item.id %>/edit" class="btn btn-sm btn-outline-primary">
+                    Edit
+                  </a>
                 <% } %>
               </td>
             </tr>

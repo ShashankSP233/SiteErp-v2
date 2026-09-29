@@ -1,215 +1,203 @@
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
   <div>
-    <h1 class="h3 mb-1">Dashboard</h1>
+    <h1 class="h3 fw-bold mb-1">Dashboard</h1>
     <p class="text-muted mb-0">
-      Site-ERP inventory management
+      Welcome, <%= currentUser.username %>. Here's your Site-ERP overview.
     </p>
   </div>
+
+  <span class="badge rounded-pill text-bg-light border px-3 py-2">
+    <%= currentUser.role %>
+  </span>
 </div>
 
+
+<div class="row g-3 mb-4">
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <h2 class="h5 mb-1">Find an item</h2>
+        <p class="text-muted small">Search by item code or name.</p>
+
+        <form method="get" action="/items" class="d-flex gap-2">
+          <input
+            type="search"
+            name="q"
+            class="form-control"
+            placeholder="e.g. OIL-20L or Engine Oil"
+            aria-label="Search items by code or name"
+          >
+          <button type="submit" class="btn btn-primary">Search</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <h2 class="h5 mb-1">Find a physical instance</h2>
+        <p class="text-muted small">Scan a barcode or enter an instance code.</p>
+
+        <form method="get" action="/inventory/instances/lookup" class="d-flex gap-2">
+          <input
+            type="search"
+            name="code"
+            class="form-control"
+            placeholder="Scan barcode or enter instance code"
+            aria-label="Scan or enter a barcode or instance code"
+            autocomplete="off"
+            autofocus
+            required
+          >
+          <button type="submit" class="btn btn-primary">Look up</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-xl-3">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small mb-2">Active Sites</div>
+        <div class="display-6 fw-bold"><%= stats.sites %></div>
+        <% if (currentUser.role === 'admin') { %>
+          <a href="/sites" class="small text-decoration-none">Manage sites →</a>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6 col-xl-3">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small mb-2">Active Item Masters</div>
+        <div class="display-6 fw-bold"><%= stats.itemMasters %></div>
+        <a href="/items" class="small text-decoration-none">Browse items →</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6 col-xl-3">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small mb-2">Active Instances</div>
+        <div class="display-6 fw-bold"><%= stats.instances %></div>
+        <a href="/inventory/instances" class="small text-decoration-none">View inventory →</a>
+      </div>
+    </div>
+  </div>
+
+  <% if (currentUser.role === 'admin') { %>
+    <div class="col-6 col-xl-3">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <div class="text-muted small mb-2">Active Users</div>
+          <div class="display-6 fw-bold"><%= stats.users %></div>
+          <a href="/users" class="small text-decoration-none">Manage users →</a>
+        </div>
+      </div>
+    </div>
+  <% } else { %>
+    <div class="col-6 col-xl-3">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <div class="text-muted small mb-2">Your account</div>
+          <div class="h4 fw-bold text-capitalize"><%= currentUser.role %></div>
+          <div class="small text-muted">Signed in as <%= currentUser.username %></div>
+        </div>
+      </div>
+    </div>
+  <% } %>
+</div>
 
 <div class="row g-3">
-
-  <!-- Sites -->
-
-  <div class="col-md-6 col-xl-3">
+  <div class="col-lg-8">
     <div class="card shadow-sm h-100">
-      <div class="card-body">
-
-        <div class="text-muted small">
-          Sites
-        </div>
-
-        <div class="metric">
-          <%= stats.sites %>
-        </div>
-
-        <a href="/sites" class="btn btn-sm btn-outline-primary mt-2">
-          Manage Sites
-        </a>
-
-      </div>
-    </div>
-  </div>
-
-
-  <!-- Item Masters -->
-
-  <div class="col-md-6 col-xl-3">
-    <div class="card shadow-sm h-100">
-      <div class="card-body">
-
-        <div class="text-muted small">
-          Item Masters
-        </div>
-
-        <div class="metric">
-          <%= stats.itemMasters %>
-        </div>
-
-        <a href="/items" class="btn btn-sm btn-outline-primary mt-2">
-            Items
-        </a>
-
-      </div>
-    </div>
-  </div>
-
-
-  <!-- Physical Instances -->
-
-  <div class="col-md-6 col-xl-3">
-    <div class="card shadow-sm h-100">
-      <div class="card-body">
-
-        <div class="text-muted small">
-          Physical Instances
-        </div>
-
-        <div class="metric">
-          <%= stats.instances %>
-        </div>
-
-        <a href="/inventory/instances" class="btn btn-sm btn-outline-primary mt-2">
-            Inventory
-        </a>
-
-      </div>
-    </div>
-  </div>
-
-
-  <!-- Active Users -->
-
-  <div class="col-md-6 col-xl-3">
-    <div class="card shadow-sm h-100">
-      <div class="card-body">
-
-        <div class="text-muted small">
-          Active Users
-        </div>
-
-        <div class="metric">
-          <%= stats.users %>
-        </div>
-
-        <% if (currentUser?.role === 'admin') { %>
-
-          <a
-            href="/users"
-            class="btn btn-sm btn-outline-primary mt-2"
-          >
-            Manage Users
-          </a>
-
-        <% } %>
-
-      </div>
-    </div>
-  </div>
-
-</div>
-
-
-<div class="row g-3 mt-1">
-
-  <div class="col-lg-6">
-
-    <div class="card shadow-sm h-100">
-
-      <div class="card-header">
-        <strong>V2 Inventory Architecture</strong>
+      <div class="card-header bg-white py-3">
+        <h2 class="h5 mb-0">Quick actions</h2>
       </div>
 
       <div class="card-body">
-
-        <p class="mb-3">
-          Site-ERP is currently being rebuilt around
-          individually tracked physical inventory instances.
-        </p>
-
-        <div class="list-group">
-
-          <div class="list-group-item">
-            <strong>Item Master</strong>
-            <div class="small text-muted">
-              Defines what an item is.
+        <div class="row g-2">
+          <% if (['admin', 'manager', 'operator'].includes(currentUser.role)) { %>
+            <div class="col-sm-6">
+              <a href="/inventory/receive" class="btn btn-primary w-100 py-3">
+                Receive Inventory
+              </a>
             </div>
-          </div>
-
-          <div class="list-group-item">
-            <strong>Item Instance</strong>
-            <div class="small text-muted">
-              Represents the actual physical item.
+            <div class="col-sm-6">
+              <a href="/inventory/issues" class="btn btn-outline-primary w-100 py-3">
+                Issue Inventory
+              </a>
             </div>
-          </div>
+          <% } %>
 
-          <div class="list-group-item">
-            <strong>Permanent Barcode</strong>
-            <div class="small text-muted">
-              Identifies one physical instance.
-            </div>
-          </div>
-
-          <div class="list-group-item">
-            <strong>Inventory Movement</strong>
-            <div class="small text-muted">
-              Records every inventory-affecting operation.
-            </div>
-          </div>
-
-        </div>
-
-      </div>
-
-    </div>
-
-  </div>
-
-
-  <div class="col-lg-6">
-
-    <div class="card shadow-sm h-100">
-
-      <div class="card-header">
-        <strong>Quick Actions</strong>
-      </div>
-
-      <div class="card-body">
-
-        <% if (currentUser?.role === 'admin') { %>
-
-          <div class="d-grid gap-2">
-
-            <a
-              href="/sites/new"
-              class="btn btn-primary"
-            >
-              Create Site
+          <div class="col-sm-6">
+            <a href="/inventory/instances" class="btn btn-outline-secondary w-100 py-3">
+              Browse Inventory
             </a>
-
-            <a
-              href="/users/new"
-              class="btn btn-outline-primary"
-            >
-              Create User
+          </div>
+          <div class="col-sm-6">
+            <a href="/inventory/movements" class="btn btn-outline-secondary w-100 py-3">
+              Movement Ledger
             </a>
-
           </div>
 
-        <% } else { %>
+          <% if (['admin', 'manager'].includes(currentUser.role)) { %>
+            <div class="col-sm-6">
+              <a href="/inventory/adjustment" class="btn btn-outline-secondary w-100 py-3">
+                Adjust Inventory
+              </a>
+            </div>
+          <% } %>
 
-          <p class="text-muted mb-0">
-            Inventory operations will appear here as
-            the V2 modules are implemented.
-          </p>
-
-        <% } %>
-
+          <% if (currentUser.role === 'admin') { %>
+            <div class="col-sm-6">
+              <a href="/sites/new" class="btn btn-outline-secondary w-100 py-3">
+                Create Site
+              </a>
+            </div>
+          <% } %>
+        </div>
       </div>
-
     </div>
-
   </div>
 
+  <div class="col-lg-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white py-3">
+        <h2 class="h5 mb-0">Work areas</h2>
+      </div>
+
+      <div class="list-group list-group-flush">
+        <a href="/items" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+          <span>Item Master</span>
+          <span aria-hidden="true">→</span>
+        </a>
+        <a href="/inventory/transfers" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+          <span>Transfers</span>
+          <span aria-hidden="true">→</span>
+        </a>
+        <a href="/inventory/transfer-register" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+          <span>Transfer Register</span>
+          <span aria-hidden="true">→</span>
+        </a>
+        <a href="/purchase-orders" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+          <span>Purchase Orders</span>
+          <span aria-hidden="true">→</span>
+        </a>
+        <a href="/goods-receipts" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+          <span>Goods Receipts</span>
+          <span aria-hidden="true">→</span>
+        </a>
+        <a href="/inventory/audits" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+          <span>Inventory Audits</span>
+          <span aria-hidden="true">→</span>
+        </a>
+      </div>
+    </div>
+  </div>
 </div>

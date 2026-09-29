@@ -20,14 +20,30 @@ router.get(
   requireAuth,
   async (req, res, next) => {
     try {
-      const items =
-        await itemMasterRepo.listItemMasters();
+      const q = String(req.query.q || '').trim();
+      const allItems = await itemMasterRepo.listItemMasters();
+      const searchTerm = q.toLocaleLowerCase();
+
+      const items = searchTerm
+        ? allItems.filter(item => {
+            const searchableText = [
+              item.item_code,
+              item.name,
+              item.description
+            ]
+              .filter(Boolean)
+              .join(' ')
+              .toLocaleLowerCase();
+
+            return searchableText.includes(searchTerm);
+          })
+        : allItems;
 
       res.render('items/list', {
         title: 'Items',
-        items
+        items,
+        q
       });
-
     } catch (err) {
       next(err);
     }
@@ -299,5 +315,41 @@ router.post(
   }
 );
 
+
+router.get(
+  '/items',
+  requireAuth,
+  async (req, res, next) => {
+    try {
+      const q = String(req.query.q || '').trim();
+      const allItems = await itemMasterRepo.listItemMasters();
+
+      const searchTerm = q.toLocaleLowerCase();
+
+      const items = searchTerm
+        ? allItems.filter(item => {
+            const searchableText = [
+              item.item_code,
+              item.name,
+              item.description
+            ]
+              .filter(Boolean)
+              .join(' ')
+              .toLocaleLowerCase();
+
+            return searchableText.includes(searchTerm);
+          })
+        : allItems;
+
+      res.render('items/list', {
+        title: 'Items',
+        items,
+        q
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
 module.exports = router;
