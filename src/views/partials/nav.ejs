@@ -156,6 +156,7 @@
       </li>
 <!--
 
+    
       <li class="nav-item">
         <a class="nav-link" href="/bills">
           Bills
@@ -176,13 +177,12 @@
         </a>
       </li>
 
-   
       <li class="nav-item">
         <a class="nav-link" href="/reports">
           Reports
         </a>
       </li>
--->
+    -->
       <!-- Admin -->
       <% if (currentUser.role === 'admin') { %>
         <li class="nav-item">
@@ -200,7 +200,7 @@
 
       <% if (['admin', 'manager'].includes(currentUser.role)) { %>
         <li class="nav-item">
-          <a class="nav-link" href="/audit">
+          <a class="nav-link" href="/inventory/audits">
             Audit Trail
           </a>
         </li>
