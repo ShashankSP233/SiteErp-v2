@@ -6,6 +6,7 @@ const {
   requireAuth,
   requireRole
 } = require('../middleware/auth');
+const session = require('express-session');
 
 const router = express.Router();
 
@@ -70,6 +71,7 @@ router.get(
 
       const instances =
         await itemMasterRepo.getItemMasterInstances(
+          req.session.user,
           req.params.id
         );
 
