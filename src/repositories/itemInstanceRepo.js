@@ -408,6 +408,83 @@ async function listInstancesForUser(user) {
   );
 }
 
+async function findInstanceForUser(user, code) {
+  const selectSql = `
+    SELECT
+      ii.id,
+      ii.item_master_id,
+      ii.instance_code,
+      ii.barcode,
+      ii.original_quantity,
+      ii.current_quantity,
+      ii.unit,
+      ii.site_id,
+      ii.lifecycle_status,
+      ii.condition,
+      ii.batch_number,
+      ii.serial_number,
+
+      im.item_code,
+      im.name AS item_name,
+
+      s.code AS site_code,
+      s.name AS site_name,
+
+      COALESCE((
+        SELECT SUM(inv.remaining_quantity)
+        FROM inventory_issues inv
+        WHERE inv.instance_id = ii.id
+          AND inv.status IN ('OPEN', 'PARTIALLY_CONSUMED')
+      ), 0) AS allocated_quantity,
+
+      ii.current_quantity - COALESCE((
+        SELECT SUM(inv.remaining_quantity)
+        FROM inventory_issues inv
+        WHERE inv.instance_id = ii.id
+          AND inv.status IN ('OPEN', 'PARTIALLY_CONSUMED')
+      ), 0) AS available_quantity,
+
+      COALESCE((
+        SELECT SUM(mv.quantity)
+        FROM inventory_movements mv
+        WHERE mv.instance_id = ii.id
+          AND mv.movement_type = 'CONSUME'
+      ), 0) AS consumed_quantity
+
+    FROM item_instances ii
+    JOIN item_masters im
+      ON im.id = ii.item_master_id
+    LEFT JOIN sites s
+      ON s.id = ii.site_id
+
+    WHERE (
+      LOWER(ii.instance_code) = LOWER(?)
+      OR LOWER(COALESCE(ii.barcode, '')) = LOWER(?)
+    )
+  `;
+
+  if (user.role === 'admin') {
+    return db.one(
+      `${selectSql} LIMIT 1`,
+      [code, code]
+    );
+  }
+
+  return db.one(
+    `${selectSql}
+      AND EXISTS (
+        SELECT 1
+        FROM site_assignments sa
+        WHERE sa.site_id = ii.site_id
+          AND sa.user_id = ?
+          AND sa.assigned_until IS NULL
+      )
+      LIMIT 1`,
+    [code, code, user.id]
+  );
+}
+
+
 module.exports = {
   getItemMasterForInstance,
   allocateInstanceNumber,
@@ -415,4 +492,5 @@ module.exports = {
   receiveInstancesWithinTransaction,
   receiveInstances,
   listInstancesForUser,
+  findInstanceForUser,
 };

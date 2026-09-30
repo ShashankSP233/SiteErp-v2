@@ -1,6 +1,13 @@
 const express = require('express');
 
 const itemMasterRepo = require('../repositories/itemMasterRepo');
+
+const {
+  receiveInstances,
+  listInstancesForUser,
+  findInstanceForUser
+} = require('../repositories/itemInstanceRepo');
+
 const { logAudit } = require('../repositories/auditRepo');
 const {
   requireAuth,
@@ -49,6 +56,7 @@ router.get(
     }
   }
 );
+
 
 
 // ============================================================
@@ -347,6 +355,41 @@ router.get(
         q
       });
     } catch (err) {
+      next(err);
+    }
+  }
+);
+
+
+// Single Item Views for Item Instance
+
+router.get(
+  '/inventory/instances/lookup',
+  requireAuth,
+  async (req, res, next) => {
+    try{
+      const code = String(req.query.code || '').trim();
+
+      let instance = null;
+      let error = null;
+
+      if (code){
+        instance = await findInstanceForUser(
+          req.session.user,
+          code
+        );
+        if (!instance){
+          error = `Not accessible instance found for "${code}"`;
+        }
+      }
+
+      res.render('inventory/instance-lookup',{
+        title: 'Find Inventory Instance',
+        code,
+        instance,
+        error
+      });
+    }catch (err){
       next(err);
     }
   }

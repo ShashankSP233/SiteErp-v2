@@ -1,0 +1,146 @@
+<div class="mb-4">
+  <div class="text-muted small mb-1">Inventory / Instance Lookup</div>
+  <h1 class="h3 mb-1">Find an Inventory Instance</h1>
+  <p class="text-muted mb-0">
+    Enter an instance code or scan its barcode.
+  </p>
+</div>
+
+<form method="get" action="/inventory/instances/lookup" class="card card-body shadow-sm mb-4">
+  <label for="instance-code" class="form-label fw-semibold">
+    Barcode or instance code
+  </label>
+
+  <div class="d-flex gap-2">
+    <input
+      id="instance-code"
+      type="search"
+      name="code"
+      class="form-control"
+      placeholder="Scan barcode or enter instance code"
+      value="<%= code || '' %>"
+      autocomplete="off"
+      autofocus
+      required
+    >
+
+    <button type="submit" class="btn btn-primary">Find Instance</button>
+  </div>
+</form>
+
+<% if (error) { %>
+  <div class="alert alert-warning"><%= error %></div>
+<% } %>
+
+<% if (instance) { %>
+  <div class="card shadow-sm">
+    <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2 py-3">
+      <div>
+        <h2 class="h5 mb-1"><%= instance.instance_code %></h2>
+        <div class="text-muted small">
+          Barcode: <%= instance.barcode || '—' %>
+        </div>
+      </div>
+
+      <span class="badge text-bg-secondary">
+        <%= instance.lifecycle_status %>
+      </span>
+    </div>
+
+    <div class="card-body">
+      <div class="mb-4">
+        <div class="text-muted small">Current location</div>
+        <strong>
+          <% if (instance.site_name) { %>
+            <%= instance.site_code ? `${instance.site_code} — ` : '' %><%= instance.site_name %>
+          <% } else { %>
+            No site assigned
+          <% } %>
+        </strong>
+      </div>
+
+      <div class="row g-3 mb-4">
+        <div class="col-6 col-lg-3">
+          <div class="border rounded p-3 h-100">
+            <div class="text-muted small">Current quantity</div>
+            <strong>
+              <%= Number(instance.current_quantity || 0).toLocaleString() %>
+              <%= instance.unit || '' %>
+            </strong>
+          </div>
+        </div>
+
+        <div class="col-6 col-lg-3">
+          <div class="border rounded p-3 h-100">
+            <div class="text-muted small">Allocated</div>
+            <strong>
+              <%= Number(instance.allocated_quantity || 0).toLocaleString() %>
+              <%= instance.unit || '' %>
+            </strong>
+          </div>
+        </div>
+
+        <div class="col-6 col-lg-3">
+          <div class="border rounded p-3 h-100">
+            <div class="text-muted small">Available to issue</div>
+            <strong>
+              <%= Number(instance.available_quantity || 0).toLocaleString() %>
+              <%= instance.unit || '' %>
+            </strong>
+          </div>
+        </div>
+
+        <div class="col-6 col-lg-3">
+          <div class="border rounded p-3 h-100">
+            <div class="text-muted small">Consumed</div>
+            <strong>
+              <%= Number(instance.consumed_quantity || 0).toLocaleString() %>
+              <%= instance.unit || '' %>
+            </strong>
+          </div>
+        </div>
+      </div>
+
+      <dl class="row mb-4">
+        <dt class="col-sm-3">Item</dt>
+        <dd class="col-sm-9">
+          <%= instance.item_code %> — <%= instance.item_name %>
+        </dd>
+
+        <dt class="col-sm-3">Condition</dt>
+        <dd class="col-sm-9"><%= instance.condition || '—' %></dd>
+
+        <dt class="col-sm-3">Batch number</dt>
+        <dd class="col-sm-9"><%= instance.batch_number || '—' %></dd>
+
+        <dt class="col-sm-3">Serial number</dt>
+        <dd class="col-sm-9"><%= instance.serial_number || '—' %></dd>
+      </dl>
+
+      <div class="d-flex flex-wrap gap-2">
+        <a
+          href="/items/<%= instance.item_master_id %>/ledger"
+          class="btn btn-outline-primary"
+        >
+          Item Master
+        </a>
+
+        <a
+          href="/inventory/movements?instanceCode=<%= encodeURIComponent(instance.instance_code) %>"
+          class="btn btn-outline-secondary"
+        >
+          Movement History
+        </a>
+
+        <% if (['admin', 'manager'].includes(currentUser.role)) { %>
+          <a
+            href="/inventory/adjustment?instanceCode=<%= encodeURIComponent(instance.instance_code) %>"
+            class="btn btn-outline-warning"
+          >
+            Adjust Inventory
+          </a>
+        <% } %>
+      </div>
+    </div>
+  </div>
+<% } %>

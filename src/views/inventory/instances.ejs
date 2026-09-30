@@ -72,9 +72,13 @@
 
                 <!-- Instance -->
                 <td>
-                  <strong>
-                    <%= instance.instance_code %>
-                  </strong>
+                  <a
+                    href="/inventory/instances/lookup?code=<%= encodeURIComponent(instance.instance_code) %>"
+                    class="text-decoration-none"
+                    title="View instance details"
+                  >
+                    <strong><%= instance.instance_code %></strong>
+                  </a>
                 </td>
 
                 <!-- Item -->
