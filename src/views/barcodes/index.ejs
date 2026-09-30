@@ -1,184 +1,195 @@
-<div class="page-header">
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-4">
   <div>
-    <h1>Barcode Labels</h1>
-    <p class="muted">
-      Print permanent barcode labels for inventory instances.
+    <h1 class="h3 fw-bold mb-1">Barcode Labels</h1>
+    <p class="text-muted mb-0">
+      Select inventory instances and print their permanent barcode labels.
     </p>
   </div>
 </div>
 
-<div class="card">
-  <div class="card-header">
-    <div>
-      <h2>Inventory Instances</h2>
-      <p class="muted">
-        Select one or more inventory instances to print their existing barcodes.
-      </p>
-    </div>
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white py-3">
+    <h2 class="h5 mb-1">Filter Inventory</h2>
+    <p class="text-muted small mb-0">
+      Narrow the list to active instances if needed.
+    </p>
   </div>
 
-  <form method="GET" action="/inventory/labels" class="filter-form">
-    <label class="checkbox-label">
-      <input
-        type="checkbox"
-        name="active"
-        value="1"
-        <%= activeOnly ? 'checked' : '' %>
-        onchange="this.form.submit()"
-      >
-      Show active instances only
-    </label>
+  <div class="card-body">
+    <form method="get" action="/inventory/labels"
+          class="d-flex flex-column flex-sm-row align-items-sm-center gap-3">
+      <input type="hidden" name="itemMasterId" value="<%= itemMasterId || '' %>">
 
-    <button type="submit" class="btn btn-secondary">
-      Apply Filter
-    </button>
-
-    <% if (activeOnly) { %>
-      <a href="/inventory/labels" class="btn btn-secondary">
-        Clear Filter
-      </a>
-    <% } %>
-  </form>
-</div>
-
-<form method="POST" action="/inventory/labels/print" id="barcode-print-form">
-  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-
-  <div class="card">
-    <div class="card-header">
-      <div>
-        <h2>Available Labels</h2>
-        <p class="muted">
-          <%= labels.length %> inventory instance<%= labels.length === 1 ? '' : 's' %> found.
-        </p>
+      <div class="form-check">
+        <input
+          id="active-only"
+          type="checkbox"
+          name="active"
+          value="1"
+          class="form-check-input"
+          <%= activeOnly ? 'checked' : '' %>
+        >
+        <label for="active-only" class="form-check-label">
+          Show active instances only
+        </label>
       </div>
 
-      <div class="button-group">
-        <button
-          type="button"
-          class="btn btn-secondary"
-          id="selectAllButton"
-        >
-          Select All
-        </button>
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Apply Filter</button>
 
-        <button
-          type="button"
-          class="btn btn-secondary"
-          id="clearSelectionButton"
-        >
-          Clear Selection
-        </button>
+        <% if (activeOnly) { %>
+          <a
+            href="/inventory/labels<%= itemMasterId ? `?itemMasterId=${encodeURIComponent(itemMasterId)}` : '' %>"
+            class="btn btn-outline-secondary"
+          >
+            Clear
+          </a>
+        <% } %>
+      </div>
+    </form>
+  </div>
+</div>
 
-        <button
-          type="submit"
-          class="btn btn-primary"
-          id="print-selected-button"
-        >
-          Print Selected
-        </button>
+<form method="post" action="/inventory/labels/print" id="barcode-print-form">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+  <div class="card shadow-sm">
+    <div class="card-header bg-white py-3">
+      <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+        <div>
+          <h2 class="h5 mb-1">Available Labels</h2>
+          <p class="text-muted small mb-0">
+            <%= labels.length %> inventory instance<%= labels.length === 1 ? '' : 's' %> found.
+          </p>
+        </div>
+
+        <% if (['admin', 'manager', 'operator'].includes(currentUser.role)) { %>
+          <div class="d-flex flex-wrap gap-2">
+            <button
+              type="button"
+              class="btn btn-outline-secondary btn-sm"
+              id="selectAllButton"
+            >
+              Select All
+            </button>
+
+            <button
+              type="button"
+              class="btn btn-outline-secondary btn-sm"
+              id="clearSelectionButton"
+            >
+              Clear Selection
+            </button>
+
+            <button
+              type="submit"
+              class="btn btn-primary btn-sm"
+              id="print-selected-button"
+            >
+              Print Selected
+            </button>
+          </div>
+        <% } %>
       </div>
     </div>
 
     <% if (!labels.length) { %>
-
-      <div class="empty-state">
-        <h3>No inventory instances found</h3>
-        <p>
-          There are currently no inventory instances available for barcode
-          printing with the selected filter.
+      <div class="card-body text-center py-5">
+        <h3 class="h5">No inventory instances found</h3>
+        <p class="text-muted mb-0">
+          There are no instances available for barcode printing with this filter.
         </p>
       </div>
-
     <% } else { %>
-
       <div class="table-responsive">
-        <table class="data-table">
-          <thead>
+        <table class="table table-hover table-striped align-middle mb-0 data-table">
+          <thead class="table-light">
             <tr>
-              <th style="width: 45px;">
-                <input
-                  type="checkbox"
-                  id="select-all"
-                  title="Select all"
-                >
-              </th>
-              <th>Instance Code</th>
-              <th>Barcode</th>
+              <% if (['admin', 'manager', 'operator'].includes(currentUser.role)) { %>
+                <th class="text-center" style="width: 48px;">
+                  <input
+                    type="checkbox"
+                    id="select-all"
+                    class="form-check-input"
+                    title="Select all instances"
+                    aria-label="Select all instances"
+                  >
+                </th>
+              <% } %>
+              <th class="text-nowrap">Instance Code</th>
+              <th class="text-nowrap">Barcode</th>
               <th>Item</th>
-              <th>Site</th>
-              <th>Current Quantity</th>
+              <th>Current Location</th>
+              <th class="text-nowrap text-end">Current Quantity</th>
               <th>Status</th>
-              <th style="width: 100px;">Action</th>
+              <th class="text-end">Action</th>
             </tr>
           </thead>
 
           <tbody>
             <% labels.forEach(function(label) { %>
+              <% const status = String(label.lifecycle_status || '').toUpperCase(); %>
+              <% const statusClass =
+                status === 'ACTIVE' ? 'text-bg-primary' :
+                status === 'IN_TRANSIT' ? 'text-bg-warning' :
+                status === 'CONSUMED' ? 'text-bg-secondary' :
+                ['MIA', 'LOST', 'DISPOSED'].includes(status) ? 'text-bg-danger' :
+                'text-bg-light'; %>
+
               <tr>
-                <td>
-                  <input
-                    type="checkbox"
-                    class="label-checkbox"
-                    name="instanceIds"
-                    value="<%= label.instance_id %>"
-                    onchange="updateSelectAllState()"
-                  >
+                <% if (['admin', 'manager', 'operator'].includes(currentUser.role)) { %>
+                  <td class="text-center">
+                    <input
+                      type="checkbox"
+                      class="form-check-input label-checkbox"
+                      name="instanceIds"
+                      value="<%= label.instance_id %>"
+                      aria-label="Select <%= label.instance_code %>"
+                    >
+                  </td>
+                <% } %>
+
+                <td class="text-nowrap">
+                  <strong><%= label.instance_code %></strong>
+                </td>
+
+                <td class="text-nowrap">
+                  <code><%= label.barcode || '—' %></code>
                 </td>
 
                 <td>
-                  <strong>
-                    <%= label.instance_code %>
-                  </strong>
-                </td>
-
-                <td>
-                  <code>
-                    <%= label.barcode %>
-                  </code>
-                </td>
-
-                <td>
-                  <div>
-                    <strong>
-                      <%= label.item_code %>
-                    </strong>
-                  </div>
-
-                  <div class="muted">
-                    <%= label.item_name %>
-                  </div>
+                  <strong class="d-block"><%= label.item_code %></strong>
+                  <span class="small text-muted"><%= label.item_name %></span>
                 </td>
 
                 <td>
                   <% if (label.site_name) { %>
-                    <%= label.site_name %>
+                    <strong><%= label.site_name %></strong>
                     <% if (label.site_code) { %>
-                      <div class="muted">
-                        <%= label.site_code %>
-                      </div>
+                      <span class="d-block small text-muted"><%= label.site_code %></span>
                     <% } %>
                   <% } else { %>
-                    <span class="muted">No site</span>
+                    <span class="text-muted">No site assigned</span>
                   <% } %>
                 </td>
 
-                <td>
-                  <%= label.current_quantity %>
+                <td class="text-nowrap text-end">
+                  <%= Number(label.current_quantity || 0).toLocaleString() %>
                   <%= label.unit || label.item_unit || '' %>
                 </td>
 
                 <td>
-                  <span class="status-badge status-<%= String(label.lifecycle_status || '').toLowerCase() %>">
-                    <%= label.lifecycle_status || 'UNKNOWN' %>
+                  <span class="badge <%= statusClass %>">
+                    <%= status || 'UNKNOWN' %>
                   </span>
                 </td>
 
-                <td>
+                <td class="text-end">
                   <a
                     href="/inventory/labels/print/<%= label.instance_id %>"
-                    class="btn btn-sm btn-secondary"
+                    class="btn btn-sm btn-outline-primary"
                     target="_blank"
+                    rel="noopener"
                   >
                     Print
                   </a>
@@ -188,130 +199,59 @@
           </tbody>
         </table>
       </div>
-
     <% } %>
   </div>
 </form>
 
 <script nonce="<%= cspNonce %>">
   document.addEventListener('DOMContentLoaded', function () {
-
-    function getLabelCheckboxes() {
-      return Array.from(
-        document.querySelectorAll('.label-checkbox')
-      );
-    }
-
-    function toggleAllLabels(checked) {
-      getLabelCheckboxes().forEach(function (checkbox) {
-        checkbox.checked = checked;
-      });
-
-      updateSelectAllState();
-    }
+    const checkboxes = Array.from(
+      document.querySelectorAll('.label-checkbox')
+    );
+    const selectAll = document.getElementById('select-all');
+    const printForm = document.getElementById('barcode-print-form');
 
     function updateSelectAllState() {
-      const checkboxes = getLabelCheckboxes();
-      const selectAll =
-        document.getElementById('select-all');
+      if (!selectAll) return;
 
-      if (!selectAll) {
-        return;
-      }
-
-      if (!checkboxes.length) {
-        selectAll.checked = false;
-        selectAll.indeterminate = false;
-        return;
-      }
-
-      const checkedCount =
-        checkboxes.filter(function (checkbox) {
-          return checkbox.checked;
-        }).length;
-
-      selectAll.checked =
+      const checkedCount = checkboxes.filter(box => box.checked).length;
+      selectAll.checked = checkboxes.length > 0 &&
         checkedCount === checkboxes.length;
-
-      selectAll.indeterminate =
-        checkedCount > 0 &&
+      selectAll.indeterminate = checkedCount > 0 &&
         checkedCount < checkboxes.length;
     }
 
-    // Header checkbox
-    const selectAll =
-      document.getElementById('select-all');
+    function setAll(checked) {
+      checkboxes.forEach(box => {
+        box.checked = checked;
+      });
+      updateSelectAllState();
+    }
 
     if (selectAll) {
-      selectAll.addEventListener(
-        'change',
-        function () {
-          toggleAllLabels(selectAll.checked);
-        }
-      );
+      selectAll.addEventListener('change', () => setAll(selectAll.checked));
     }
 
-    // Select All button
-    const selectAllButton =
-      document.getElementById('selectAllButton');
-
-    if (selectAllButton) {
-      selectAllButton.addEventListener(
-        'click',
-        function () {
-          toggleAllLabels(true);
-        }
-      );
-    }
-
-    // Clear Selection button
-    const clearSelectionButton =
-      document.getElementById('clearSelectionButton');
-
-    if (clearSelectionButton) {
-      clearSelectionButton.addEventListener(
-        'click',
-        function () {
-          toggleAllLabels(false);
-        }
-      );
-    }
-
-    // Individual checkboxes
-    getLabelCheckboxes().forEach(
-      function (checkbox) {
-        checkbox.addEventListener(
-          'change',
-          updateSelectAllState
-        );
-      }
+    document.getElementById('selectAllButton')?.addEventListener(
+      'click',
+      () => setAll(true)
     );
 
-    // Prevent printing with nothing selected.
-    const printForm =
-      document.getElementById('barcode-print-form');
+    document.getElementById('clearSelectionButton')?.addEventListener(
+      'click',
+      () => setAll(false)
+    );
 
-    if (printForm) {
-      printForm.addEventListener(
-        'submit',
-        function (event) {
-          const selected =
-            getLabelCheckboxes().filter(
-              function (checkbox) {
-                return checkbox.checked;
-              }
-            );
+    checkboxes.forEach(box => {
+      box.addEventListener('change', updateSelectAllState);
+    });
 
-          if (!selected.length) {
-            event.preventDefault();
-
-            alert(
-              'Please select at least one inventory instance to print.'
-            );
-          }
-        }
-      );
-    }
+    printForm?.addEventListener('submit', function (event) {
+      if (!checkboxes.some(box => box.checked)) {
+        event.preventDefault();
+        alert('Please select at least one inventory instance to print.');
+      }
+    });
 
     updateSelectAllState();
   });
