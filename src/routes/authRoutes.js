@@ -3,6 +3,7 @@ const {
   authenticate,
   createUser,
   changePassword,
+  updateUser,
   listUsers,
   getUserWithSites
 } = require('../repositories/userRepo');
@@ -291,5 +292,80 @@ router.post(
     }
   }
 );
+
+// ================= user edit page ===========================
+
+router.get(
+  '/users/:id/edit',
+  requireAuth,
+  requireRole('admin'),
+  async (req, res, next) => {
+    try {
+      const user = await getUserWithSites(req.params.id);
+
+      if (!user) {
+        return res.status(404).render('errors/404', {
+          title: 'User not found'
+        });
+      }
+
+      const sites = await siteRepo.listSites();
+
+      res.render('auth/user-sites', {
+        title: 'Manage User',
+        user,
+        sites
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+router.post(
+  '/users/:id/edit',
+  requireAuth,
+  requireRole('admin'),
+  async (req, res) => {
+    const userId = Number(req.params.id);
+    const { username, fullName, role, password } = req.body;
+    const isActive = req.body.isActive === 'on';
+
+    try {
+      const user = await updateUser(userId, {
+        username,
+        fullName,
+        role,
+        isActive,
+        password
+      });
+
+      await logAudit({
+        userId: req.session.user.id,
+        action: 'UPDATE_USER',
+        entity: 'users',
+        entityId: userId,
+        details: {
+          username: user.username,
+          role: user.role,
+          is_active: user.is_active,
+          password_reset: Boolean(password)
+        },
+        ip: req.ip,
+        userAgent: req.get('user-agent')
+      });
+
+      req.session.success = 'User updated successfully.';
+      res.redirect(`/users/${userId}/edit`);
+    } catch (err) {
+      req.session.error = err.message;
+      res.redirect(`/users/${userId}/edit`);
+    }
+  }
+);
+
+
+
+
 
 module.exports = router;

@@ -206,6 +206,114 @@ async function getActiveSiteAssignments(userId) {
   `, [userId]);
 }
 
+async function updateUser(id, {
+  username,
+  fullName,
+  role,
+  isActive,
+  password
+}) {
+  const normalizedUsername = String(username || '').trim().toLowerCase();
+  const normalizedFullName = String(fullName || '').trim() || null;
+  const normalizedPassword = String(password || '');
+
+  const allowedRoles = ['operator', 'manager', 'viewer', 'admin'];
+
+  if (!normalizedUsername) {
+    throw new Error('Username is required.');
+  }
+
+  if (!allowedRoles.includes(role)) {
+    throw new Error('Invalid user role.');
+  }
+
+  if (normalizedPassword && normalizedPassword.length < 8) {
+    throw new Error('New password must be at least 8 characters long.');
+  }
+
+  await db.tx(async tx => {
+    const user = await tx.one(
+      'SELECT id FROM users WHERE id = ?',
+      [id]
+    );
+
+    if (!user) {
+      throw new Error('User not found.');
+    }
+
+    const duplicate = await tx.one(
+      `SELECT id
+       FROM users
+       WHERE username = ?
+         AND id <> ?
+       LIMIT 1`,
+      [normalizedUsername, id]
+    );
+
+    if (duplicate) {
+      throw new Error('That username is already in use.');
+    }
+
+    if (role === 'operator') {
+      const assignmentCount = await tx.one(
+        `SELECT COUNT(*) AS count
+         FROM site_assignments
+         WHERE user_id = ?
+           AND assigned_until IS NULL`,
+        [id]
+      );
+
+      if (Number(assignmentCount.count) > 1) {
+        throw new Error(
+          'An operator can only have one active site assignment. Remove extra site assignments, then save again.'
+        );
+      }
+    }
+
+    if (normalizedPassword) {
+      await tx.query(
+        `UPDATE users
+         SET username = ?,
+             full_name = ?,
+             role = ?,
+             is_active = ?,
+             password_hash = ?,
+             must_change_password = TRUE,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [
+          normalizedUsername,
+          normalizedFullName,
+          role,
+          Boolean(isActive),
+          hashPassword(normalizedPassword),
+          id
+        ]
+      );
+    } else {
+      await tx.query(
+        `UPDATE users
+         SET username = ?,
+             full_name = ?,
+             role = ?,
+             is_active = ?,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [
+          normalizedUsername,
+          normalizedFullName,
+          role,
+          Boolean(isActive),
+          id
+        ]
+      );
+    }
+  });
+
+  return getUserById(id);
+}
+
+
 
 module.exports = {
   createUser,
@@ -214,5 +322,6 @@ module.exports = {
   changePassword,
   listUsers,
   getUserWithSites,
-  getActiveSiteAssignments
+  getActiveSiteAssignments,
+  updateUser,
 };

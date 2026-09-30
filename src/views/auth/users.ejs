@@ -98,24 +98,12 @@
             </td>
 
             <td class="text-end">
-
-              <% if (u.role !== 'admin') { %>
-
-                <a
-                  href="/users/<%= u.id %>/sites"
-                  class="btn btn-sm btn-outline-primary"
-                >
-                  Manage Sites
-                </a>
-
-              <% } else { %>
-
-                <span class="text-muted small">
-                  Global access
-                </span>
-
-              <% } %>
-
+              <a
+                href="/users/<%= u.id %>/edit"
+                class="btn btn-sm btn-outline-primary"
+              >
+                Edit
+              </a>
             </td>
 
           </tr>

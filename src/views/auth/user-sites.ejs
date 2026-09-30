@@ -30,108 +30,98 @@
   <!-- USER INFORMATION -->
 
   <div class="col-lg-4">
-
     <div class="card shadow-sm">
-
       <div class="card-header">
-        <strong>User</strong>
+        <strong>User Details</strong>
       </div>
 
       <div class="card-body">
+        <form method="post" action="/users/<%= user.id %>/edit">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
-        <dl class="row mb-0">
+          <div class="mb-3">
+            <label for="username" class="form-label">Username</label>
+            <input
+              id="username"
+              name="username"
+              class="form-control"
+              value="<%= user.username %>"
+              required
+            >
+          </div>
 
-          <dt class="col-5">
-            Username
-          </dt>
+          <div class="mb-3">
+            <label for="fullName" class="form-label">Full Name</label>
+            <input
+              id="fullName"
+              name="fullName"
+              class="form-control"
+              value="<%= user.full_name || '' %>"
+            >
+          </div>
 
-          <dd class="col-7">
-            <%= user.username %>
-          </dd>
+          <div class="mb-3">
+            <label for="role" class="form-label">Role</label>
+            <select id="role" name="role" class="form-select" required>
+              <option value="admin" <%= user.role === 'admin' ? 'selected' : '' %>>Admin</option>
+              <option value="manager" <%= user.role === 'manager' ? 'selected' : '' %>>Manager</option>
+              <option value="operator" <%= user.role === 'operator' ? 'selected' : '' %>>Operator</option>
+              <option value="viewer" <%= user.role === 'viewer' ? 'selected' : '' %>>Viewer</option>
+            </select>
+          </div>
 
+          <div class="form-check form-switch mb-3">
+            <input
+              id="isActive"
+              name="isActive"
+              type="checkbox"
+              class="form-check-input"
+              <%= user.is_active ? 'checked' : '' %>
+            >
+            <label for="isActive" class="form-check-label">Active account</label>
+          </div>
 
-          <dt class="col-5">
-            Name
-          </dt>
+          <hr>
 
-          <dd class="col-7">
-            <%= user.full_name || '—' %>
-          </dd>
+          <div class="mb-3">
+            <label for="password" class="form-label">Reset Password</label>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              class="form-control"
+              minlength="8"
+              autocomplete="new-password"
+            >
+            <div class="form-text">
+              Leave blank to keep the current password. A new password must be at least 8 characters.
+            </div>
+          </div>
 
-
-          <dt class="col-5">
-            Role
-          </dt>
-
-          <dd class="col-7">
-
-            <span class="badge text-bg-secondary">
-              <%= user.role %>
-            </span>
-
-          </dd>
-
-
-          <dt class="col-5">
-            Status
-          </dt>
-
-          <dd class="col-7">
-
-            <% if (user.is_active) { %>
-
-              <span class="badge text-bg-success">
-                Active
-              </span>
-
-            <% } else { %>
-
-              <span class="badge text-bg-secondary">
-                Inactive
-              </span>
-
-            <% } %>
-
-          </dd>
-
-        </dl>
-
+          <button type="submit" class="btn btn-primary w-100">
+            Save User
+          </button>
+        </form>
       </div>
-
     </div>
 
-
     <% if (user.role === 'operator') { %>
-
       <div class="alert alert-info mt-3">
-
         <strong>Operator rule</strong>
-
         <div class="small mt-1">
-          An operator can be assigned to exactly one
-          active site.
+          An operator can be assigned to exactly one active site.
         </div>
-
       </div>
-
     <% } %>
-
 
     <% if (user.role === 'manager') { %>
-
       <div class="alert alert-info mt-3">
-
         <strong>Manager rule</strong>
-
         <div class="small mt-1">
-          A manager can be assigned to multiple active
-          sites.
+          A manager can be assigned to multiple active sites.
         </div>
-
       </div>
-
     <% } %>
-
   </div>
 
 
