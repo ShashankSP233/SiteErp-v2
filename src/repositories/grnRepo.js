@@ -1738,7 +1738,7 @@ async function markGoodsReceiptLabelsPrinted({ goodsReceiptId, performedBy }) {
 }
 
 async function scanGoodsReceiptBarcode({ goodsReceiptId, barcode, performedBy }) {
-    const value = String(barcode || '').trim();
+    const value = String(barcode || '').replace(/\s+/g, '').toUpperCase();
     if (!value) throw new Error('Scan or enter a barcode.');
     return db.tx(async tx => {
         const batch = await tx.one(
@@ -1754,7 +1754,7 @@ async function scanGoodsReceiptBarcode({ goodsReceiptId, barcode, performedBy })
         const result = await tx.query(
             `UPDATE inventory_receipt_labels
              SET scanned_at = now(), scanned_by = ?
-             WHERE receipt_batch_id = ? AND barcode = ? AND scanned_at IS NULL
+             WHERE receipt_batch_id = ? AND UPPER(barcode) = ? AND scanned_at IS NULL
              RETURNING instance_code`,
             [performedBy, batch.id, value]
         );
@@ -1762,11 +1762,18 @@ async function scanGoodsReceiptBarcode({ goodsReceiptId, barcode, performedBy })
         if (!rows.length) {
             const exists = await tx.query(
                 `SELECT scanned_at FROM inventory_receipt_labels
-                 WHERE receipt_batch_id = ? AND barcode = ?`,
+                 WHERE receipt_batch_id = ? AND UPPER(barcode) = ?`,
                 [batch.id, value]
             );
             if ((exists.rows || exists).length) throw new Error('This barcode was already scanned.');
-            throw new Error('That barcode does not belong to this receipt.');
+            const expected = await tx.query(
+                `SELECT instance_code FROM inventory_receipt_labels
+                 WHERE receipt_batch_id = ? AND scanned_at IS NULL
+                 ORDER BY id LIMIT 5`,
+                [batch.id]
+            );
+            const codes = (expected.rows || expected).map(row => row.instance_code);
+            throw new Error(`Barcode “${value}” is not in this receipt. Scan one of the labels shown${codes.length ? ` (for example: ${codes.join(', ')})` : ''}.`);
         }
         return rows[0];
     });

@@ -398,6 +398,31 @@ async function getDirectReceiptBatch(batchId) {
   };
 }
 
+async function listPendingDirectReceiptBatches(user) {
+  const accessFilter = user?.role === 'admin'
+    ? ''
+    : `AND EXISTS (
+        SELECT 1 FROM site_assignments sa
+        JOIN sites assigned_site ON assigned_site.id = sa.site_id AND assigned_site.status = 'ACTIVE'
+        WHERE sa.site_id = b.site_id AND sa.user_id = ? AND sa.assigned_until IS NULL
+      )`;
+  const result = await db.query(
+    `SELECT b.id, b.site_id, b.reason, b.created_at, b.labels_printed_at,
+            s.code AS site_code, s.name AS site_name,
+            (SELECT COUNT(*) FROM inventory_receipt_labels l WHERE l.receipt_batch_id = b.id) AS label_count,
+            (SELECT COUNT(*) FROM inventory_receipt_labels l WHERE l.receipt_batch_id = b.id AND l.scanned_at IS NOT NULL) AS scanned_count,
+            (SELECT COUNT(DISTINCT l.item_master_id) FROM inventory_receipt_labels l WHERE l.receipt_batch_id = b.id) AS item_type_count
+     FROM inventory_receipt_batches b
+     JOIN sites s ON s.id = b.site_id
+     WHERE b.source_type = 'DIRECT' AND b.status = 'AWAITING_SCAN'
+       ${accessFilter}
+     ORDER BY b.created_at DESC
+     LIMIT 20`,
+    user?.role === 'admin' ? [] : [user.id]
+  );
+  return result.rows || result;
+}
+
 async function markDirectReceiptLabelsPrinted({ batchId, performedBy }) {
   const result = await db.query(
     `UPDATE inventory_receipt_batches
@@ -413,7 +438,7 @@ async function markDirectReceiptLabelsPrinted({ batchId, performedBy }) {
 }
 
 async function scanDirectReceiptBarcode({ batchId, barcode, performedBy }) {
-  const value = String(barcode || '').trim();
+  const value = String(barcode || '').replace(/\s+/g, '').toUpperCase();
   if (!value) throw new Error('Scan or enter a barcode.');
   return db.tx(async tx => {
     const batch = await tx.one(
@@ -427,7 +452,7 @@ async function scanDirectReceiptBarcode({ batchId, barcode, performedBy }) {
     const result = await tx.query(
       `UPDATE inventory_receipt_labels
        SET scanned_at = now(), scanned_by = ?
-       WHERE receipt_batch_id = ? AND barcode = ? AND scanned_at IS NULL
+       WHERE receipt_batch_id = ? AND UPPER(barcode) = ? AND scanned_at IS NULL
        RETURNING instance_code`,
       [performedBy, batch.id, value]
     );
@@ -435,11 +460,18 @@ async function scanDirectReceiptBarcode({ batchId, barcode, performedBy }) {
     if (!rows.length) {
       const exists = await tx.query(
         `SELECT id FROM inventory_receipt_labels
-         WHERE receipt_batch_id = ? AND barcode = ?`,
+         WHERE receipt_batch_id = ? AND UPPER(barcode) = ?`,
         [batch.id, value]
       );
       if ((exists.rows || exists).length) throw new Error('This barcode was already scanned.');
-      throw new Error('That barcode does not belong to this receipt.');
+      const expected = await tx.query(
+        `SELECT instance_code FROM inventory_receipt_labels
+         WHERE receipt_batch_id = ? AND scanned_at IS NULL
+         ORDER BY id LIMIT 5`,
+        [batch.id]
+      );
+      const codes = (expected.rows || expected).map(row => row.instance_code);
+      throw new Error(`Barcode “${value}” is not in this receipt. Scan one of the labels shown${codes.length ? ` (for example: ${codes.join(', ')})` : ''}.`);
     }
     return rows[0];
   });
@@ -739,6 +771,7 @@ module.exports = {
   receiveInstances,
   prepareDirectReceiptBatch,
   getDirectReceiptBatch,
+  listPendingDirectReceiptBatches,
   markDirectReceiptLabelsPrinted,
   scanDirectReceiptBarcode,
   completeDirectReceiptBatch,

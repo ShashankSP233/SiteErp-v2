@@ -63,6 +63,8 @@
     .receipt-controls a, .receipt-controls button { padding: 8px 14px; cursor: pointer; }
     .receipt-title { margin: 0 0 6px; }
     .receipt-status { margin: 8px 0; }
+    .receipt-alert { padding: 9px 12px; margin: 10px 0; border-radius: 5px; background: #eaf4ec; color: #245b31; }
+    .receipt-alert.error { background: #fdecec; color: #8a2525; }
 
 
     /*
@@ -385,10 +387,11 @@
       <h1 class="receipt-title"><%= batch.reference_number || `GRN ${batch.grn_number}` %> — Barcode check</h1>
       <div><%= batch.site_code %> — <%= batch.site_name %></div>
       <div class="receipt-status"><strong><%= batch.scannedCount %> / <%= batch.labelCount %> scanned</strong></div>
-      <% if (success) { %><p><%= success %></p><% } %>
-      <% if (error) { %><p><%= error %></p><% } %>
+      <% if (success) { %><div class="receipt-alert"><%= success %></div><% } %>
+      <% if (error) { %><div class="receipt-alert error"><%= error %></div><% } %>
       <% if (batch.status === 'AWAITING_SCAN' && batch.labelCount > batch.scannedCount) { %>
         <% if (batch.labels_printed_at) { %><p>Print was started. Scan each physical label to verify it.</p><% } else { %><p>Print the labels before scanning them.</p><% } %>
+        <p class="small">Scan the full instance barcode printed on the label below, such as <strong><%= batch.labels.find(label => !label.scanned_at)?.instance_code || '' %></strong>. The item code alone is not a unique instance barcode.</p>
         <form method="post" action="<%= scanAction %>">
           <input type="hidden" name="_csrf" value="<%= csrfToken %>">
           <input id="barcode-input" name="barcode" autocomplete="off" required placeholder="Scan barcode" autofocus <%= batch.labels_printed_at ? '' : 'disabled' %>>
@@ -491,8 +494,12 @@
 
 <script src="/vendor/jsbarcode/JsBarcode.all.min.js"></script>
 
-<script nonce="<%= cspNonce %>">
-  const receiptBackUrl = <%- JSON.stringify(isReceiptFlow ? backUrl : null) %>;
+<script
+  nonce="<%= cspNonce %>"
+  data-receipt-back-url="<%= isReceiptFlow ? backUrl : '' %>"
+>
+  const receiptBackUrl =
+    document.currentScript.dataset.receiptBackUrl || null;
   document.addEventListener('DOMContentLoaded', function () {
 
     // Generate every barcode.
@@ -552,7 +559,19 @@
     }
 
     const scannerInput = document.getElementById('barcode-input');
-    if (scannerInput && !scannerInput.disabled) scannerInput.focus();
+    if (scannerInput && !scannerInput.disabled) {
+      const focusScanner = function () {
+        scannerInput.focus({ preventScroll: true });
+      };
+
+      // The scan POST redirects back to this page with #scanner. Restore focus
+      // after the browser has completed navigation to the fragment.
+      window.addEventListener('load', function () {
+        window.setTimeout(focusScanner, 100);
+      }, { once: true });
+
+      focusScanner();
+    }
     if (new URLSearchParams(window.location.search).get('print') === '1') {
       window.addEventListener('load', function () { window.print(); });
     }

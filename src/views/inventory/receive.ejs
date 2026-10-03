@@ -13,6 +13,24 @@
 
 <% if (error) { %><div class="alert alert-danger" role="alert"><%= error %></div><% } %>
 
+<% if (Array.isArray(pendingReceipts) && pendingReceipts.length) { %>
+  <div class="card border-warning shadow-sm mb-4">
+    <div class="card-header bg-white py-3"><h2 class="h5 mb-0">Unfinished Add Stock receipts</h2></div>
+    <div class="list-group list-group-flush">
+      <% pendingReceipts.forEach(receipt => { %>
+        <div class="list-group-item d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 py-3">
+          <div>
+            <div class="fw-semibold">Receipt #<%= receipt.id %> · <%= receipt.site_code %> — <%= receipt.site_name %></div>
+            <div class="small text-muted"><%= receipt.item_type_count %> item type(s) · <%= receipt.scanned_count %> of <%= receipt.label_count %> labels scanned · Started <%= new Date(receipt.created_at).toLocaleString() %></div>
+            <div class="small text-muted">Its barcode numbers are reserved. Resume this receipt to continue scanning the same labels instead of creating another batch.</div>
+          </div>
+          <a href="/inventory/receive/<%= receipt.id %>/labels#scanner" class="btn btn-outline-primary flex-shrink-0">Resume receipt</a>
+        </div>
+      <% }) %>
+    </div>
+  </div>
+<% } %>
+
 <form method="POST" action="/inventory/receive" id="add-stock-form">
   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 

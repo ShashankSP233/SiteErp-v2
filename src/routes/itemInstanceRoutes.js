@@ -6,6 +6,7 @@ const siteRepo = require('../repositories/siteRepo');
 const {
   prepareDirectReceiptBatch,
   getDirectReceiptBatch,
+  listPendingDirectReceiptBatches,
   markDirectReceiptLabelsPrinted,
   scanDirectReceiptBarcode,
   completeDirectReceiptBatch,
@@ -126,12 +127,10 @@ router.get(
   requireInventoryManager,
   async (req, res, next) => {
     try {
-      const [
-        itemMasters,
-        assignments
-      ] = await Promise.all([
+      const [itemMasters, assignments, pendingReceipts] = await Promise.all([
         listItemMasters(),
-        getReceiveSites(req.session.user)
+        getReceiveSites(req.session.user),
+        listPendingDirectReceiptBatches(req.session.user)
       ]);
 
       res.render('inventory/receive', {
@@ -144,6 +143,7 @@ router.get(
         ),
 
         sites: assignments,
+        pendingReceipts,
 
         error: null,
 
@@ -215,6 +215,13 @@ router.post(
       if (!lines.length) throw new Error('Add at least one item and quantity.');
 
       const user = req.session.user;
+      const pendingReceipt = (await listPendingDirectReceiptBatches(user))
+        .find(receipt => Number(receipt.site_id) === Number(siteId));
+      if (pendingReceipt) {
+        req.session.error = `Receipt #${pendingReceipt.id} for this site is still waiting for barcode scans. Resume it before starting another receipt; its barcode numbers are already reserved.`;
+        return res.redirect(`/inventory/receive/${pendingReceipt.id}/labels#scanner`);
+      }
+
       const batch = await prepareDirectReceiptBatch({
         lines,
         siteId: Number(siteId),
@@ -234,14 +241,12 @@ router.post(
 
       try {
 
-        const [
-          itemMasters,
-          assignments
-        ] = await Promise.all([
+        const [itemMasters, assignments, pendingReceipts] = await Promise.all([
           listItemMasters(),
           getReceiveSites(
             req.session.user
-          )
+          ),
+          listPendingDirectReceiptBatches(req.session.user)
         ]);
 
 
@@ -258,6 +263,7 @@ router.post(
               ),
 
             sites: assignments,
+            pendingReceipts,
 
             error: err.message,
 
