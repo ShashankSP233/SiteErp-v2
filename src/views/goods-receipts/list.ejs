@@ -51,7 +51,7 @@
                                 All Statuses
                             </option>
 
-                            <% ['DRAFT', 'RECEIVED', 'CANCELLED'].forEach(status => { %>
+                            <% ['DRAFT', 'AWAITING_BARCODE_SCAN', 'RECEIVED', 'CANCELLED'].forEach(status => { %>
 
                                 <option
                                     value="<%= status %>"
@@ -239,6 +239,12 @@
 
                                             <span class="badge bg-success">
                                                 Received
+                                            </span>
+
+                                        <% } else if (grn.status === 'AWAITING_BARCODE_SCAN') { %>
+
+                                            <span class="badge bg-warning text-dark">
+                                                Awaiting Barcode Scan
                                             </span>
 
                                         <% } else { %>

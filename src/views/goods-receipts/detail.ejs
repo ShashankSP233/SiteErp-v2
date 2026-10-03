@@ -304,6 +304,10 @@
                                 </th>
 
                                 <th>
+                                    Condition
+                                </th>
+
+                                <th>
                                     Physical Unit
                                 </th>
 
@@ -352,6 +356,10 @@
                                             <%= line.item_name %>
                                         </div>
 
+                                        <% if (line.brand) { %>
+                                            <div class="small text-muted">Brand: <%= line.brand %></div>
+                                        <% } %>
+
                                         <% if (
                                             line.item_description
                                         ) { %>
@@ -371,6 +379,13 @@
                                             <%= line.received_quantity %>
                                         </strong>
 
+                                    </td>
+
+
+                                    <td>
+                                        <span class="badge <%= line.item_condition === 'GOOD' ? 'text-bg-success' : line.item_condition === 'DAMAGED' ? 'text-bg-warning' : 'text-bg-danger' %>">
+                                            <%= line.item_condition || 'GOOD' %>
+                                        </span>
                                     </td>
 
 
@@ -428,14 +443,16 @@
 
                                             =
 
-                                            <%= line.received_quantity %>
-                                            physical instance(s)
+                                            <% if (['DEFECTIVE', 'REJECTED'].includes(line.item_condition)) { %>
+                                                returned to seller; no inventory instance created
+                                            <% } else { %>
+                                                <%= line.received_quantity %> physical instance(s)
 
-                                            ×
+                                                ×
 
-                                            <%= line.instance_quantity %>
-                                            <%= line.instance_quantity_unit %>
-                                            each
+                                                <%= line.instance_quantity %>
+                                                <%= line.instance_quantity_unit %> each
+                                            <% } %>
 
                                         </div>
 
@@ -487,9 +504,7 @@
 
                     This GRN is still a draft.
 
-                    Inventory has not been added yet.
-
-                    Review the receipt carefully before confirming it.
+                    Review the receipt, then prepare its barcode labels.
 
                 </div>
 
@@ -507,10 +522,10 @@
 
                     <form
                         method="POST"
-                        action="/goods-receipts/<%= grn.id %>/receive"
+                        action="/goods-receipts/<%= grn.id %>/prepare-labels"
                         class="d-inline"
                         onsubmit="return confirm(
-                            'Confirm this Goods Receipt? This will create physical inventory instances and cannot be undone.'
+                            'Prepare barcode labels for all accepted items? Defective and rejected items will be excluded from inventory.'
                         );"
                     >
 
@@ -524,7 +539,7 @@
                             type="submit"
                             class="btn btn-success"
                         >
-                            Confirm Receipt
+                            Prepare Barcode Labels
                         </button>
 
                     </form>
@@ -558,6 +573,40 @@
 
             </div>
 
+        </div>
+
+    <% } %>
+
+
+    <% if (
+        currentUser &&
+        ['admin', 'manager', 'operator'].includes(currentUser.role) &&
+        grn.status === 'AWAITING_BARCODE_SCAN' &&
+        barcodeBatch
+    ) { %>
+
+        <div class="card shadow-sm">
+            <div class="card-header fw-semibold">Print and verify barcodes</div>
+            <div class="card-body">
+                <p class="mb-3">
+                    Scanned <strong><%= barcodeBatch.scannedCount %> of <%= barcodeBatch.labelCount %></strong> required item barcodes.
+                    Defective and rejected quantities do not require labels.
+                </p>
+                <div class="d-flex flex-wrap gap-2">
+                    <a class="btn btn-primary" href="/goods-receipts/<%= grn.id %>/labels">Open Print and Scan Page</a>
+                    <form method="POST" action="/goods-receipts/<%= grn.id %>/receive" class="d-inline">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <button
+                            type="submit"
+                            class="btn btn-success"
+                            <%= barcodeBatch.scannedCount !== barcodeBatch.labelCount ? 'disabled' : '' %>
+                            onclick="return confirm('Complete this GRN and add the scanned items to inventory?');"
+                        >
+                            Complete GRN
+                        </button>
+                    </form>
+                </div>
+            </div>
         </div>
 
     <% } %>

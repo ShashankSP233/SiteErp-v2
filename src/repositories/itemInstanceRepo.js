@@ -302,6 +302,207 @@ async function receiveInstances({
     });
   });
 }
+
+/** Stage direct-receive labels without adding stock yet. */
+async function prepareDirectReceiptBatch({
+  lines,
+  siteId,
+  performedBy,
+  reason = null,
+}) {
+  if (!Array.isArray(lines) || !lines.length) throw new Error('Add at least one item to receive.');
+  if (lines.length > 100) throw new Error('A single stock receipt can contain up to 100 item rows.');
+
+  return db.tx(async tx => {
+    const site = await tx.one(
+      `SELECT id, status FROM sites WHERE id = ? FOR UPDATE`,
+      [siteId]
+    );
+    if (site.status !== 'ACTIVE') throw new Error('Cannot receive inventory into an inactive site.');
+
+    const batch = await tx.one(
+      `INSERT INTO inventory_receipt_batches
+         (source_type, site_id, status, reason, created_by)
+       VALUES ('DIRECT', ?, 'AWAITING_SCAN', ?, ?)
+       RETURNING id`,
+      [siteId, reason || null, performedBy]
+    );
+    let totalInstances = 0;
+    const itemCodes = [];
+    for (const line of lines) {
+      const itemMasterId = Number(line.itemMasterId);
+      const count = Number(line.instanceCount);
+      if (!Number.isInteger(itemMasterId) || itemMasterId <= 0) throw new Error('Each stock row must have an item selected.');
+      if (!Number.isInteger(count) || count <= 0) throw new Error('Each stock row must have a positive whole-number quantity.');
+      if (line.serialNumber && count !== 1) throw new Error('A serial number can only be entered for a row with one physical instance.');
+
+      const item = await tx.one(
+        `SELECT id, item_code, name, status, unit, instance_quantity,
+                instance_quantity_unit, requires_instance_tracking
+         FROM item_masters WHERE id = ? FOR UPDATE`,
+        [itemMasterId]
+      );
+      if (!item || item.status !== 'ACTIVE' || !item.requires_instance_tracking) {
+        throw new Error('Select an active, instance-tracked item for every row.');
+      }
+      if (!Number.isFinite(Number(item.instance_quantity)) || Number(item.instance_quantity) <= 0 || !String(item.instance_quantity_unit || '').trim()) {
+        throw new Error(`Item ${item.item_code} has invalid quantity-per-instance settings.`);
+      }
+
+      for (let i = 0; i < count; i += 1) {
+        const number = await allocateInstanceNumber(tx, item.id);
+        const code = buildInstanceCode(item.item_code, number);
+        await tx.query(
+          `INSERT INTO inventory_receipt_labels
+             (receipt_batch_id, item_master_id, item_condition, instance_code,
+              brand, barcode, batch_number, serial_number, manufacture_date, expiry_date)
+           VALUES (?, ?, 'GOOD', ?, ?, ?, ?, ?, ?, ?)`,
+          [batch.id, item.id, code, String(line.brand || '').trim() || null, code,
+           String(line.batchNumber || '').trim() || null,
+           String(line.serialNumber || '').trim() || null,
+           line.manufactureDate || null, line.expiryDate || null]
+        );
+      }
+      totalInstances += count;
+      itemCodes.push(item.item_code);
+    }
+    return { batchId: batch.id, itemCodes: [...new Set(itemCodes)], totalInstances };
+  });
+}
+
+async function getDirectReceiptBatch(batchId) {
+  const batch = await db.one(
+    `SELECT b.id, b.status, b.site_id, b.reason, b.labels_printed_at,
+            s.code AS site_code, s.name AS site_name
+     FROM inventory_receipt_batches b
+     JOIN sites s ON s.id = b.site_id
+     WHERE b.id = ? AND b.source_type = 'DIRECT'`,
+    [batchId]
+  );
+  const result = await db.query(
+    `SELECT l.id, l.instance_code, l.barcode, l.item_condition, l.brand,
+            l.scanned_at, im.item_code, im.name AS item_name,
+            im.instance_quantity, im.instance_quantity_unit
+     FROM inventory_receipt_labels l
+     JOIN item_masters im ON im.id = l.item_master_id
+     WHERE l.receipt_batch_id = ? ORDER BY l.id`,
+    [batch.id]
+  );
+  const labels = result.rows || result;
+  return {
+    ...batch,
+    reference_number: `Direct receipt ${batch.id}`,
+    labels,
+    scannedCount: labels.filter(label => label.scanned_at).length,
+    labelCount: labels.length
+  };
+}
+
+async function markDirectReceiptLabelsPrinted({ batchId, performedBy }) {
+  const result = await db.query(
+    `UPDATE inventory_receipt_batches
+     SET labels_printed_at = COALESCE(labels_printed_at, now()),
+         labels_printed_by = COALESCE(labels_printed_by, ?), updated_at = now()
+     WHERE id = ? AND source_type = 'DIRECT'
+       AND status IN ('AWAITING_SCAN', 'COMPLETED')
+     RETURNING id`,
+    [performedBy, batchId]
+  );
+  const rows = result.rows || result;
+  if (!rows.length) throw new Error('Direct receipt label batch was not found or is not ready to print.');
+}
+
+async function scanDirectReceiptBarcode({ batchId, barcode, performedBy }) {
+  const value = String(barcode || '').trim();
+  if (!value) throw new Error('Scan or enter a barcode.');
+  return db.tx(async tx => {
+    const batch = await tx.one(
+      `SELECT id, status, labels_printed_at
+       FROM inventory_receipt_batches
+       WHERE id = ? AND source_type = 'DIRECT' FOR UPDATE`,
+      [batchId]
+    );
+    if (batch.status !== 'AWAITING_SCAN') throw new Error('This receipt batch is no longer open.');
+    if (!batch.labels_printed_at) throw new Error('Start printing the barcode labels before scanning them.');
+    const result = await tx.query(
+      `UPDATE inventory_receipt_labels
+       SET scanned_at = now(), scanned_by = ?
+       WHERE receipt_batch_id = ? AND barcode = ? AND scanned_at IS NULL
+       RETURNING instance_code`,
+      [performedBy, batch.id, value]
+    );
+    const rows = result.rows || result;
+    if (!rows.length) {
+      const exists = await tx.query(
+        `SELECT id FROM inventory_receipt_labels
+         WHERE receipt_batch_id = ? AND barcode = ?`,
+        [batch.id, value]
+      );
+      if ((exists.rows || exists).length) throw new Error('This barcode was already scanned.');
+      throw new Error('That barcode does not belong to this receipt.');
+    }
+    return rows[0];
+  });
+}
+
+async function completeDirectReceiptBatch({ batchId, performedBy }) {
+  return db.tx(async tx => {
+    const batch = await tx.one(
+      `SELECT b.id, b.site_id, b.status, b.reason, b.labels_printed_at
+       FROM inventory_receipt_batches b
+       WHERE b.id = ? AND b.source_type = 'DIRECT' FOR UPDATE`,
+      [batchId]
+    );
+    if (batch.status !== 'AWAITING_SCAN') throw new Error('This receipt batch cannot be completed.');
+    if (!batch.labels_printed_at) throw new Error('Print the labels before completing this receipt.');
+    const counts = await tx.one(
+      `SELECT COUNT(*) AS label_count, COUNT(scanned_at) AS scanned_count
+       FROM inventory_receipt_labels WHERE receipt_batch_id = ?`,
+      [batch.id]
+    );
+    if (Number(counts.label_count) !== Number(counts.scanned_count)) {
+      throw new Error(`Scan all barcodes before adding stock (${counts.scanned_count}/${counts.label_count}).`);
+    }
+    const labels = await tx.query(
+      `SELECT l.*, im.instance_quantity, im.instance_quantity_unit
+       FROM inventory_receipt_labels l
+       JOIN item_masters im ON im.id = l.item_master_id
+       WHERE l.receipt_batch_id = ? ORDER BY l.id FOR UPDATE OF l`,
+      [batch.id]
+    );
+    const instances = [];
+    for (const label of (labels.rows || labels)) {
+      const instance = await tx.one(
+        `INSERT INTO item_instances (
+           item_master_id, instance_code, barcode, brand, original_quantity,
+           current_quantity, unit, site_id, lifecycle_status, condition,
+           batch_number, serial_number, manufacture_date, expiry_date
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 'GOOD', ?, ?, ?, ?)
+         RETURNING *`,
+        [label.item_master_id, label.instance_code, label.barcode, label.brand,
+         label.instance_quantity, label.instance_quantity,
+         label.instance_quantity_unit, batch.site_id, label.batch_number,
+         label.serial_number, label.manufacture_date, label.expiry_date]
+      );
+      await tx.query(
+        `INSERT INTO inventory_movements (
+           instance_id, movement_type, quantity, from_site_id, to_site_id,
+           reference_type, reference_id, reason, performed_by
+         ) VALUES (?, 'RECEIVE', ?, NULL, ?, 'DIRECT_RECEIVE', ?, ?, ?)`,
+        [instance.id, instance.original_quantity, batch.site_id,
+         instance.instance_code, batch.reason || 'Direct inventory receipt', performedBy]
+      );
+      instances.push(instance);
+    }
+    await tx.query(
+      `UPDATE inventory_receipt_batches
+       SET status = 'COMPLETED', completed_by = ?, completed_at = now(), updated_at = now()
+       WHERE id = ?`,
+      [performedBy, batch.id]
+    );
+    return instances;
+  });
+}
 /**
  * List inventory instances accessible to a user.
  *
@@ -337,6 +538,7 @@ async function listInstancesForUser(user) {
          ii.condition,
          ii.batch_number,
          ii.serial_number,
+         ii.brand,
          ii.manufacture_date,
          ii.expiry_date,
          ii.created_at,
@@ -383,6 +585,7 @@ async function listInstancesForUser(user) {
        ii.condition,
        ii.batch_number,
        ii.serial_number,
+       ii.brand,
        ii.manufacture_date,
        ii.expiry_date,
        ii.created_at,
@@ -423,6 +626,9 @@ async function findInstanceForUser(user, code) {
       ii.condition,
       ii.batch_number,
       ii.serial_number,
+      ii.brand,
+      ii.manufacture_date,
+      ii.expiry_date,
 
       im.item_code,
       im.name AS item_name,
@@ -484,6 +690,46 @@ async function findInstanceForUser(user, code) {
   );
 }
 
+async function updateInstanceDetails({ user, instanceId, condition, lifecycleStatus, brand, batchNumber, serialNumber, manufactureDate, expiryDate }) {
+  const normalizedCondition = String(condition || '').toUpperCase();
+  let normalizedStatus = String(lifecycleStatus || '').toUpperCase();
+  if (!['GOOD', 'DAMAGED'].includes(normalizedCondition)) {
+    throw new Error('Condition must be Good or Damaged.');
+  }
+  if (!['ACTIVE', 'QUARANTINED'].includes(normalizedStatus)) {
+    throw new Error('Status must be Active or Quarantined.');
+  }
+  if (normalizedCondition === 'DAMAGED') normalizedStatus = 'QUARANTINED';
+
+  const current = await db.one(
+    `SELECT id, lifecycle_status FROM item_instances WHERE id = ?`,
+    [instanceId]
+  );
+  if (!current) throw new Error('Inventory instance not found.');
+  if (!['ACTIVE', 'QUARANTINED'].includes(current.lifecycle_status)) {
+    throw new Error('Condition and traceability details can only be changed for active or quarantined instances.');
+  }
+
+  const result = await db.query(
+    `UPDATE item_instances
+     SET condition = ?, lifecycle_status = ?, brand = ?, batch_number = ?,
+         serial_number = ?, manufacture_date = ?, expiry_date = ?, updated_at = now()
+     WHERE id = ?
+       AND (? = 'admin' OR EXISTS (
+         SELECT 1 FROM site_assignments sa
+         WHERE sa.site_id = item_instances.site_id
+           AND sa.user_id = ? AND sa.assigned_until IS NULL
+       ))
+     RETURNING id`,
+    [normalizedCondition, normalizedStatus, String(brand || '').trim() || null,
+      String(batchNumber || '').trim() || null, String(serialNumber || '').trim() || null,
+      manufactureDate || null, expiryDate || null, instanceId, user.role, user.id]
+  );
+  const rows = result.rows || result;
+  if (!rows.length) throw new Error('You do not have access to update this inventory instance.');
+  return rows[0];
+}
+
 
 module.exports = {
   getItemMasterForInstance,
@@ -491,6 +737,12 @@ module.exports = {
   buildInstanceCode,
   receiveInstancesWithinTransaction,
   receiveInstances,
+  prepareDirectReceiptBatch,
+  getDirectReceiptBatch,
+  markDirectReceiptLabelsPrinted,
+  scanDirectReceiptBarcode,
+  completeDirectReceiptBatch,
   listInstancesForUser,
   findInstanceForUser,
+  updateInstanceDetails,
 };

@@ -3,6 +3,7 @@ const itemInstanceRepo = require('./itemInstanceRepo');
 
 const GRN_STATUSES = [
     'DRAFT',
+    'AWAITING_BARCODE_SCAN',
     'RECEIVED',
     'CANCELLED'
 ];
@@ -357,6 +358,12 @@ async function getGoodsReceiptById(id) {
             grl.goods_receipt_id,
             grl.purchase_order_line_id,
             grl.received_quantity,
+            grl.item_condition,
+            grl.brand,
+            grl.batch_number,
+            grl.serial_number,
+            grl.manufacture_date,
+            grl.expiry_date,
             grl.unit,
             grl.notes,
 
@@ -474,6 +481,7 @@ async function getReceivedQuantityForPurchaseOrderLine(
 
         WHERE grl.purchase_order_line_id = ?
           AND gr.status = 'RECEIVED'
+          AND grl.item_condition IN ('GOOD', 'DAMAGED')
         `,
         [purchaseOrderLineId]
     );
@@ -541,6 +549,7 @@ async function getReceivablePurchaseOrderLines(
 
             WHERE gr.purchase_order_id = ?
               AND gr.status = 'RECEIVED'
+              AND grl.item_condition IN ('GOOD', 'DAMAGED')
 
             GROUP BY
                 grl.purchase_order_line_id
@@ -760,6 +769,21 @@ async function createGoodsReceipt({
                 );
             }
 
+            const itemCondition = String(rawLine.itemCondition || 'GOOD').toUpperCase();
+            if (!['GOOD', 'DAMAGED', 'DEFECTIVE', 'REJECTED'].includes(itemCondition)) {
+                throw new Error('Select a valid item condition.');
+            }
+            const traceability = {
+                brand: String(rawLine.brand || '').trim() || null,
+                batchNumber: String(rawLine.batchNumber || '').trim() || null,
+                serialNumber: String(rawLine.serialNumber || '').trim() || null,
+                manufactureDate: normalizeDateOnly(rawLine.manufactureDate),
+                expiryDate: normalizeDateOnly(rawLine.expiryDate)
+            };
+            if (traceability.serialNumber && quantity !== 1) {
+                throw new Error('Enter a serial number only when this receipt line contains exactly one physical item.');
+            }
+
             /*
              * Lock the PO line so another transaction
              * cannot change its receiving state while
@@ -803,7 +827,10 @@ async function createGoodsReceipt({
                 ) -
                 alreadyReceived;
 
-            if (quantity > remaining) {
+            if (
+                ['GOOD', 'DAMAGED'].includes(itemCondition) &&
+                quantity > remaining
+            ) {
                 throw new Error(
                     `Receipt quantity for ${poLine.item_code} cannot exceed the remaining Purchase Order quantity. Remaining: ${remaining} ${poLine.unit}.`
                 );
@@ -817,6 +844,18 @@ async function createGoodsReceipt({
 
                 receivedQuantity:
                     quantity,
+
+                itemCondition,
+
+                brand: traceability.brand,
+
+                batchNumber: traceability.batchNumber,
+
+                serialNumber: traceability.serialNumber,
+
+                manufactureDate: traceability.manufactureDate,
+
+                expiryDate: traceability.expiryDate,
 
                 unit:
                     poLine.unit,
@@ -961,10 +1000,22 @@ async function createGoodsReceipt({
                     goods_receipt_id,
                     purchase_order_line_id,
                     received_quantity,
+                    item_condition,
+                    brand,
+                    batch_number,
+                    serial_number,
+                    manufacture_date,
+                    expiry_date,
                     unit,
                     notes
                 )
                 VALUES (
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
                     ?,
                     ?,
                     ?,
@@ -978,6 +1029,18 @@ async function createGoodsReceipt({
                     line.purchaseOrderLineId,
 
                     line.receivedQuantity,
+
+                    line.itemCondition,
+
+                    line.brand,
+
+                    line.batchNumber,
+
+                    line.serialNumber,
+
+                    line.manufactureDate,
+
+                    line.expiryDate,
 
                     line.unit,
 
@@ -1082,12 +1145,44 @@ async function addGoodsReceiptLine({
     goodsReceiptId,
     purchaseOrderLineId,
     receivedQuantity,
+    itemCondition = 'GOOD',
+    brand = null,
+    batchNumber = null,
+    serialNumber = null,
+    manufactureDate = null,
+    expiryDate = null,
     notes
 }) {
+    const allowedConditions = [
+        'GOOD',
+        'DAMAGED',
+        'DEFECTIVE',
+        'REJECTED'
+    ];
+
+    const condition =
+        String(itemCondition).toUpperCase();
+
+    const traceability = {
+        brand: String(brand || '').trim() || null,
+        batchNumber: String(batchNumber || '').trim() || null,
+        serialNumber: String(serialNumber || '').trim() || null,
+        manufactureDate: manufactureDate || null,
+        expiryDate: expiryDate || null
+    };
+
+    if (!allowedConditions.includes(condition)) {
+        throw new Error('Select a valid item condition.');
+    }
+
     const quantity =
         normalizeQuantity(
             receivedQuantity
         );
+
+    if (traceability.serialNumber && quantity !== 1) {
+        throw new Error('Enter a serial number only when this receipt line contains exactly one physical item.');
+    }
 
     if (!Number.isInteger(quantity)) {
         throw new Error(
@@ -1187,15 +1282,18 @@ async function addGoodsReceiptLine({
             `
             SELECT
                 id,
-                received_quantity
+                received_quantity,
+                item_condition
             FROM goods_receipt_lines
             WHERE goods_receipt_id = ?
               AND purchase_order_line_id = ?
+              AND item_condition = ?
             LIMIT 1
             `,
             [
                 goodsReceiptId,
-                purchaseOrderLineId
+                purchaseOrderLineId,
+                condition
             ]
         );
 
@@ -1206,29 +1304,39 @@ async function addGoodsReceiptLine({
     const existingLine =
         existingRows[0] || null;
 
+    const otherDraftResult =
+        await db.query(
+            `
+            SELECT COALESCE(SUM(received_quantity), 0) AS quantity
+            FROM goods_receipt_lines
+            WHERE goods_receipt_id = ?
+              AND purchase_order_line_id = ?
+              AND id <> COALESCE(?, -1)
+            `,
+            [
+                goodsReceiptId,
+                purchaseOrderLineId,
+                existingLine?.id || null
+            ]
+        );
+
+    const otherDraftRows =
+        otherDraftResult.rows || otherDraftResult;
+
+    const otherDraftQuantity =
+        Number(otherDraftRows[0]?.quantity || 0);
+
     const alreadyReceived =
         await getReceivedQuantityForPurchaseOrderLine(
             purchaseOrderLineId
         );
 
-    /*
-     * If this draft already contains a quantity for this PO
-     * line, that quantity is not part of finalized receipts,
-     * so it must not be double-counted against availability.
-     */
-    const existingDraftQuantity =
-        existingLine
-            ? Number(
-                existingLine.received_quantity || 0
-            )
-            : 0;
-
     const availableForDraft =
         Number(
             poLine.ordered_quantity
         ) -
-        alreadyReceived +
-        existingDraftQuantity;
+        alreadyReceived -
+        otherDraftQuantity;
 
     if (
         quantity >
@@ -1247,6 +1355,12 @@ async function addGoodsReceiptLine({
 
                 SET
                     received_quantity = ?,
+                    item_condition = ?,
+                    brand = ?,
+                    batch_number = ?,
+                    serial_number = ?,
+                    manufacture_date = ?,
+                    expiry_date = ?,
                     notes = ?,
                     updated_at = now()
 
@@ -1257,11 +1371,29 @@ async function addGoodsReceiptLine({
                     goods_receipt_id,
                     purchase_order_line_id,
                     received_quantity,
+                    item_condition,
+                    brand,
+                    batch_number,
+                    serial_number,
+                    manufacture_date,
+                    expiry_date,
                     unit,
                     notes
                 `,
                 [
                     quantity,
+
+                    condition,
+
+                    traceability.brand,
+
+                    traceability.batchNumber,
+
+                    traceability.serialNumber,
+
+                    traceability.manufactureDate,
+
+                    traceability.expiryDate,
 
                     String(
                         notes || ''
@@ -1285,10 +1417,22 @@ async function addGoodsReceiptLine({
                 goods_receipt_id,
                 purchase_order_line_id,
                 received_quantity,
+                item_condition,
+                brand,
+                batch_number,
+                serial_number,
+                manufacture_date,
+                expiry_date,
                 unit,
                 notes
             )
             VALUES (
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
                 ?,
                 ?,
                 ?,
@@ -1301,6 +1445,12 @@ async function addGoodsReceiptLine({
                 goods_receipt_id,
                 purchase_order_line_id,
                 received_quantity,
+                item_condition,
+                brand,
+                batch_number,
+                serial_number,
+                manufacture_date,
+                expiry_date,
                 unit,
                 notes
             `,
@@ -1310,6 +1460,18 @@ async function addGoodsReceiptLine({
                 purchaseOrderLineId,
 
                 quantity,
+
+                condition,
+
+                traceability.brand,
+
+                traceability.batchNumber,
+
+                traceability.serialNumber,
+
+                traceability.manufactureDate,
+
+                traceability.expiryDate,
 
                 poLine.unit,
 
@@ -1388,6 +1550,228 @@ async function deleteGoodsReceiptLine(
  *
  * If anything fails, the entire transaction rolls back.
  */
+async function prepareGoodsReceiptLabels({
+    goodsReceiptId,
+    performedBy,
+    userRole
+}) {
+    return db.tx(async tx => {
+        const grnResult = await tx.query(
+            `SELECT id, grn_number, purchase_order_id, site_id, status
+             FROM goods_receipts
+             WHERE id = ?
+             FOR UPDATE`,
+            [goodsReceiptId]
+        );
+        const grn = (grnResult.rows || grnResult)[0];
+        if (!grn) throw new Error('Goods Receipt not found.');
+        if (grn.status !== 'DRAFT') {
+            throw new Error('Only a draft Goods Receipt can prepare barcode labels.');
+        }
+
+        if (userRole !== 'admin') {
+            const access = await tx.query(
+                `SELECT 1
+                 FROM site_assignments
+                 WHERE user_id = ? AND site_id = ? AND assigned_until IS NULL
+                 LIMIT 1`,
+                [performedBy, grn.site_id]
+            );
+            if (!(access.rows || access).length) {
+                throw new Error('You do not have permission to receive at this site.');
+            }
+        }
+
+        const site = await tx.one(
+            `SELECT status FROM sites WHERE id = ? FOR UPDATE`,
+            [grn.site_id]
+        );
+        if (site.status !== 'ACTIVE') throw new Error('The receiving site is inactive.');
+
+        const purchaseOrder = await tx.one(
+            `SELECT status FROM purchase_orders WHERE id = ? FOR UPDATE`,
+            [grn.purchase_order_id]
+        );
+        if (['CANCELLED', 'COMPLETED'].includes(String(purchaseOrder.status).toUpperCase())) {
+            throw new Error(`Purchase Order cannot receive goods in its current status (${purchaseOrder.status}).`);
+        }
+
+        const linesResult = await tx.query(
+            `SELECT grl.id, grl.purchase_order_line_id, grl.received_quantity,
+                    grl.unit, grl.item_condition, grl.brand, grl.batch_number,
+                    grl.serial_number, grl.manufacture_date, grl.expiry_date,
+                    pol.item_master_id,
+                    pol.ordered_quantity, im.item_code, im.status AS item_status,
+                    im.instance_quantity, im.instance_quantity_unit,
+                    im.requires_instance_tracking, im.unit AS item_unit
+             FROM goods_receipt_lines grl
+             JOIN purchase_order_lines pol ON pol.id = grl.purchase_order_line_id
+             JOIN item_masters im ON im.id = pol.item_master_id
+             WHERE grl.goods_receipt_id = ?
+             ORDER BY grl.id
+             FOR UPDATE OF grl, pol`,
+            [goodsReceiptId]
+        );
+        const lines = linesResult.rows || linesResult;
+        if (!lines.length) throw new Error('This Goods Receipt has no receipt lines.');
+
+        const acceptedByPoLine = new Map();
+        for (const line of lines) {
+            if (!['GOOD', 'DAMAGED', 'DEFECTIVE', 'REJECTED'].includes(line.item_condition)) {
+                throw new Error(`Invalid condition for ${line.item_code}.`);
+            }
+            const count = Number(line.received_quantity);
+            if (!Number.isInteger(count) || count < 1) {
+                throw new Error(`Receipt quantity for ${line.item_code} must be a positive whole number.`);
+            }
+            if (['DEFECTIVE', 'REJECTED'].includes(line.item_condition)) continue;
+            if (line.item_status !== 'ACTIVE' || !line.requires_instance_tracking) {
+                throw new Error(`Item ${line.item_code} must be active and instance tracked.`);
+            }
+            if (!Number.isFinite(Number(line.instance_quantity)) || Number(line.instance_quantity) <= 0 || !String(line.instance_quantity_unit || '').trim()) {
+                throw new Error(`Item ${line.item_code} has invalid quantity-per-instance settings.`);
+            }
+            if (String(line.unit).trim().toLowerCase() !== String(line.item_unit).trim().toLowerCase()) {
+                throw new Error(`Unit mismatch for ${line.item_code}.`);
+            }
+            acceptedByPoLine.set(
+                String(line.purchase_order_line_id),
+                (acceptedByPoLine.get(String(line.purchase_order_line_id)) || 0) + count
+            );
+        }
+
+        for (const [poLineId, quantity] of acceptedByPoLine) {
+            const poLine = lines.find(line => String(line.purchase_order_line_id) === poLineId);
+            const prior = await getReceivedQuantityForPurchaseOrderLine(poLineId, tx);
+            if (quantity + prior > Number(poLine.ordered_quantity)) {
+                throw new Error(`Accepted quantity for ${poLine.item_code} exceeds the remaining PO quantity.`);
+            }
+        }
+
+        const batch = await tx.one(
+            `INSERT INTO inventory_receipt_batches
+                (source_type, goods_receipt_id, site_id, status, created_by)
+             VALUES ('GRN', ?, ?, 'AWAITING_SCAN', ?)
+             RETURNING id`,
+            [grn.id, grn.site_id, performedBy]
+        );
+
+        for (const line of lines) {
+            if (!['GOOD', 'DAMAGED'].includes(line.item_condition)) continue;
+            for (let i = 0; i < Number(line.received_quantity); i += 1) {
+                const number = await itemInstanceRepo.allocateInstanceNumber(tx, line.item_master_id);
+                const code = itemInstanceRepo.buildInstanceCode(line.item_code, number);
+                await tx.query(
+                    `INSERT INTO inventory_receipt_labels
+                        (receipt_batch_id, goods_receipt_line_id, item_master_id,
+                         item_condition, instance_code, barcode, brand,
+                         batch_number, serial_number, manufacture_date, expiry_date)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [batch.id, line.id, line.item_master_id, line.item_condition,
+                     code, code, line.brand, line.batch_number, line.serial_number,
+                     line.manufacture_date, line.expiry_date]
+                );
+            }
+        }
+
+        await tx.query(
+            `UPDATE goods_receipts
+             SET status = 'AWAITING_BARCODE_SCAN', updated_at = now()
+             WHERE id = ? AND status = 'DRAFT'`,
+            [grn.id]
+        );
+        return { batchId: batch.id, grnNumber: grn.grn_number };
+    });
+}
+
+async function getGoodsReceiptLabelBatch(goodsReceiptId) {
+    const batch = await db.one(
+        `SELECT b.id, b.status, b.site_id, b.labels_printed_at,
+                gr.id AS grn_id, gr.grn_number,
+                gr.status AS grn_status, s.code AS site_code, s.name AS site_name
+         FROM inventory_receipt_batches b
+         JOIN goods_receipts gr ON gr.id = b.goods_receipt_id
+         JOIN sites s ON s.id = b.site_id
+         WHERE gr.id = ? AND b.source_type = 'GRN'
+         LIMIT 1`,
+        [goodsReceiptId]
+    );
+    const result = await db.query(
+        `SELECT l.id, l.instance_code, l.barcode, l.item_condition, l.brand,
+                l.batch_number, l.serial_number,
+                l.scanned_at, im.item_code, im.name AS item_name,
+                im.instance_quantity, im.instance_quantity_unit
+         FROM inventory_receipt_labels l
+         JOIN item_masters im ON im.id = l.item_master_id
+         WHERE l.receipt_batch_id = ?
+         ORDER BY l.id`,
+        [batch.id]
+    );
+    const labels = result.rows || result;
+    return {
+        ...batch,
+        labels,
+        scannedCount: labels.filter(label => label.scanned_at).length,
+        labelCount: labels.length
+    };
+}
+
+async function markGoodsReceiptLabelsPrinted({ goodsReceiptId, performedBy }) {
+    return db.tx(async tx => {
+        const result = await tx.query(
+            `UPDATE inventory_receipt_batches b
+             SET labels_printed_at = COALESCE(labels_printed_at, now()),
+                 labels_printed_by = COALESCE(labels_printed_by, ?),
+                 updated_at = now()
+             FROM goods_receipts gr
+             WHERE b.goods_receipt_id = gr.id
+               AND gr.id = ?
+               AND b.source_type = 'GRN'
+               AND b.status IN ('AWAITING_SCAN', 'COMPLETED')
+             RETURNING b.id`,
+            [performedBy, goodsReceiptId]
+        );
+        const rows = result.rows || result;
+        if (!rows.length) throw new Error('Barcode batch was not found or is not ready to print.');
+        return rows[0];
+    });
+}
+
+async function scanGoodsReceiptBarcode({ goodsReceiptId, barcode, performedBy }) {
+    const value = String(barcode || '').trim();
+    if (!value) throw new Error('Scan or enter a barcode.');
+    return db.tx(async tx => {
+        const batch = await tx.one(
+            `SELECT b.id, b.status, b.labels_printed_at
+             FROM inventory_receipt_batches b
+             JOIN goods_receipts gr ON gr.id = b.goods_receipt_id
+             WHERE gr.id = ? AND b.source_type = 'GRN'
+             FOR UPDATE OF b`,
+            [goodsReceiptId]
+        );
+        if (batch.status !== 'AWAITING_SCAN') throw new Error('This barcode batch is no longer open.');
+        if (!batch.labels_printed_at) throw new Error('Start printing the barcode labels before scanning them.');
+        const result = await tx.query(
+            `UPDATE inventory_receipt_labels
+             SET scanned_at = now(), scanned_by = ?
+             WHERE receipt_batch_id = ? AND barcode = ? AND scanned_at IS NULL
+             RETURNING instance_code`,
+            [performedBy, batch.id, value]
+        );
+        const rows = result.rows || result;
+        if (!rows.length) {
+            const exists = await tx.query(
+                `SELECT scanned_at FROM inventory_receipt_labels
+                 WHERE receipt_batch_id = ? AND barcode = ?`,
+                [batch.id, value]
+            );
+            if ((exists.rows || exists).length) throw new Error('This barcode was already scanned.');
+            throw new Error('That barcode does not belong to this receipt.');
+        }
+        return rows[0];
+    });
+}
+
 async function confirmGoodsReceipt({
     goodsReceiptId,
     performedBy,
@@ -1441,10 +1825,34 @@ async function confirmGoodsReceipt({
         const grn =
             grnRows[0];
 
-        if (grn.status !== 'DRAFT') {
+        if (grn.status !== 'AWAITING_BARCODE_SCAN') {
             throw new Error(
-                `This Goods Receipt cannot be confirmed because its status is ${grn.status}.`
+                `This Goods Receipt cannot be completed because its status is ${grn.status}.`
             );
+        }
+
+        const batchResult = await tx.query(
+            `SELECT b.id
+             FROM inventory_receipt_batches b
+             WHERE b.goods_receipt_id = ?
+               AND b.source_type = 'GRN'
+               AND b.status = 'AWAITING_SCAN'
+             FOR UPDATE`,
+            [goodsReceiptId]
+        );
+        const receiptBatch = (batchResult.rows || batchResult)[0];
+        if (!receiptBatch) throw new Error('Prepare and scan this GRN\'s barcodes before completing it.');
+        const scanCounts = await tx.one(
+            `SELECT COUNT(*) AS label_count,
+                    COUNT(scanned_at) AS scanned_count
+             FROM inventory_receipt_labels
+             WHERE receipt_batch_id = ?`,
+            [receiptBatch.id]
+        );
+        receiptBatch.label_count = scanCounts.label_count;
+        receiptBatch.scanned_count = scanCounts.scanned_count;
+        if (Number(receiptBatch.scanned_count) !== Number(receiptBatch.label_count)) {
+            throw new Error(`Scan all required barcodes before completing this GRN (${receiptBatch.scanned_count}/${receiptBatch.label_count} scanned).`);
         }
 
         /*
@@ -1579,6 +1987,7 @@ async function confirmGoodsReceipt({
                 grl.goods_receipt_id,
                 grl.purchase_order_line_id,
                 grl.received_quantity,
+                grl.item_condition,
                 grl.unit,
                 grl.notes,
 
@@ -1690,7 +2099,10 @@ async function confirmGoodsReceipt({
             /*
              * Item master must still be active.
              */
-            if (line.item_master_status !== 'ACTIVE') {
+            if (
+                ['GOOD', 'DAMAGED'].includes(line.item_condition) &&
+                line.item_master_status !== 'ACTIVE'
+            ) {
                 throw new Error(
                     `Item ${line.item_code} is no longer active and cannot be received.`
                 );
@@ -1700,7 +2112,10 @@ async function confirmGoodsReceipt({
              * Physical instance tracking is required for
              * the current Site-ERP inventory model.
              */
-            if (!line.requires_instance_tracking) {
+            if (
+                ['GOOD', 'DAMAGED'].includes(line.item_condition) &&
+                !line.requires_instance_tracking
+            ) {
                 throw new Error(
                     `Item ${line.item_code} is not configured for instance tracking.`
                 );
@@ -1740,21 +2155,14 @@ async function confirmGoodsReceipt({
             const instanceQuantity =
                 Number(line.instance_quantity);
 
-            if (
-                !Number.isFinite(instanceQuantity) ||
-                instanceQuantity <= 0
-            ) {
+            const createsInstance = ['GOOD', 'DAMAGED'].includes(line.item_condition);
+            if (createsInstance && (!Number.isFinite(instanceQuantity) || instanceQuantity <= 0)) {
                 throw new Error(
                     `Item ${line.item_code} has an invalid quantity per instance.`
                 );
             }
 
-            if (
-                !line.instance_quantity_unit ||
-                !String(
-                    line.instance_quantity_unit
-                ).trim()
-            ) {
+            if (createsInstance && !String(line.instance_quantity_unit || '').trim()) {
                 throw new Error(
                     `Item ${line.item_code} has no quantity unit configured for its physical instances.`
                 );
@@ -1778,7 +2186,10 @@ async function confirmGoodsReceipt({
                 orderedQuantity -
                 alreadyReceived;
 
-            if (quantity > remainingQuantity) {
+            if (
+                ['GOOD', 'DAMAGED'].includes(line.item_condition) &&
+                quantity > remainingQuantity
+            ) {
                 throw new Error(
                     `Receipt quantity for ${line.item_code} cannot exceed the remaining Purchase Order quantity. Remaining: ${remainingQuantity} ${poLine.unit}.`
                 );
@@ -1820,31 +2231,60 @@ async function confirmGoodsReceipt({
          * its quantity consumed.
          */
         const createdInstances = [];
-
-        for (const line of lockedLines) {
-            const result =
-                await itemInstanceRepo.receiveInstancesWithinTransaction(
-                    tx,
-                    {
-                        itemMasterId:
-                            line.item_master_id,
-
-                        instanceCount:
-                            line.quantity,
-
-                        siteId:
-                            grn.site_id,
-
-                        performedBy,
-
-                        reason:
-                            `Received through GRN ${grn.grn_number}`
-                    }
-                );
-
-            createdInstances.push(
-                ...result.instances
+        const labelsResult = await tx.query(
+            `SELECT l.*, im.instance_quantity, im.instance_quantity_unit
+             FROM inventory_receipt_labels l
+             JOIN item_masters im ON im.id = l.item_master_id
+             WHERE l.receipt_batch_id = ?
+             ORDER BY l.id
+             FOR UPDATE OF l`,
+            [receiptBatch.id]
+        );
+        for (const label of (labelsResult.rows || labelsResult)) {
+            const damaged = label.item_condition === 'DAMAGED';
+            const instance = await tx.one(
+                `INSERT INTO item_instances (
+                    item_master_id, instance_code, barcode, brand,
+                    original_quantity, current_quantity, unit, site_id,
+                    lifecycle_status, condition, batch_number, serial_number,
+                    manufacture_date, expiry_date, received_grn_id
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 RETURNING *`,
+                [
+                    label.item_master_id,
+                    label.instance_code,
+                    label.barcode,
+                    label.brand,
+                    label.instance_quantity,
+                    label.instance_quantity,
+                    label.instance_quantity_unit,
+                    grn.site_id,
+                    damaged ? 'QUARANTINED' : 'ACTIVE',
+                    label.item_condition,
+                    label.batch_number,
+                    label.serial_number,
+                    label.manufacture_date,
+                    label.expiry_date,
+                    grn.id
+                ]
             );
+            await tx.query(
+                `INSERT INTO inventory_movements (
+                    instance_id, movement_type, quantity, from_site_id,
+                    to_site_id, reference_type, reference_id, reason, performed_by
+                 ) VALUES (?, 'RECEIVE', ?, NULL, ?, 'GRN', ?, ?, ?)`,
+                [
+                    instance.id,
+                    instance.original_quantity,
+                    grn.site_id,
+                    grn.grn_number,
+                    damaged
+                        ? `Damaged item received through GRN ${grn.grn_number}; quarantined`
+                        : `Received through GRN ${grn.grn_number}`,
+                    performedBy
+                ]
+            );
+            createdInstances.push(instance);
         }
 
         /*
@@ -1860,7 +2300,7 @@ async function confirmGoodsReceipt({
                 received_at = now(),
                 updated_at = now()
             WHERE id = ?
-              AND status = 'DRAFT'
+              AND status = 'AWAITING_BARCODE_SCAN'
             RETURNING
                 id,
                 grn_number,
@@ -1879,6 +2319,13 @@ async function confirmGoodsReceipt({
                 'Goods Receipt could not be finalized.'
             );
         }
+
+        await tx.query(
+            `UPDATE inventory_receipt_batches
+             SET status = 'COMPLETED', completed_by = ?, completed_at = now(), updated_at = now()
+             WHERE id = ? AND status = 'AWAITING_SCAN'`,
+            [performedBy, receiptBatch.id]
+        );
 
         /*
          * ---------------------------------------------------------
@@ -1927,6 +2374,7 @@ async function confirmGoodsReceipt({
 
                 WHERE gr.purchase_order_id = ?
                   AND gr.status = 'RECEIVED'
+                  AND grl.item_condition IN ('GOOD', 'DAMAGED')
 
                 GROUP BY
                     grl.purchase_order_line_id
@@ -2107,6 +2555,11 @@ module.exports = {
 
     addGoodsReceiptLine,
     deleteGoodsReceiptLine,
+
+    prepareGoodsReceiptLabels,
+    getGoodsReceiptLabelBatch,
+    markGoodsReceiptLabelsPrinted,
+    scanGoodsReceiptBarcode,
 
     confirmGoodsReceipt,
     cancelGoodsReceipt

@@ -1,6 +1,54 @@
+:root {
+  --app-olive: #6c7d49;
+  --app-olive-soft: #f3f5ed;
+}
+
 body { background: #f5f6f8; }
-.navbar-brand { letter-spacing: .3px; }
+.navbar-brand { letter-spacing: .3px; display: inline-flex; align-items: center; }
+.navbar-brand::before {
+  content: "";
+  width: .45rem;
+  height: .45rem;
+  margin-right: .5rem;
+  border-radius: 50%;
+  background: var(--app-olive);
+}
 .card { border: none; }
 .metric { font-size: 1.6rem; font-weight: 700; }
 .table thead th { white-space: nowrap; }
 main { max-width: 1400px; margin: 0 auto; }
+
+/* Small olive accents complement the existing blue and white UI. */
+main h1::after {
+  content: "";
+  display: block;
+  width: 2rem;
+  height: 3px;
+  margin-top: .45rem;
+  border-radius: 2px;
+  background: var(--app-olive);
+}
+
+.card-header {
+  position: relative;
+}
+.card-header::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--app-olive);
+}
+
+.dashboard-page .dashboard-eyebrow {
+  color: var(--app-olive) !important;
+  letter-spacing: .08em;
+}
+.dashboard-page .dashboard-accent-card {
+  border-top: 3px solid var(--app-olive) !important;
+}
+.dashboard-page .dashboard-site-code { color: var(--app-olive); }
+.dashboard-page .dashboard-site-type {
+  color: var(--app-olive);
+  background: var(--app-olive-soft);
+}

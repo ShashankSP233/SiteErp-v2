@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title><%= title %></title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 20px; color: #17212b; font: 15px Arial, sans-serif; background: #f3f5f8; }
+        .page { max-width: 1100px; margin: 0 auto; }
+        .panel { background: #fff; border: 1px solid #d8dee7; border-radius: 10px; padding: 18px; margin-bottom: 18px; }
+        .toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
+        .btn { display: inline-block; padding: 10px 14px; color: #fff; background: #315efb; border: 0; border-radius: 6px; text-decoration: none; font-size: 15px; cursor: pointer; }
+        .btn.secondary { color: #263242; background: #e9edf3; }
+        .btn.success { background: #16834a; }
+        .btn:disabled { opacity: .55; cursor: not-allowed; }
+        .muted { color: #657183; }
+        .progress { font-weight: 700; }
+        .scan-form { display: flex; gap: 8px; }
+        .scan-form input { flex: 1; min-width: 200px; padding: 11px; border: 1px solid #aab4c2; border-radius: 6px; font-size: 17px; }
+        .labels { display: grid; grid-template-columns: repeat(auto-fill, minmax(225px, 1fr)); gap: 12px; }
+        .label { min-height: 145px; padding: 12px; border: 1px dashed #aeb7c4; border-radius: 6px; background: #fff; text-align: center; break-inside: avoid; }
+        .label strong { display: block; margin-bottom: 4px; }
+        .label svg { width: 100%; height: 58px; }
+        .badge { display: inline-block; margin-top: 5px; padding: 3px 7px; border-radius: 4px; background: #e8f4ec; font-size: 12px; }
+        .badge.damaged { background: #fff0c2; }
+        .scanned { color: #16834a; font-size: 12px; font-weight: 700; }
+        .alert { padding: 10px 12px; border-radius: 5px; margin-bottom: 12px; background: #e8f4ec; }
+        .alert.error { background: #fde8e8; }
+        @media print {
+            body { padding: 0; background: #fff; }
+            .no-print { display: none !important; }
+            .page { max-width: none; }
+            .labels { grid-template-columns: repeat(3, 1fr); gap: 4mm; }
+            .label { min-height: 38mm; border: 1px solid #777; padding: 4mm; }
+        }
+    </style>
+</head>
+<body>
+<main class="page">
+    <section class="panel no-print">
+        <div class="toolbar">
+            <div>
+                <h1 style="margin:0 0 6px"><%= batch.reference_number || `GRN ${batch.grn_number}` %> — Barcode check</h1>
+                <div class="muted"><%= batch.site_code %> — <%= batch.site_name %></div>
+            </div>
+            <div class="toolbar">
+                <form method="post" action="<%= printAction %>">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <button class="btn" type="submit">Print Labels</button>
+                </form>
+                <a class="btn secondary" href="<%= backUrl %>">Back</a>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel no-print" id="scanner">
+        <% if (success) { %><div class="alert"><%= success %></div><% } %>
+        <% if (error) { %><div class="alert error"><%= error %></div><% } %>
+        <div class="toolbar" style="margin-bottom:12px">
+            <div>
+                <h2 style="margin:0 0 5px">Scan each printed label</h2>
+                <div class="muted">Use the barcode scanner or type the code and press Enter.</div>
+            </div>
+            <div class="progress"><%= batch.scannedCount %> / <%= batch.labelCount %> scanned</div>
+        </div>
+        <% if (batch.labels_printed_at) { %>
+            <div class="muted" style="margin-bottom:10px">Print was started. Scan each physical label to verify it.</div>
+        <% } %>
+        <% if (batch.status === 'AWAITING_SCAN' && batch.labelCount > batch.scannedCount) { %>
+            <form class="scan-form" method="post" action="<%= scanAction %>">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <input id="barcode-input" name="barcode" autocomplete="off" required placeholder="Scan barcode" autofocus>
+                <button class="btn" type="submit">Record Scan</button>
+            </form>
+        <% } else if (batch.status === 'AWAITING_SCAN') { %>
+            <div class="alert">All required barcodes have been scanned. You can now complete this receipt.</div>
+            <form method="post" action="<%= finishAction %>">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button class="btn success" type="submit" onclick="return confirm('Add these scanned items to inventory and complete the receipt?')"><%= finishText %></button>
+            </form>
+        <% } else { %>
+            <div class="alert">This receipt is complete. Labels can be reprinted for reference.</div>
+        <% } %>
+    </section>
+
+    <section class="labels" aria-label="Barcode labels">
+        <% if (!batch.labels.length) { %>
+            <div class="panel no-print">No barcode labels are needed. The GRN contains only defective or rejected quantities.</div>
+        <% } %>
+        <% batch.labels.forEach(label => { %>
+            <article class="label">
+                <strong><%= label.item_code %></strong>
+                <div><%= label.item_name %></div>
+                <% if (label.brand) { %><div><small>Brand: <%= label.brand %></small></div><% } %>
+                <% if (label.serial_number) { %><div><small>Serial: <%= label.serial_number %></small></div><% } %>
+                <svg data-barcode="<%= label.barcode %>"></svg>
+                <div><%= label.instance_code %></div>
+                <span class="badge <%= label.item_condition === 'DAMAGED' ? 'damaged' : '' %>"><%= label.item_condition === 'DAMAGED' ? 'DAMAGED — QUARANTINE' : 'GOOD' %></span>
+                <% if (label.scanned_at) { %><div class="scanned">Scanned</div><% } %>
+            </article>
+        <% }) %>
+    </section>
+</main>
+<script src="/vendor/jsbarcode/JsBarcode.all.min.js"></script>
+<script nonce="<%= cspNonce %>">
+    document.querySelectorAll('svg[data-barcode]').forEach(function (element) {
+        JsBarcode(element, element.dataset.barcode, {
+            format: 'CODE128',
+            displayValue: false,
+            width: 1.5,
+            height: 52,
+            margin: 0
+        });
+    });
+    var input = document.getElementById('barcode-input');
+    if (input) input.focus();
+    if (new URLSearchParams(window.location.search).get('print') === '1') {
+        window.addEventListener('load', function () { window.print(); });
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,141 @@
+<%
+  const canEditInstance = ['admin', 'manager'].includes(currentUser?.role);
+  const movements = Array.isArray(instance?.movements) ? instance.movements.slice(0, 10) : [];
+  const dateValue = value => value ? (value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10)) : '';
+%>
+
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <div class="text-muted small mb-1">Inventory / Instance Details</div>
+    <h1 class="h3 mb-1"><%= instance ? instance.instance_code : 'Find an Inventory Instance' %></h1>
+    <p class="text-muted mb-0"><%= instance ? `${instance.item_code} — ${instance.item_name}` : 'Enter an instance code or scan its barcode.' %></p>
+  </div>
+  <a href="/inventory/instances" class="btn btn-outline-secondary">Back to Instances</a>
+</div>
+
+<% if (typeof success !== 'undefined' && success) { %><div class="alert alert-success"><%= success %></div><% } %>
+<% if (typeof error !== 'undefined' && error) { %><div class="alert alert-warning"><%= error %></div><% } %>
+
+<% if (!instance) { %>
+  <form method="get" action="/inventory/instances/lookup" class="card card-body shadow-sm">
+    <label for="instance-code" class="form-label fw-semibold">Barcode or instance code</label>
+    <div class="d-flex gap-2">
+      <input id="instance-code" type="search" name="code" class="form-control" value="<%= code || '' %>" placeholder="Scan barcode or enter instance code" autocomplete="off" required autofocus>
+      <button type="submit" class="btn btn-primary">Find Instance</button>
+    </div>
+  </form>
+<% } else { %>
+  <div class="card shadow-sm mb-4">
+    <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2 py-3">
+      <div>
+        <h2 class="h5 mb-1"><%= instance.instance_code %></h2>
+        <div class="text-muted small">Barcode: <%= instance.barcode || '—' %></div>
+      </div>
+      <span class="badge <%= instance.lifecycle_status === 'ACTIVE' ? 'text-bg-success' : instance.lifecycle_status === 'QUARANTINED' ? 'text-bg-warning' : 'text-bg-secondary' %>"><%= instance.lifecycle_status %></span>
+    </div>
+    <div class="card-body">
+      <div class="mb-3">
+        <div class="text-muted small">Current location</div>
+        <strong><%= instance.site_name ? `${instance.site_code ? `${instance.site_code} — ` : ''}${instance.site_name}` : 'No site assigned' %></strong>
+      </div>
+      <div class="row g-3 mb-4">
+        <% [
+          ['Current quantity', instance.current_quantity],
+          ['Allocated', instance.allocated_quantity],
+          ['Available to issue', instance.available_quantity],
+          ['Consumed', instance.consumed_quantity]
+        ].forEach(([label, value]) => { %>
+          <div class="col-6 col-xl-3"><div class="border rounded p-3 h-100"><div class="text-muted small"><%= label %></div><strong><%= Number(value || 0).toLocaleString() %> <%= instance.unit || '' %></strong></div></div>
+        <% }) %>
+      </div>
+
+      <div class="row g-4">
+        <div class="col-12 col-lg-6">
+          <div class="border rounded p-3 h-100">
+            <h3 class="h6 mb-3">Instance details</h3>
+            <dl class="row mb-0">
+              <dt class="col-sm-5">Item Master</dt><dd class="col-sm-7"><%= instance.item_code %> — <%= instance.item_name %></dd>
+              <dt class="col-sm-5">Condition</dt><dd class="col-sm-7"><%= instance.condition || '—' %></dd>
+              <dt class="col-sm-5">Brand</dt><dd class="col-sm-7"><%= instance.brand || '—' %></dd>
+              <dt class="col-sm-5">Batch number</dt><dd class="col-sm-7"><%= instance.batch_number || '—' %></dd>
+              <dt class="col-sm-5">Serial number</dt><dd class="col-sm-7"><%= instance.serial_number || '—' %></dd>
+              <dt class="col-sm-5">Manufacture date</dt><dd class="col-sm-7"><%= dateValue(instance.manufacture_date) || '—' %></dd>
+              <dt class="col-sm-5">Expiry date</dt><dd class="col-sm-7"><%= dateValue(instance.expiry_date) || '—' %></dd>
+            </dl>
+          </div>
+        </div>
+
+        <% if (canEditInstance && ['ACTIVE', 'QUARANTINED'].includes(instance.lifecycle_status)) { %>
+          <div class="col-12 col-lg-6">
+            <form method="post" action="/inventory/instances/<%= instance.id %>/details" class="border rounded p-3 h-100">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <input type="hidden" name="instanceCode" value="<%= instance.instance_code %>">
+              <h3 class="h6 mb-3">Update instance</h3>
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label for="instance-condition" class="form-label">Condition</label>
+                  <select id="instance-condition" name="condition" class="form-select">
+                    <option value="GOOD" <%= instance.condition === 'GOOD' ? 'selected' : '' %>>Good</option>
+                    <option value="DAMAGED" <%= instance.condition === 'DAMAGED' ? 'selected' : '' %>>Damaged</option>
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label for="instance-status" class="form-label">Inventory status</label>
+                  <select id="instance-status" name="lifecycleStatus" class="form-select">
+                    <option value="ACTIVE" <%= instance.lifecycle_status === 'ACTIVE' ? 'selected' : '' %>>Active</option>
+                    <option value="QUARANTINED" <%= instance.lifecycle_status === 'QUARANTINED' ? 'selected' : '' %>>Quarantined</option>
+                  </select>
+                  <div class="form-text">Damaged condition automatically sets status to Quarantined.</div>
+                </div>
+                <div class="col-md-6"><label class="form-label" for="instance-brand">Brand</label><input id="instance-brand" class="form-control" name="brand" maxlength="100" value="<%= instance.brand || '' %>"></div>
+                <div class="col-md-6"><label class="form-label" for="instance-batch">Batch number</label><input id="instance-batch" class="form-control" name="batchNumber" maxlength="100" value="<%= instance.batch_number || '' %>"></div>
+                <div class="col-md-6"><label class="form-label" for="instance-serial">Serial number</label><input id="instance-serial" class="form-control" name="serialNumber" maxlength="100" value="<%= instance.serial_number || '' %>"></div>
+                <div class="col-md-6"><label class="form-label" for="instance-mfg">Manufacture date</label><input id="instance-mfg" type="date" class="form-control" name="manufactureDate" value="<%= dateValue(instance.manufacture_date) %>"></div>
+                <div class="col-md-6"><label class="form-label" for="instance-expiry">Expiry date</label><input id="instance-expiry" type="date" class="form-control" name="expiryDate" value="<%= dateValue(instance.expiry_date) %>"></div>
+              </div>
+              <button type="submit" class="btn btn-primary mt-3">Save Instance Details</button>
+            </form>
+          </div>
+        <% } %>
+      </div>
+
+      <div class="d-flex flex-wrap gap-2 mt-4">
+        <a href="/items/<%= instance.item_master_id %>/ledger" class="btn btn-outline-primary">Item Master</a>
+        <a href="/inventory/movements?instanceCode=<%= encodeURIComponent(instance.instance_code) %>" class="btn btn-outline-secondary">Full Movement History</a>
+        <% if (['admin', 'manager'].includes(currentUser?.role) && instance.lifecycle_status === 'ACTIVE') { %>
+          <a href="/inventory/adjustment?instanceCode=<%= encodeURIComponent(instance.instance_code) %>" class="btn btn-outline-warning">Adjust Inventory</a>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+      <h2 class="h5 mb-0">Recent Movement History</h2>
+      <a href="/inventory/movements?instanceCode=<%= encodeURIComponent(instance.instance_code) %>" class="small">View all</a>
+    </div>
+    <% if (!movements.length) { %>
+      <div class="card-body text-muted">No movement records found for this instance.</div>
+    <% } else { %>
+      <div class="table-responsive"><table class="table table-hover align-middle mb-0">
+        <thead class="table-light"><tr><th>Date</th><th>Movement</th><th>Quantity</th><th>From / To</th><th>Performed by</th><th>Reference</th></tr></thead>
+        <tbody><% movements.forEach(movement => { %>
+          <tr>
+            <td class="text-nowrap"><%= new Date(movement.created_at).toLocaleString() %></td>
+            <td><span class="badge text-bg-secondary"><%= movement.movement_type.replaceAll('_', ' ') %></span></td>
+            <td><%= Number(movement.quantity || 0).toLocaleString() %> <%= instance.unit %></td>
+            <td><%= movement.from_site_code || '—' %> → <%= movement.to_site_code || '—' %></td>
+            <td><%= movement.performed_by_name || movement.performed_by_username || '—' %></td>
+            <td><%= movement.reference_type || '—' %><%= movement.reference_id ? ` #${movement.reference_id}` : '' %></td>
+          </tr>
+        <% }) %></tbody>
+      </table></div>
+    <% } %>
+  </div>
+<% } %>
+
+<script nonce="<%= cspNonce %>">
+  document.getElementById('instance-condition')?.addEventListener('change', function () {
+    if (this.value === 'DAMAGED') document.getElementById('instance-status').value = 'QUARANTINED';
+  });
+</script>

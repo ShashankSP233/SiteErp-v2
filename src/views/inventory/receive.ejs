@@ -1,288 +1,156 @@
 <%
-  const selectedItem = (itemMasters || []).find(
-    item => String(item.id) === String(form.itemMasterId || '')
-  );
+  const submittedLines = Array.isArray(form?.lines) && form.lines.length ? form.lines : [{}];
+  const selectedSiteId = form?.siteId || '';
 %>
 
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
   <div>
-    <h1 class="h3 mb-1">Receive Inventory</h1>
-    <p class="text-muted mb-0">
-      Create physical inventory instances in a site.
-    </p>
+    <h1 class="h3 mb-1">Add Stock</h1>
+    <p class="text-muted mb-0">Add one or more items, then print and scan every barcode before stock enters inventory.</p>
   </div>
-
-  <a href="/inventory/instances" class="btn btn-outline-secondary">
-    View Inventory
-  </a>
+  <a href="/inventory/instances" class="btn btn-outline-secondary">View Inventory</a>
 </div>
 
+<% if (error) { %><div class="alert alert-danger" role="alert"><%= error %></div><% } %>
 
+<form method="POST" action="/inventory/receive" id="add-stock-form">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
-<% if (error) { %>
-  <div class="alert alert-danger" role="alert"><%= error %></div>
-<% } %>
-
-<div class="card shadow-sm">
-  <div class="card-header bg-white py-3">
-    <h2 class="h5 mb-0">Receive Physical Inventory</h2>
-  </div>
-
-  <div class="card-body">
-    <form method="POST" action="/inventory/receive">
-
-      <input
-        type="hidden"
-        name="_csrf"
-        value="<%= csrfToken %>"
-      >
-
+  <div class="card shadow-sm mb-4">
+    <div class="card-header bg-white py-3"><h2 class="h5 mb-0">Receipt details</h2></div>
+    <div class="card-body">
       <div class="row g-3">
-
-        <div class="col-12 col-md-6">
-          <label for="itemMasterId" class="form-label">
-            Item
-          </label>
-
-          <select
-            class="form-select"
-            id="itemMasterId"
-            name="itemMasterId"
-            required
-          >
-            <option value="">Select item...</option>
-
-            <% itemMasters.forEach(item => { %>
-              <option
-                value="<%= item.id %>"
-                data-physical-unit="<%= item.unit || '' %>"
-                data-instance-quantity="<%= item.instance_quantity ?? '' %>"
-                data-quantity-unit="<%= item.instance_quantity_unit || '' %>"
-                <%= String(form.itemMasterId || '') === String(item.id) ? 'selected' : '' %>
-              >
-                <%= item.item_code %> — <%= item.name %>
-              </option>
-            <% }) %>
-          </select>
-
-          <% if (!itemMasters.length) { %>
-            <div class="form-text text-warning">
-              No instance-tracked active items are available.
-            </div>
-          <% } %>
-
-          <div
-            id="selectedItemInfo"
-            class="alert alert-info mt-3 mb-0 <%= selectedItem ? '' : 'd-none' %>"
-          >
-            <div class="fw-semibold mb-2">Selected item contents</div>
-            <div class="row g-2 small">
-              <div class="col-sm-4">
-                <span class="d-block text-muted">Physical Unit</span>
-                <strong id="physicalUnit"><%= selectedItem?.unit || '—' %></strong>
-              </div>
-              <div class="col-sm-4">
-                <span class="d-block text-muted">Quantity per Instance</span>
-                <strong id="instanceQuantity"><%= selectedItem?.instance_quantity ?? '—' %> <%= selectedItem?.instance_quantity_unit || '' %></strong>
-              </div>
-              <div class="col-sm-4">
-                <span class="d-block text-muted">Quantity Unit</span>
-                <strong id="quantityUnit"><%= selectedItem?.instance_quantity_unit || '—' %></strong>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-3">
-          <label for="quantity" class="form-label">
-            Number of Physical Instances
-          </label>
-
-          <input
-            type="number"
-            class="form-control"
-            id="quantity"
-            name="quantity"
-            min="1"
-            step="1"
-            value="<%= form.quantity || '' %>"
-            required
-          >
-
-          <div class="form-text">
-             Enter the number of physical units/containers being received.
-            Each physical instance will be created with the selected item's configured quantity.
-            Example: 5 BARREL creates 5 instances.
-          </div>
-        </div>
-
-        <div class="col-md-3">
-          <label for="siteId" class="form-label">
-            Site
-          </label>
-
-          <select
-            class="form-select"
-            id="siteId"
-            name="siteId"
-            required
-          >
+        <div class="col-md-6">
+          <label for="siteId" class="form-label fw-semibold">Receiving site</label>
+          <select class="form-select" id="siteId" name="siteId" required>
             <option value="">Select site...</option>
-
-            <% sites.forEach(site => { %>
-              <option
-                value="<%= site.site_id %>"
-                <%= String(form.siteId || '') === String(site.site_id) ? 'selected' : '' %>
-              >
-                <%= site.code %> — <%= site.name %>
-              </option>
-            <% }) %>
+            <% sites.forEach(site => { %><option value="<%= site.site_id %>" <%= String(selectedSiteId) === String(site.site_id) ? 'selected' : '' %>><%= site.code %> — <%= site.name %></option><% }) %>
           </select>
         </div>
-
-        <div class="col-12">
-          <label for="reason" class="form-label">
-            Reason / Reference
-            <span class="text-muted">(optional)</span>
-          </label>
-
-          <input
-            type="text"
-            class="form-control"
-            id="reason"
-            name="reason"
-            value="<%= form.reason || '' %>"
-            maxlength="255"
-            placeholder="e.g. Initial stock receipt"
-          >
+        <div class="col-md-6">
+          <label for="reason" class="form-label fw-semibold">Reason / reference <span class="text-muted fw-normal">(optional)</span></label>
+          <input type="text" class="form-control" id="reason" name="reason" value="<%= form?.reason || '' %>" maxlength="255" placeholder="e.g. Initial stock receipt">
         </div>
+      </div>
+    </div>
+  </div>
 
-        <div class="col-12">
-          <button
-            type="button"
-            class="btn btn-outline-secondary"
-            data-bs-toggle="collapse"
-            data-bs-target="#traceabilityFields"
-            aria-expanded="false"
-            aria-controls="traceabilityFields"
-          >
-            Advanced / Traceability
-          </button>
-          <div class="form-text">
-            Optional details for batch, serial, manufacturing, or expiry information.
+  <div class="card shadow-sm">
+    <div class="card-header bg-white py-3 d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2">
+      <div><h2 class="h5 mb-1">Items to add</h2><p class="text-muted small mb-0">Add a row for each item type. Quantity means physical units or containers.</p></div>
+      <button type="button" class="btn btn-outline-primary" id="add-stock-line">+ Add another item</button>
+    </div>
+    <div class="card-body" id="stock-lines">
+      <% submittedLines.forEach((line, index) => { %>
+        <section class="stock-line border rounded p-3 p-lg-4 mb-3" data-index="<%= index %>">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3 class="h6 mb-0">Item <span class="stock-line-number"><%= index + 1 %></span></h3>
+            <button type="button" class="btn btn-sm btn-outline-danger remove-stock-line <%= index === 0 ? 'd-none' : '' %>">Remove</button>
           </div>
-
-          <div class="collapse mt-3" id="traceabilityFields">
-            <div class="border rounded p-3 bg-light">
-              <p class="small text-muted mb-3">
-                These fields are optional and can be used when the physical stock carries batch, serial, manufacturing, or expiry information.
-              </p>
-
-              <div class="row g-3">
-                <div class="col-md-6">
-                  <label for="batchNumber" class="form-label">
-                    Batch Number <span class="text-muted">(optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    class="form-control"
-                    id="batchNumber"
-                    name="batchNumber"
-                    value="<%= form.batchNumber || '' %>"
-                    maxlength="100"
-                  >
-                </div>
-
-                <div class="col-md-6">
-                  <label for="serialNumber" class="form-label">
-                    Serial Number <span class="text-muted">(optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    class="form-control"
-                    id="serialNumber"
-                    name="serialNumber"
-                    value="<%= form.serialNumber || '' %>"
-                    maxlength="100"
-                  >
-                </div>
-
-                <div class="col-md-6">
-                  <label for="manufactureDate" class="form-label">
-                    Manufacture Date <span class="text-muted">(optional)</span>
-                  </label>
-                  <input
-                    type="date"
-                    class="form-control"
-                    id="manufactureDate"
-                    name="manufactureDate"
-                    value="<%= form.manufactureDate || '' %>"
-                  >
-                </div>
-
-                <div class="col-md-6">
-                  <label for="expiryDate" class="form-label">
-                    Expiry Date <span class="text-muted">(optional)</span>
-                  </label>
-                  <input
-                    type="date"
-                    class="form-control"
-                    id="expiryDate"
-                    name="expiryDate"
-                    value="<%= form.expiryDate || '' %>"
-                  >
-                </div>
-              </div>
+          <div class="row g-3 align-items-start">
+            <div class="col-lg-7">
+              <label class="form-label fw-semibold">Item master</label>
+              <select class="form-select stock-item" name="lines[<%= index %>][itemMasterId]" required>
+                <option value="">Select item...</option>
+                <% itemMasters.forEach(item => { %>
+                  <option value="<%= item.id %>" data-physical-unit="<%= item.unit || '' %>" data-instance-quantity="<%= item.instance_quantity ?? '' %>" data-quantity-unit="<%= item.instance_quantity_unit || '' %>" <%= String(line.itemMasterId || '') === String(item.id) ? 'selected' : '' %>><%= item.item_code %> — <%= item.name %></option>
+                <% }) %>
+              </select>
+              <div class="item-instance-info small text-muted mt-2">Choose an item to see its configured quantity per physical unit.</div>
+            </div>
+            <div class="col-lg-5">
+              <label class="form-label fw-semibold">Number of physical instances</label>
+              <input type="number" class="form-control" name="lines[<%= index %>][quantity]" min="1" step="1" value="<%= line.quantity || '' %>" required>
+              <div class="form-text">For example, 4 barrels creates four individually barcoded instances.</div>
             </div>
           </div>
-        </div>
-
+          <details class="mt-3">
+            <summary class="text-primary" style="cursor:pointer">Brand and traceability details <span class="text-muted">(optional)</span></summary>
+            <div class="row g-3 mt-1">
+              <div class="col-md-6 col-xl-4"><label class="form-label">Brand</label><input class="form-control" name="lines[<%= index %>][brand]" maxlength="100" value="<%= line.brand || '' %>" placeholder="e.g. Shell"></div>
+              <div class="col-md-6 col-xl-4"><label class="form-label">Batch number</label><input class="form-control" name="lines[<%= index %>][batchNumber]" maxlength="100" value="<%= line.batchNumber || '' %>"></div>
+              <div class="col-md-6 col-xl-4"><label class="form-label">Serial number</label><input class="form-control" name="lines[<%= index %>][serialNumber]" maxlength="100" value="<%= line.serialNumber || '' %>" placeholder="Use for one physical instance only"></div>
+              <div class="col-md-6 col-xl-4"><label class="form-label">Manufacture date</label><input type="date" class="form-control" name="lines[<%= index %>][manufactureDate]" value="<%= line.manufactureDate || '' %>"></div>
+              <div class="col-md-6 col-xl-4"><label class="form-label">Expiry date</label><input type="date" class="form-control" name="lines[<%= index %>][expiryDate]" value="<%= line.expiryDate || '' %>"></div>
+            </div>
+          </details>
+        </section>
+      <% }) %>
+      <% if (!itemMasters.length) { %><div class="alert alert-warning">No active instance-tracked item masters are available.</div><% } %>
+    </div>
+    <div class="card-footer bg-white d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3 p-3">
+      <div class="small text-muted">Stock is added only after labels are printed and each barcode is scanned.</div>
+      <div class="d-flex gap-2">
+        <a href="/inventory/instances" class="btn btn-outline-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary" <%= !itemMasters.length ? 'disabled' : '' %>>Continue to Barcode Labels</button>
       </div>
-
-      <hr class="my-4">
-
-      <div class="d-flex justify-content-end gap-2">
-        <a href="/inventory/instances" class="btn btn-secondary">
-          Cancel
-        </a>
-
-        <button
-          type="submit"
-          class="btn btn-primary"
-          <%= !itemMasters.length ? 'disabled' : '' %>
-        >
-          Receive Inventory
-        </button>
-      </div>
-
-    </form>
+    </div>
   </div>
-</div>
+</form>
+
+<template id="stock-line-template">
+  <section class="stock-line border rounded p-3 p-lg-4 mb-3" data-index="__INDEX__">
+    <div class="d-flex justify-content-between align-items-center mb-3"><h3 class="h6 mb-0">Item <span class="stock-line-number"></span></h3><button type="button" class="btn btn-sm btn-outline-danger remove-stock-line">Remove</button></div>
+    <div class="row g-3 align-items-start">
+      <div class="col-lg-7"><label class="form-label fw-semibold">Item master</label><select class="form-select stock-item" name="lines[__INDEX__][itemMasterId]" required><option value="">Select item...</option><% itemMasters.forEach(item => { %><option value="<%= item.id %>" data-physical-unit="<%= item.unit || '' %>" data-instance-quantity="<%= item.instance_quantity ?? '' %>" data-quantity-unit="<%= item.instance_quantity_unit || '' %>"><%= item.item_code %> — <%= item.name %></option><% }) %></select><div class="item-instance-info small text-muted mt-2">Choose an item to see its configured quantity per physical unit.</div></div>
+      <div class="col-lg-5"><label class="form-label fw-semibold">Number of physical instances</label><input type="number" class="form-control" name="lines[__INDEX__][quantity]" min="1" step="1" required><div class="form-text">Each physical unit receives its own barcode.</div></div>
+    </div>
+    <details class="mt-3"><summary class="text-primary" style="cursor:pointer">Brand and traceability details <span class="text-muted">(optional)</span></summary><div class="row g-3 mt-1">
+      <div class="col-md-6 col-xl-4"><label class="form-label">Brand</label><input class="form-control" name="lines[__INDEX__][brand]" maxlength="100"></div>
+      <div class="col-md-6 col-xl-4"><label class="form-label">Batch number</label><input class="form-control" name="lines[__INDEX__][batchNumber]" maxlength="100"></div>
+      <div class="col-md-6 col-xl-4"><label class="form-label">Serial number</label><input class="form-control" name="lines[__INDEX__][serialNumber]" maxlength="100" placeholder="Use for one physical instance only"></div>
+      <div class="col-md-6 col-xl-4"><label class="form-label">Manufacture date</label><input type="date" class="form-control" name="lines[__INDEX__][manufactureDate]"></div>
+      <div class="col-md-6 col-xl-4"><label class="form-label">Expiry date</label><input type="date" class="form-control" name="lines[__INDEX__][expiryDate]"></div>
+    </div></details>
+  </section>
+</template>
 
 <script nonce="<%= cspNonce %>">
   (() => {
-    const itemSelect = document.getElementById('itemMasterId');
-    const itemInfo = document.getElementById('selectedItemInfo');
-    const physicalUnit = document.getElementById('physicalUnit');
-    const instanceQuantity = document.getElementById('instanceQuantity');
-    const quantityUnit = document.getElementById('quantityUnit');
+    const list = document.getElementById('stock-lines');
+    const template = document.getElementById('stock-line-template');
+    const addButton = document.getElementById('add-stock-line');
 
-    itemSelect?.addEventListener('change', () => {
-      const option = itemSelect.selectedOptions[0];
+    function refreshRows() {
+      const rows = [...list.querySelectorAll('.stock-line')];
+      rows.forEach((row, index) => {
+        row.querySelector('.stock-line-number').textContent = String(index + 1);
+        row.querySelector('.remove-stock-line').classList.toggle('d-none', rows.length === 1);
+        row.querySelectorAll('[name]').forEach(field => {
+          field.name = field.name.replace(/lines\[\d+\]/, `lines[${index}]`);
+        });
+      });
+    }
 
-      if (!option || !option.value) {
-        itemInfo?.classList.add('d-none');
+    function updateItemInfo(select) {
+      const option = select.selectedOptions[0];
+      const output = select.closest('.stock-line').querySelector('.item-instance-info');
+      if (!option?.value) {
+        output.textContent = 'Choose an item to see its configured quantity per physical unit.';
         return;
       }
+      output.textContent = `${option.dataset.instanceQuantity || '—'} ${option.dataset.quantityUnit || ''} per ${option.dataset.physicalUnit || 'instance'}`;
+    }
 
-      const physicalUnitValue = option.dataset.physicalUnit || '—';
-      const instanceQuantityValue = option.dataset.instanceQuantity || '—';
-      const quantityUnitValue = option.dataset.quantityUnit || '';
-
-      physicalUnit.textContent = physicalUnitValue;
-      instanceQuantity.textContent = `${instanceQuantityValue} ${quantityUnitValue}`.trim();
-      quantityUnit.textContent = quantityUnitValue || '—';
-      itemInfo?.classList.remove('d-none');
+    addButton.addEventListener('click', () => {
+      const index = list.querySelectorAll('.stock-line').length;
+      const html = template.innerHTML.replaceAll('__INDEX__', String(index));
+      list.insertAdjacentHTML('beforeend', html);
+      refreshRows();
+      list.querySelector('.stock-line:last-child .stock-item')?.focus();
     });
+
+    list.addEventListener('click', event => {
+      const button = event.target.closest('.remove-stock-line');
+      if (button && list.querySelectorAll('.stock-line').length > 1) {
+        button.closest('.stock-line').remove();
+        refreshRows();
+      }
+    });
+    list.addEventListener('change', event => {
+      if (event.target.matches('.stock-item')) updateItemInfo(event.target);
+    });
+    list.querySelectorAll('.stock-item').forEach(updateItemInfo);
+    refreshRows();
   })();
 </script>

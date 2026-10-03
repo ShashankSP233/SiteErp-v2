@@ -536,6 +536,13 @@ router.post(
                 req.body.lineNotes ||
                 {};
 
+            const itemConditions = req.body.itemCondition || {};
+            const brands = req.body.brand || {};
+            const batchNumbers = req.body.batchNumber || {};
+            const serialNumbers = req.body.serialNumber || {};
+            const manufactureDates = req.body.manufactureDate || {};
+            const expiryDates = req.body.expiryDate || {};
+
 
             const lines =
                 Object.entries(
@@ -562,6 +569,13 @@ router.post(
                                 purchaseOrderLineId,
 
                                 receivedQuantity,
+
+                                itemCondition: itemConditions[fieldName] || 'GOOD',
+                                brand: brands[fieldName] || '',
+                                batchNumber: batchNumbers[fieldName] || '',
+                                serialNumber: serialNumbers[fieldName] || '',
+                                manufactureDate: manufactureDates[fieldName] || '',
+                                expiryDate: expiryDates[fieldName] || '',
 
                                 notes:
                                     lineNotes[
@@ -667,7 +681,7 @@ router.post(
 
 
             return res.redirect(
-                `/goods-receipts/${result.id}/edit`
+                `/goods-receipts/${result.id}`
             );
 
         } catch (err) {
@@ -703,7 +717,119 @@ router.post(
 
 /*
  * ---------------------------------------------------------
- * CONFIRM GRN
+ * GRN BARCODE LABELS AND SCANNING
+ * ---------------------------------------------------------
+ */
+
+router.post(
+    '/goods-receipts/:id/prepare-labels',
+    requireAuth,
+    requireRole(...EDIT_ROLES),
+    async (req, res) => {
+        try {
+            const result = await grnRepo.prepareGoodsReceiptLabels({
+                goodsReceiptId: req.params.id,
+                performedBy: req.session.user.id,
+                userRole: req.session.user.role
+            });
+            req.session.success = 'Barcode labels prepared. Print and scan every label before completing the GRN.';
+            return res.redirect(`/goods-receipts/${req.params.id}/labels`);
+        } catch (err) {
+            req.session.error = err.message;
+            return res.redirect(`/goods-receipts/${req.params.id}`);
+        }
+    }
+);
+
+router.get(
+    '/goods-receipts/:id/labels',
+    requireAuth,
+    async (req, res, next) => {
+        try {
+            const batch = await grnRepo.getGoodsReceiptLabelBatch(req.params.id);
+            const sites = await getAccessibleSites(req.session.user);
+            if (!userCanAccessSite(sites, batch.site_id)) {
+                return res.status(403).render('errors/403', { title: 'Access denied' });
+            }
+            return res.render('barcodes/print', {
+                layout: false,
+                title: `GRN ${batch.grn_number} Barcodes`,
+                batch,
+                labels: batch.labels.map(label => ({
+                    ...label,
+                    site_name: batch.site_name,
+                    site_code: batch.site_code,
+                    current_quantity: label.instance_quantity,
+                    unit: label.instance_quantity_unit,
+                    lifecycle_status: label.item_condition === 'DAMAGED' ? 'QUARANTINED' : 'ACTIVE'
+                })),
+                receiptFlow: true,
+                csrfToken: res.locals.csrfToken,
+                backUrl: `/goods-receipts/${batch.grn_id}`,
+                printAction: `/goods-receipts/${batch.grn_id}/print-labels`,
+                scanAction: `/goods-receipts/${batch.grn_id}/scan`,
+                finishAction: `/goods-receipts/${batch.grn_id}/receive`,
+                finishText: 'Complete GRN'
+            });
+        } catch (err) {
+            next(err);
+        }
+    }
+);
+
+router.post(
+    '/goods-receipts/:id/print-labels',
+    requireAuth,
+    requireRole(...EDIT_ROLES),
+    async (req, res) => {
+        try {
+            const grn = await grnRepo.getGoodsReceiptById(req.params.id);
+            if (!grn) throw new Error('Goods Receipt not found.');
+            const sites = await getAccessibleSites(req.session.user);
+            if (!userCanAccessSite(sites, grn.site_id)) {
+                return res.status(403).render('errors/403', { title: 'Access denied' });
+            }
+            await grnRepo.markGoodsReceiptLabelsPrinted({
+                goodsReceiptId: req.params.id,
+                performedBy: req.session.user.id
+            });
+            return res.redirect(`/goods-receipts/${req.params.id}/labels?print=1`);
+        } catch (err) {
+            req.session.error = err.message;
+            return res.redirect(`/goods-receipts/${req.params.id}/labels`);
+        }
+    }
+);
+
+router.post(
+    '/goods-receipts/:id/scan',
+    requireAuth,
+    requireRole(...EDIT_ROLES),
+    async (req, res) => {
+        try {
+            const grn = await grnRepo.getGoodsReceiptById(req.params.id);
+            if (!grn) throw new Error('Goods Receipt not found.');
+            const sites = await getAccessibleSites(req.session.user);
+            if (!userCanAccessSite(sites, grn.site_id)) {
+                return res.status(403).render('errors/403', { title: 'Access denied' });
+            }
+            const result = await grnRepo.scanGoodsReceiptBarcode({
+                goodsReceiptId: req.params.id,
+                barcode: req.body.barcode,
+                performedBy: req.session.user.id
+            });
+            req.session.success = `${result.instance_code} scanned.`;
+        } catch (err) {
+            req.session.error = err.message;
+        }
+        return res.redirect(`/goods-receipts/${req.params.id}/labels#scanner`);
+    }
+);
+
+
+/*
+ * ---------------------------------------------------------
+ * COMPLETE GRN AFTER BARCODE SCANNING
  * ---------------------------------------------------------
  */
 
@@ -872,6 +998,11 @@ router.get(
 
             }
 
+            const barcodeBatch =
+                grn.status === 'AWAITING_BARCODE_SCAN'
+                    ? await grnRepo.getGoodsReceiptLabelBatch(grn.id)
+                    : null;
+
 
             return res.render(
                 'goods-receipts/detail',
@@ -880,7 +1011,9 @@ router.get(
                     title:
                         `GRN ${grn.grn_number}`,
 
-                    grn
+                    grn,
+
+                    barcodeBatch
 
                 }
             );
@@ -1200,6 +1333,12 @@ router.post(
             const {
                 purchaseOrderLineId,
                 receivedQuantity,
+                itemCondition,
+                brand,
+                batchNumber,
+                serialNumber,
+                manufactureDate,
+                expiryDate,
                 notes
             } = req.body;
 
@@ -1222,6 +1361,18 @@ router.post(
                     purchaseOrderLineId,
 
                     receivedQuantity,
+
+                    itemCondition,
+
+                    brand,
+
+                    batchNumber,
+
+                    serialNumber,
+
+                    manufactureDate,
+
+                    expiryDate,
 
                     notes
 
@@ -1249,7 +1400,19 @@ router.post(
 
                     purchaseOrderLineId,
 
-                    receivedQuantity
+                    receivedQuantity,
+
+                    itemCondition,
+
+                    brand,
+
+                    batchNumber,
+
+                    serialNumber,
+
+                    manufactureDate,
+
+                    expiryDate
 
                 },
 

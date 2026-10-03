@@ -505,7 +505,7 @@
 
                             <div class="table-responsive">
 
-                                <table class="table table-hover align-middle mb-0">
+                                <table class="table table-hover align-middle mb-0 grn-new-items">
 
                                     <thead class="table-light">
 
@@ -515,29 +515,12 @@
                                                 Item
                                             </th>
 
-                                            <th>
-                                                Ordered
-                                            </th>
-
-                                            <th>
-                                                Previously Received
-                                            </th>
-
-                                            <th>
-                                                Remaining
-                                            </th>
-
-                                            <th style="min-width: 180px;">
+                                            <th style="min-width: 175px;">
                                                 This Receipt
                                             </th>
 
-                                            <th>
-                                                Physical Unit
-                                            </th>
-
-                                            <th>
-                                                Per Instance
-                                            </th>
+                                            <th style="min-width: 150px;">Condition</th>
+                                            <th style="min-width: 150px;">Instance Details</th>
 
                                         </tr>
 
@@ -562,55 +545,14 @@
                                                         <%= line.item_code %>
                                                     </div>
 
-                                                </td>
-
-
-                                                <!-- ORDERED -->
-
-                                                <td>
-
-                                                    <strong>
-                                                        <%= formatQuantity(
-                                                            line.ordered_quantity
-                                                        ) %>
-                                                    </strong>
-
-                                                    <span class="text-muted">
-                                                        <%= line.unit %>
-                                                    </span>
-
-                                                </td>
-
-
-                                                <!-- PREVIOUSLY RECEIVED -->
-
-                                                <td>
-
-                                                    <%= formatQuantity(
-                                                        line.received_quantity
-                                                    ) %>
-
-                                                    <span class="text-muted">
-                                                        <%= line.unit %>
-                                                    </span>
-
-                                                </td>
-
-
-                                                <!-- REMAINING -->
-
-                                                <td>
-
-                                                    <strong>
-                                                        <%= formatQuantity(
-                                                            line.remaining_quantity
-                                                        ) %>
-                                                    </strong>
-
-                                                    <span class="text-muted">
-                                                        <%= line.unit %>
-                                                    </span>
-
+                                                    <% if (line.brand) { %>
+                                                        <div class="small text-muted">Brand: <%= line.brand %></div>
+                                                    <% } %>
+                                                    <div class="d-flex flex-wrap gap-2 small mt-2">
+                                                        <span class="badge text-bg-light border">Ordered: <%= formatQuantity(line.ordered_quantity) %> <%= line.unit %></span>
+                                                        <span class="badge text-bg-light border">Received: <%= formatQuantity(line.received_quantity) %> <%= line.unit %></span>
+                                                        <span class="badge text-bg-primary">Remaining: <%= formatQuantity(line.remaining_quantity) %> <%= line.unit %></span>
+                                                    </div>
                                                 </td>
 
 
@@ -637,32 +579,19 @@
 
                                                 </td>
 
-
-                                                <!-- PHYSICAL UNIT -->
-
                                                 <td>
-
-                                                    <span class="badge text-bg-secondary">
-                                                        <%= line.unit %>
-                                                    </span>
-
+                                                    <select class="form-select" name="itemCondition[line_<%= line.id %>]">
+                                                        <option value="GOOD">Good</option>
+                                                        <option value="DAMAGED">Damaged</option>
+                                                        <option value="DEFECTIVE">Defective</option>
+                                                        <option value="REJECTED">Rejected</option>
+                                                    </select>
                                                 </td>
 
 
-                                                <!-- PER INSTANCE -->
-
                                                 <td>
-
-                                                    <strong>
-                                                        <%= line.instance_quantity %>
-                                                    </strong>
-
-                                                    <%= line.instance_quantity_unit %>
-
-                                                    <div class="small text-muted">
-                                                        per <%= line.unit %>
-                                                    </div>
-
+                                                    <div class="fw-semibold"><%= line.instance_quantity %> <%= line.instance_quantity_unit %></div>
+                                                    <div class="small text-muted">per <%= line.unit %> instance</div>
                                                 </td>
 
                                             </tr>
@@ -674,7 +603,7 @@
 
                                                 <td></td>
 
-                                                <td colspan="6">
+                                                <td colspan="4">
 
                                                     <div class="small text-muted">
 
@@ -695,6 +624,18 @@
                                                         each
 
                                                     </div>
+
+                                                    <details class="mt-2">
+                                                        <summary class="text-primary" style="cursor:pointer">Advanced / Traceability (optional)</summary>
+                                                        <div class="row g-2 mt-1">
+                                                            <div class="col-md-4"><label class="form-label small">Brand</label><input class="form-control form-control-sm" name="brand[line_<%= line.id %>]" maxlength="100"></div>
+                                                            <div class="col-md-4"><label class="form-label small">Batch Number</label><input class="form-control form-control-sm" name="batchNumber[line_<%= line.id %>]" maxlength="100"></div>
+                                                            <div class="col-md-4"><label class="form-label small">Serial Number</label><input class="form-control form-control-sm" name="serialNumber[line_<%= line.id %>]" maxlength="100"></div>
+                                                            <div class="col-md-4"><label class="form-label small">Manufacture Date</label><input type="date" class="form-control form-control-sm" name="manufactureDate[line_<%= line.id %>]" /></div>
+                                                            <div class="col-md-4"><label class="form-label small">Expiry Date</label><input type="date" class="form-control form-control-sm" name="expiryDate[line_<%= line.id %>]" /></div>
+                                                            <div class="col-md-12"><label class="form-label small">Line Notes</label><input class="form-control form-control-sm" name="lineNotes[line_<%= line.id %>]" maxlength="500" /></div>
+                                                        </div>
+                                                    </details>
 
                                                 </td>
 
@@ -770,6 +711,10 @@
                                             </th>
 
                                             <th>
+                                                Condition
+                                            </th>
+
+                                            <th>
                                                 Physical Unit
                                             </th>
 
@@ -826,6 +771,13 @@
                                                         ) %>
                                                     </strong>
 
+                                                </td>
+
+
+                                                <td>
+                                                    <span class="badge <%= line.item_condition === 'GOOD' ? 'text-bg-success' : line.item_condition === 'DAMAGED' ? 'text-bg-warning' : 'text-bg-danger' %>">
+                                                        <%= line.item_condition || 'GOOD' %>
+                                                    </span>
                                                 </td>
 
 
@@ -1036,6 +988,69 @@
                                             quantity per physical instance.
                                         </div>
 
+                                    </div>
+
+
+                                    <div class="col-12">
+
+                                        <label
+                                            for="itemConditionEdit"
+                                            class="form-label fw-semibold"
+                                        >
+                                            Item Condition
+                                        </label>
+
+                                        <select
+                                            id="itemConditionEdit"
+                                            class="form-select"
+                                        >
+                                            <option value="GOOD">Good</option>
+                                            <option value="DAMAGED">Damaged</option>
+                                            <option value="DEFECTIVE">Defective — return to seller</option>
+                                            <option value="REJECTED">Rejected — return to seller</option>
+                                        </select>
+
+                                    </div>
+
+
+                                    <div class="col-12">
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-outline-secondary"
+                                            data-bs-toggle="collapse"
+                                            data-bs-target="#grnTraceabilityFields"
+                                            aria-expanded="false"
+                                            aria-controls="grnTraceabilityFields"
+                                        >
+                                            Advanced / Traceability (optional)
+                                        </button>
+                                        <div class="collapse mt-3" id="grnTraceabilityFields">
+                                            <div class="border rounded p-3 bg-light">
+                                                <div class="row g-3">
+                                                    <div class="col-md-6">
+                                                        <label for="brandEdit" class="form-label">Brand</label>
+                                                        <input type="text" id="brandEdit" class="form-control" maxlength="100" placeholder="Brand name">
+                                                    </div>
+
+                                                    <div class="col-md-6">
+                                                        <label for="batchNumberEdit" class="form-label">Batch Number</label>
+                                                        <input type="text" id="batchNumberEdit" class="form-control" maxlength="100">
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label for="serialNumberEdit" class="form-label">Serial Number</label>
+                                                        <input type="text" id="serialNumberEdit" class="form-control" maxlength="100">
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label for="manufactureDateEdit" class="form-label">Manufacture Date</label>
+                                                        <input type="date" id="manufactureDateEdit" class="form-control">
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label for="expiryDateEdit" class="form-label">Expiry Date</label>
+                                                        <input type="date" id="expiryDateEdit" class="form-control">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
 
 
@@ -1517,6 +1532,19 @@
                         'lineNotesEdit'
                     )?.value || '';
 
+                const itemCondition =
+                    document.getElementById(
+                        'itemConditionEdit'
+                    )?.value || 'GOOD';
+
+                const traceability = {
+                    brand: document.getElementById('brandEdit')?.value || '',
+                    batchNumber: document.getElementById('batchNumberEdit')?.value || '',
+                    serialNumber: document.getElementById('serialNumberEdit')?.value || '',
+                    manufactureDate: document.getElementById('manufactureDateEdit')?.value || '',
+                    expiryDate: document.getElementById('expiryDateEdit')?.value || ''
+                };
+
 
                 if (!lineId) {
 
@@ -1602,6 +1630,17 @@
                     'receivedQuantity',
                     numericQuantity
                 );
+
+
+                addHidden(
+                    form,
+                    'itemCondition',
+                    itemCondition
+                );
+
+                Object.entries(traceability).forEach(([name, value]) => {
+                    addHidden(form, name, value);
+                });
 
 
                 addHidden(

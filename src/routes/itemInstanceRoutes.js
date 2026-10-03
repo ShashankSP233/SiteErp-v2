@@ -4,7 +4,11 @@ const router = express.Router();
 const siteRepo = require('../repositories/siteRepo');
 
 const {
-  receiveInstances,
+  prepareDirectReceiptBatch,
+  getDirectReceiptBatch,
+  markDirectReceiptLabelsPrinted,
+  scanDirectReceiptBarcode,
+  completeDirectReceiptBatch,
   listInstancesForUser
 } = require('../repositories/itemInstanceRepo');
 
@@ -131,7 +135,7 @@ router.get(
       ]);
 
       res.render('inventory/receive', {
-        title: 'Receive Inventory',
+        title: 'Add Stock',
 
         itemMasters: itemMasters.filter(
           item =>
@@ -174,218 +178,51 @@ router.post(
   requireInventoryManager,
   async (req, res, next) => {
 
-    const {
-      itemMasterId,
-      quantity,
-      siteId,
-      batchNumber,
-      serialNumber,
-      manufactureDate,
-      expiryDate,
-      reason
-    } = req.body;
+    const { siteId, reason } = req.body;
 
     try {
-
-      /*
-       * ---------------------------------------------------------
-       * 1. Required fields
-       * ---------------------------------------------------------
-       */
-
-      if (
-        !itemMasterId ||
-        !siteId ||
-        quantity === undefined ||
-        quantity === null ||
-        quantity === ''
-      ) {
-        throw new Error(
-          'Item, site and number of physical instances are required.'
-        );
+      if (!siteId) throw new Error('Select the receiving site.');
+      if (!await userCanAccessSite(req.session.user, siteId)) {
+        return res.status(403).render('errors/403', { title: 'Access denied' });
       }
 
+      const submittedLines = Array.isArray(req.body.lines) ? req.body.lines : [];
+      const lines = submittedLines
+        .filter(line => line && (line.itemMasterId || line.quantity))
+        .map((line, index) => {
+          const itemMasterId = Number(line.itemMasterId);
+          const instanceCount = Number(line.quantity);
+          if (!Number.isInteger(itemMasterId) || itemMasterId <= 0) {
+            throw new Error(`Select an item for row ${index + 1}.`);
+          }
+          if (!Number.isInteger(instanceCount) || instanceCount <= 0) {
+            throw new Error(`Enter a whole number of physical instances for row ${index + 1}.`);
+          }
+          if (line.serialNumber && instanceCount !== 1) {
+            throw new Error(`Row ${index + 1}: enter a serial number only when adding exactly one physical instance.`);
+          }
+          return {
+            itemMasterId,
+            instanceCount,
+            brand: line.brand || null,
+            batchNumber: line.batchNumber || null,
+            serialNumber: line.serialNumber || null,
+            manufactureDate: line.manufactureDate || null,
+            expiryDate: line.expiryDate || null
+          };
+        });
 
-      /*
-       * ---------------------------------------------------------
-       * 2. Validate physical instance count
-       * ---------------------------------------------------------
-       */
-
-      const instanceCount = Number(quantity);
-
-      if (
-        !Number.isInteger(instanceCount) ||
-        instanceCount <= 0
-      ) {
-        throw new Error(
-          'Number of physical instances must be a positive whole number.'
-        );
-      }
-
-
-      /*
-       * A serial number identifies one physical instance.
-       *
-       * If multiple physical instances are received,
-       * one single serial number cannot identify all of them.
-       */
-      if (
-        serialNumber &&
-        instanceCount !== 1
-      ) {
-        throw new Error(
-          'Enter a serial number only when receiving exactly one physical instance.'
-        );
-      }
-
-
-      /*
-       * ---------------------------------------------------------
-       * 3. Site authorization
-       * ---------------------------------------------------------
-       */
+      if (!lines.length) throw new Error('Add at least one item and quantity.');
 
       const user = req.session.user;
+      const batch = await prepareDirectReceiptBatch({
+        lines,
+        siteId: Number(siteId),
+        performedBy: user.id,
+        reason: reason || null
+      });
 
-      if (
-        !await userCanAccessSite(
-          user,
-          siteId
-        )
-      ) {
-        return res.status(403).render(
-          'errors/403',
-          {
-            title: 'Access denied'
-          }
-        );
-      }
-
-
-      /*
-       * ---------------------------------------------------------
-       * 4. Create physical instances
-       * ---------------------------------------------------------
-       */
-
-      const result =
-        await receiveInstances({
-          itemMasterId: Number(itemMasterId),
-
-          instanceCount,
-
-          siteId: Number(siteId),
-
-          performedBy: user.id,
-
-          batchNumber:
-            batchNumber || null,
-
-          serialNumber:
-            serialNumber || null,
-
-          manufactureDate:
-            manufactureDate || null,
-
-          expiryDate:
-            expiryDate || null,
-
-          reason:
-            reason || null
-        });
-
-
-      /*
-       * ---------------------------------------------------------
-       * 5. Audit every created instance
-       * ---------------------------------------------------------
-       */
-
-      for (
-        const instance of result.instances
-      ) {
-
-        await logAudit({
-          userId: user.id,
-
-          action: 'RECEIVE_INVENTORY',
-
-          entity: 'item_instance',
-
-          entityId: instance.id,
-
-          details: {
-            instanceCode:
-              instance.instance_code,
-
-            barcode:
-              instance.barcode,
-
-            itemMasterId:
-              result.itemMaster.id,
-
-            itemCode:
-              result.itemMaster.item_code,
-
-            quantity:
-              instance.original_quantity,
-
-            unit:
-              instance.unit,
-
-            siteId:
-              result.site.id,
-
-            siteCode:
-              result.site.code
-          },
-
-          ip: req.ip,
-
-          userAgent:
-            req.get('user-agent')
-        });
-      }
-
-
-      /*
-       * ---------------------------------------------------------
-       * 6. Redirect to inventory list
-       * ---------------------------------------------------------
-       */
-
-      const firstInstance =
-        result.instances[0];
-
-      const lastInstance =
-        result.instances[
-          result.instances.length - 1
-        ];
-
-
-      let receivedReference;
-
-      if (
-        firstInstance.instance_code ===
-        lastInstance.instance_code
-      ) {
-
-        receivedReference =
-          firstInstance.instance_code;
-
-      } else {
-
-        receivedReference =
-          `${firstInstance.instance_code} to ${lastInstance.instance_code}`;
-      }
-
-
-      return res.redirect(
-        `/inventory/instances?received=${encodeURIComponent(
-          receivedReference
-        )}`
-      );
+      return res.redirect(`/inventory/receive/${batch.batchId}/labels`);
 
     } catch (err) {
 
@@ -411,7 +248,7 @@ router.post(
         return res.status(400).render(
           'inventory/receive',
           {
-            title: 'Receive Inventory',
+            title: 'Add Stock',
 
             itemMasters:
               itemMasters.filter(
@@ -424,7 +261,10 @@ router.post(
 
             error: err.message,
 
-            form: req.body
+            form: {
+              ...req.body,
+              lines: Array.isArray(req.body.lines) ? req.body.lines.map(line => line || {}) : [{}]
+            }
           }
         );
 
@@ -433,6 +273,131 @@ router.post(
         next(renderError);
 
       }
+    }
+  }
+);
+
+router.get(
+  '/inventory/receive/:batchId/labels',
+  requireAuth,
+  requireInventoryManager,
+  async (req, res, next) => {
+    try {
+      const batch = await getDirectReceiptBatch(req.params.batchId);
+      if (!await userCanAccessSite(req.session.user, batch.site_id)) {
+        return res.status(403).render('errors/403', { title: 'Access denied' });
+      }
+      return res.render('barcodes/print', {
+        layout: false,
+        title: `${batch.reference_number} Barcodes`,
+        batch,
+        labels: batch.labels.map(label => ({
+          ...label,
+          site_name: batch.site_name,
+          site_code: batch.site_code,
+          current_quantity: label.instance_quantity,
+          unit: label.instance_quantity_unit,
+          lifecycle_status: label.item_condition === 'DAMAGED' ? 'QUARANTINED' : 'ACTIVE'
+        })),
+        receiptFlow: true,
+        csrfToken: res.locals.csrfToken,
+        backUrl: '/inventory/receive',
+        printAction: `/inventory/receive/${batch.id}/print-labels`,
+        scanAction: `/inventory/receive/${batch.id}/scan`,
+        finishAction: `/inventory/receive/${batch.id}/complete`,
+        finishText: 'Add to Inventory'
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+router.post(
+  '/inventory/receive/:batchId/print-labels',
+  requireAuth,
+  requireInventoryManager,
+  async (req, res) => {
+    try {
+      const batch = await getDirectReceiptBatch(req.params.batchId);
+      if (!await userCanAccessSite(req.session.user, batch.site_id)) {
+        return res.status(403).render('errors/403', { title: 'Access denied' });
+      }
+      await markDirectReceiptLabelsPrinted({
+        batchId: req.params.batchId,
+        performedBy: req.session.user.id
+      });
+      return res.redirect(`/inventory/receive/${req.params.batchId}/labels?print=1`);
+    } catch (err) {
+      req.session.error = err.message;
+      return res.redirect(`/inventory/receive/${req.params.batchId}/labels`);
+    }
+  }
+);
+
+router.post(
+  '/inventory/receive/:batchId/scan',
+  requireAuth,
+  requireInventoryManager,
+  async (req, res) => {
+    try {
+      const batch = await getDirectReceiptBatch(req.params.batchId);
+      if (!await userCanAccessSite(req.session.user, batch.site_id)) {
+        return res.status(403).render('errors/403', { title: 'Access denied' });
+      }
+      const label = await scanDirectReceiptBarcode({
+        batchId: req.params.batchId,
+        barcode: req.body.barcode,
+        performedBy: req.session.user.id
+      });
+      req.session.success = `${label.instance_code} scanned.`;
+    } catch (err) {
+      req.session.error = err.message;
+    }
+    return res.redirect(`/inventory/receive/${req.params.batchId}/labels#scanner`);
+  }
+);
+
+router.post(
+  '/inventory/receive/:batchId/complete',
+  requireAuth,
+  requireInventoryManager,
+  async (req, res) => {
+    try {
+      const batch = await getDirectReceiptBatch(req.params.batchId);
+      if (!await userCanAccessSite(req.session.user, batch.site_id)) {
+        return res.status(403).render('errors/403', { title: 'Access denied' });
+      }
+      const instances = await completeDirectReceiptBatch({
+        batchId: req.params.batchId,
+        performedBy: req.session.user.id
+      });
+      for (const instance of instances) {
+        await logAudit({
+          userId: req.session.user.id,
+          action: 'RECEIVE_INVENTORY',
+          entity: 'item_instance',
+          entityId: instance.id,
+          details: {
+            instanceCode: instance.instance_code,
+            barcode: instance.barcode,
+            itemMasterId: instance.item_master_id,
+            quantity: instance.original_quantity,
+            unit: instance.unit,
+            siteId: instance.site_id,
+            receiptBatchId: req.params.batchId
+          },
+          ip: req.ip,
+          userAgent: req.get('user-agent')
+        });
+      }
+      const first = instances[0]?.instance_code;
+      const last = instances[instances.length - 1]?.instance_code;
+      const received = first === last ? first : `${first} to ${last}`;
+      return res.redirect(`/inventory/instances?received=${encodeURIComponent(received || '')}`);
+    } catch (err) {
+      req.session.error = err.message;
+      return res.redirect(`/inventory/receive/${req.params.batchId}/labels`);
     }
   }
 );

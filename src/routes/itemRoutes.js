@@ -5,8 +5,11 @@ const itemMasterRepo = require('../repositories/itemMasterRepo');
 const {
   receiveInstances,
   listInstancesForUser,
-  findInstanceForUser
+  findInstanceForUser,
+  updateInstanceDetails
 } = require('../repositories/itemInstanceRepo');
+
+const { getInstanceMovementSummary } = require('../repositories/inventoryMovementRepo');
 
 const { logAudit } = require('../repositories/auditRepo');
 const {
@@ -380,17 +383,70 @@ router.get(
         );
         if (!instance){
           error = `Not accessible instance found for "${code}"`;
+        } else {
+          instance.movements = await getInstanceMovementSummary(
+            req.session.user,
+            instance.instance_code
+          );
         }
       }
 
-      res.render('inventory/instance-lookup',{
-        title: 'Find Inventory Instance',
+      res.render('inventory/instance-detail',{
+        title: instance ? `Instance — ${instance.instance_code}` : 'Find Inventory Instance',
         code,
         instance,
         error
       });
     }catch (err){
       next(err);
+    }
+  }
+);
+
+router.post(
+  '/inventory/instances/:id/details',
+  requireAuth,
+  requireRole('admin', 'manager'),
+  async (req, res, next) => {
+    try {
+      const instanceId = Number(req.params.id);
+      const current = await findInstanceForUser(req.session.user, req.body.instanceCode || '');
+      if (!Number.isInteger(instanceId) || !current || Number(current.id) !== instanceId) {
+        return res.status(404).render('errors/404', { title: 'Inventory instance not found' });
+      }
+      await updateInstanceDetails({
+        user: req.session.user,
+        instanceId,
+        condition: req.body.condition,
+        lifecycleStatus: req.body.lifecycleStatus,
+        brand: req.body.brand,
+        batchNumber: req.body.batchNumber,
+        serialNumber: req.body.serialNumber,
+        manufactureDate: req.body.manufactureDate || null,
+        expiryDate: req.body.expiryDate || null
+      });
+      await logAudit({
+        userId: req.session.user.id,
+        action: 'UPDATE_INSTANCE_DETAILS',
+        entity: 'item_instances',
+        entityId: instanceId,
+        details: {
+          condition: req.body.condition,
+          lifecycleStatus: req.body.condition === 'DAMAGED' ? 'QUARANTINED' : req.body.lifecycleStatus,
+          brand: req.body.brand,
+          batchNumber: req.body.batchNumber,
+          serialNumber: req.body.serialNumber,
+          manufactureDate: req.body.manufactureDate,
+          expiryDate: req.body.expiryDate
+        },
+        ip: req.ip,
+        userAgent: req.get('user-agent')
+      });
+      req.session.success = 'Instance details updated.';
+      return res.redirect(`/inventory/instances/lookup?code=${encodeURIComponent(current.instance_code)}`);
+    } catch (err) {
+      req.session.error = err.message;
+      return res.redirect(`/inventory/instances/lookup?code=${encodeURIComponent(req.body.instanceCode || '')}`);
     }
   }
 );

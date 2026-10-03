@@ -8,7 +8,7 @@
 
   <% if (['admin', 'manager', 'operator'].includes(currentUser.role)) { %>
     <a href="/inventory/receive" class="btn btn-primary">
-      Receive Inventory
+      Add Stock
     </a>
   <% } %>
 </div>
@@ -33,7 +33,7 @@
 
       <% if (['admin', 'manager', 'operator'].includes(currentUser.role)) { %>
         <a href="/inventory/receive" class="btn btn-primary">
-          Receive Inventory
+          Add Stock
         </a>
       <% } %>
     </div>
@@ -52,6 +52,7 @@
             <tr>
               <th>Instance</th>
               <th>Item</th>
+              <th>Brand</th>
               <th>Barcode</th>
               <th>Current</th>
               <th>Allocated</th>
@@ -93,6 +94,8 @@
                     <%= instance.item_name %>
                   </small>
                 </td>
+
+                <td><%= instance.brand || '—' %></td>
 
                 <!-- Barcode -->
                 <td>
@@ -183,7 +186,7 @@
                   <% } else { %>
 
                     <span class="badge bg-warning text-dark">
-                      <%= instance.lifecycle_status %>
+                      <%= instance.lifecycle_status === 'QUARANTINED' ? 'Quarantined' : instance.lifecycle_status %>
                     </span>
 
                   <% } %>

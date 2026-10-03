@@ -1,3 +1,4 @@
+<% const isReceiptFlow = typeof receiptFlow !== 'undefined' && receiptFlow; %>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,7 +9,7 @@
     content="width=device-width, initial-scale=1.0"
   >
 
-  <title>Print Barcode Labels</title>
+  <title><%= title || 'Print Barcode Labels' %></title>
 
   <style>
     @page {
@@ -55,6 +56,13 @@
       background: #111;
       color: #fff;
     }
+
+    .receipt-controls { max-width: 900px; margin: 12px auto; padding: 16px; background: #fff; border: 1px solid #ddd; border-radius: 6px; }
+    .receipt-controls form { display: flex; gap: 8px; margin-top: 10px; }
+    .receipt-controls input { flex: 1; min-width: 200px; padding: 9px; }
+    .receipt-controls a, .receipt-controls button { padding: 8px 14px; cursor: pointer; }
+    .receipt-title { margin: 0 0 6px; }
+    .receipt-status { margin: 8px 0; }
 
 
     /*
@@ -281,6 +289,8 @@
         display: none !important;
       }
 
+      .receipt-controls { display: none !important; }
+
 
       .labels-container {
         width: 281mm;
@@ -348,13 +358,14 @@
 <body>
 
   <div class="print-toolbar">
-    <button
-      type="button"
-      class="primary"
-      id="printLabelsButton"
-    >
-      Print Labels
-    </button>
+    <% if (isReceiptFlow) { %>
+      <form method="post" action="<%= printAction %>">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button type="submit" class="primary">Print Labels</button>
+      </form>
+    <% } else { %>
+      <button type="button" class="primary" id="printLabelsButton">Print Labels</button>
+    <% } %>
 
     <button
       type="button"
@@ -368,6 +379,33 @@
       label<%= labels.length === 1 ? '' : 's' %>
     </div>
   </div>
+
+  <% if (isReceiptFlow) { %>
+    <section class="receipt-controls" id="scanner">
+      <h1 class="receipt-title"><%= batch.reference_number || `GRN ${batch.grn_number}` %> — Barcode check</h1>
+      <div><%= batch.site_code %> — <%= batch.site_name %></div>
+      <div class="receipt-status"><strong><%= batch.scannedCount %> / <%= batch.labelCount %> scanned</strong></div>
+      <% if (success) { %><p><%= success %></p><% } %>
+      <% if (error) { %><p><%= error %></p><% } %>
+      <% if (batch.status === 'AWAITING_SCAN' && batch.labelCount > batch.scannedCount) { %>
+        <% if (batch.labels_printed_at) { %><p>Print was started. Scan each physical label to verify it.</p><% } else { %><p>Print the labels before scanning them.</p><% } %>
+        <form method="post" action="<%= scanAction %>">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <input id="barcode-input" name="barcode" autocomplete="off" required placeholder="Scan barcode" autofocus <%= batch.labels_printed_at ? '' : 'disabled' %>>
+          <button type="submit" <%= batch.labels_printed_at ? '' : 'disabled' %>>Record Scan</button>
+        </form>
+      <% } else if (batch.status === 'AWAITING_SCAN') { %>
+        <p>All labels have been scanned. Complete the receipt to add items to inventory.</p>
+        <form method="post" action="<%= finishAction %>">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <button type="submit"><%= finishText %></button>
+        </form>
+      <% } else { %>
+        <p>This receipt is complete. Labels can be reprinted for reference.</p>
+      <% } %>
+      <p><a href="<%= backUrl %>">Back to receipt</a></p>
+    </section>
+  <% } %>
 
   <% if (!labels.length) { %>
 
@@ -426,6 +464,9 @@
 
           </div>
 
+          <% if (label.brand) { %><div class="site">Brand: <%= label.brand %></div><% } %>
+          <% if (label.serial_number) { %><div class="site">Serial: <%= label.serial_number %></div><% } %>
+
           <div class="label-footer">
 
             <div class="quantity">
@@ -451,6 +492,7 @@
 <script src="/vendor/jsbarcode/JsBarcode.all.min.js"></script>
 
 <script nonce="<%= cspNonce %>">
+  const receiptBackUrl = <%- JSON.stringify(isReceiptFlow ? backUrl : null) %>;
   document.addEventListener('DOMContentLoaded', function () {
 
     // Generate every barcode.
@@ -500,12 +542,19 @@
 
     if (closeButton) {
       closeButton.addEventListener('click', function () {
+        if (receiptBackUrl) { window.location.href = receiptBackUrl; return; }
         if (window.history.length > 1) {
           window.history.back();
         } else {
           window.location.href = '/inventory/labels';
         }
       });
+    }
+
+    const scannerInput = document.getElementById('barcode-input');
+    if (scannerInput && !scannerInput.disabled) scannerInput.focus();
+    if (new URLSearchParams(window.location.search).get('print') === '1') {
+      window.addEventListener('load', function () { window.print(); });
     }
 
   });

@@ -242,6 +242,7 @@ async function getItemMasterInstances(user, itemMasterId) {
 
         ii.batch_number,
         ii.serial_number,
+        ii.brand,
         ii.manufacture_date,
         ii.expiry_date,
 
@@ -290,6 +291,7 @@ async function getItemMasterInstances(user, itemMasterId) {
 
       ii.batch_number,
       ii.serial_number,
+      ii.brand,
       ii.manufacture_date,
       ii.expiry_date,
 
