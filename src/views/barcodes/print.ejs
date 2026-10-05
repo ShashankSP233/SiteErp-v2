@@ -1,5 +1,7 @@
 <%
   const isReceiptFlow = typeof receiptFlow !== 'undefined' && receiptFlow;
+  const labelPages = [];
+  for (let i = 0; i < labels.length; i += 16) labelPages.push(labels.slice(i, i + 16));
   const displayBarcodeCode = value => {
     const code = String(value || '').trim();
     return isReceiptFlow ? code.toUpperCase().replace(/\s+/g, '-') : code;
@@ -63,17 +65,20 @@
       color: #fff;
     }
 
-    .receipt-controls { max-width: 900px; margin: 12px auto; padding: 16px; background: #fff; border: 1px solid #ddd; border-radius: 6px; }
-    .receipt-controls form { display: flex; gap: 8px; margin-top: 10px; }
-    .receipt-controls input { flex: 1; min-width: 200px; padding: 9px; }
-    .receipt-controls a, .receipt-controls button { padding: 8px 14px; cursor: pointer; }
-    .receipt-title { margin: 0 0 6px; }
-    .receipt-status { margin: 8px 0; }
-    .receipt-alert { padding: 9px 12px; margin: 10px 0; border-radius: 5px; background: #eaf4ec; color: #245b31; }
+    .receipt-controls { max-width: 1040px; margin: 16px auto 20px; padding: 22px 24px; background: #fff; border: 1px solid #dce2e8; border-top: 4px solid #6c7d49; border-radius: 10px; box-shadow: 0 5px 18px rgba(28, 39, 52, .08); }
+    .receipt-controls form { display: flex; gap: 10px; margin-top: 14px; }
+    .receipt-controls input { flex: 1; min-width: 200px; padding: 11px 13px; border: 1px solid #b8c2ce; border-radius: 6px; font-size: 15px; }
+    .receipt-controls input:focus { outline: 3px solid rgba(49, 96, 255, .18); border-color: #3160ff; }
+    .receipt-controls a, .receipt-controls button { padding: 10px 16px; cursor: pointer; border-radius: 6px; }
+    .receipt-controls form button { border: 1px solid #315cff; background: #315cff; color: #fff; font-weight: 600; }
+    .receipt-title { margin: 0 0 6px; font-size: 25px; }
+    .receipt-status { display: flex; align-items: center; gap: 12px; margin: 12px 0; }
+    .receipt-progress { height: 8px; flex: 1; max-width: 420px; accent-color: #6c7d49; }
+    .receipt-alert { padding: 10px 13px; margin: 12px 0; border-radius: 6px; background: #edf5e9; color: #315528; }
     .receipt-alert.error { background: #fdecec; color: #8a2525; }
-    .receipt-label-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 150px; overflow-y: auto; margin: 12px 0; padding: 2px; }
-    .receipt-label-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid #d5dce2; border-radius: 5px; background: #f5f7f9; font-size: 12px; }
-    .receipt-label-chip.scanned { border-color: #8bab7a; background: #edf5e9; color: #315528; }
+    .receipt-label-list { display: flex; flex-wrap: wrap; gap: 7px; max-height: 210px; overflow-y: auto; margin: 14px 0; padding: 10px; border: 1px solid #e0e5ea; border-radius: 7px; background: #f8f9fb; }
+    .receipt-label-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; border: 1px solid #d5dce2; border-radius: 999px; background: #fff; font-size: 12px; }
+    .receipt-label-chip.scanned { border-color: #9ab387; background: #edf5e9; color: #315528; }
     .receipt-label-chip.pending { color: #52606d; }
     .receipt-label-chip .scan-check { font-weight: 700; }
 
@@ -103,6 +108,18 @@
     */
 
 
+    .labels-page {
+      width: 281mm;
+      height: 194mm;
+      margin: 8mm auto;
+      padding: 0;
+      background: #fff;
+      break-after: page;
+      page-break-after: always;
+    }
+
+    .labels-page:last-of-type { break-after: auto; page-break-after: auto; }
+
     .labels-container {
       width: 281mm;
       height: 194mm;
@@ -118,7 +135,7 @@
       column-gap: 3mm;
       row-gap: 3mm;
 
-      margin: 8mm auto 0;
+      margin: 0;
       padding: 0;
 
       background: #fff;
@@ -289,7 +306,7 @@
       html,
       body {
         width: 297mm;
-        height: 210mm;
+        min-height: 210mm;
 
         margin: 0;
         padding: 0;
@@ -305,11 +322,21 @@
       .receipt-controls { display: none !important; }
 
 
+      .labels-page {
+        width: 281mm;
+        height: 194mm;
+        margin: 8mm;
+        padding: 0;
+        break-after: page;
+        page-break-after: always;
+      }
+
+      .labels-page:last-of-type { break-after: auto; page-break-after: auto; }
+
       .labels-container {
         width: 281mm;
         height: 194mm;
-
-        margin: 8mm 8mm 0;
+        margin: 0;
         padding: 0;
 
         display: grid;
@@ -358,7 +385,7 @@
 
     @media screen and (max-width: 1200px) {
 
-      .labels-container {
+      .labels-page {
         margin-left: 8mm;
         margin-right: 8mm;
       }
@@ -397,7 +424,10 @@
     <section class="receipt-controls" id="scanner">
       <h1 class="receipt-title"><%= batch.reference_number || `GRN ${batch.grn_number}` %> — Barcode check</h1>
       <div><%= batch.site_code %> — <%= batch.site_name %></div>
-      <div class="receipt-status"><strong><%= batch.scannedCount %> / <%= batch.labelCount %> scanned</strong></div>
+      <div class="receipt-status">
+        <strong><%= batch.scannedCount %> / <%= batch.labelCount %> scanned</strong>
+        <progress class="receipt-progress" value="<%= batch.scannedCount %>" max="<%= batch.labelCount || 1 %>" aria-label="Barcode scan progress"></progress>
+      </div>
       <% if (success) { %><div class="receipt-alert"><%= success %></div><% } %>
       <% if (error) { %><div class="receipt-alert error"><%= error %></div><% } %>
       <% if (batch.status === 'AWAITING_SCAN' && batch.labelCount > batch.scannedCount) { %>
@@ -438,9 +468,10 @@
 
   <% } else { %>
 
-    <div class="labels-container">
+    <% labelPages.forEach(function(pageLabels) { %>
+    <div class="labels-page"><div class="labels-container">
 
-      <% labels.forEach(function(label) { %>
+      <% pageLabels.forEach(function(label) { %>
 
         <div class="label">
 
@@ -508,7 +539,8 @@
 
       <% }); %>
 
-    </div>
+    </div></div>
+    <% }); %>
 
   <% } %>
 

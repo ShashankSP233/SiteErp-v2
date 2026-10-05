@@ -52,3 +52,31 @@ main h1::after {
   color: var(--app-olive);
   background: var(--app-olive-soft);
 }
+
+.receive-page { padding-bottom: 2rem; }
+.receive-page-heading { padding: 1rem 0 .25rem; }
+.receive-eyebrow { margin-bottom: .35rem; color: var(--app-olive); font-size: .72rem; font-weight: 700; letter-spacing: .1em; }
+.receive-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
+.receive-step { display: flex; align-items: center; gap: .75rem; min-height: 68px; padding: .75rem 1rem; border: 1px solid #e0e5e9; border-radius: .65rem; background: #fff; color: #68717b; }
+.receive-step > span { display: grid; width: 2rem; height: 2rem; flex: 0 0 2rem; place-items: center; border-radius: 50%; background: #eef0f2; color: #5d6670; font-weight: 700; }
+.receive-step strong, .receive-step small { display: block; }
+.receive-step strong { color: #26313b; font-size: .9rem; }
+.receive-step small { margin-top: .12rem; font-size: .76rem; }
+.receive-step.active { border-color: #c8d2b9; background: var(--app-olive-soft); }
+.receive-step.active > span { background: var(--app-olive); color: white; }
+.receive-card { overflow: hidden; border: 1px solid #e3e7eb; border-radius: .7rem; }
+.receive-card > .card-header { border-bottom: 1px solid #e7eaee; }
+.receive-card .stock-line { border-color: #e2e7eb !important; background: #fbfcfd; transition: border-color .15s, background .15s; }
+.receive-card .stock-line:focus-within { border-color: #9cac85 !important; background: #fff; }
+.receive-card .form-label { color: #35414b; }
+.receive-card .form-control, .receive-card .form-select { min-height: 42px; border-color: #d5dce3; }
+.receive-card .item-instance-info { display: inline-block; padding: .25rem .5rem; border-radius: .3rem; background: #f0f3eb; color: #52633b !important; }
+.traceability-details { padding-top: .8rem; border-top: 1px solid #e6e9ed; }
+.traceability-details summary { color: #315cff; font-weight: 600; cursor: pointer; }
+.traceability-details summary span { margin-left: .35rem; color: #78818a !important; font-size: .78rem; font-weight: 400; }
+.traceability-details[open] summary { margin-bottom: .25rem; }
+.receive-card .card-footer { border-top: 1px solid #e7eaee; }
+@media (max-width: 767.98px) {
+  .receive-steps { grid-template-columns: 1fr; gap: .45rem; }
+  .receive-step { min-height: 58px; }
+}

@@ -3,12 +3,20 @@
   const selectedSiteId = form?.siteId || '';
 %>
 
-<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+<div class="receive-page">
+<div class="receive-page-heading d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
   <div>
+    <div class="receive-eyebrow">INVENTORY · STOCK INTAKE</div>
     <h1 class="h3 mb-1">Add Stock</h1>
-    <p class="text-muted mb-0">Add one or more items, then print and scan every barcode before stock enters inventory.</p>
+    <p class="text-muted mb-0">Register physical items, verify their labels, then add them to the selected site.</p>
   </div>
   <a href="/inventory/instances" class="btn btn-outline-secondary">View Inventory</a>
+</div>
+
+<div class="receive-steps mb-4" aria-label="Add stock steps">
+  <div class="receive-step active"><span>1</span><div><strong>Receipt details</strong><small>Choose the destination site</small></div></div>
+  <div class="receive-step"><span>2</span><div><strong>Items and quantities</strong><small>Enter items and traceability info</small></div></div>
+  <div class="receive-step"><span>3</span><div><strong>Print and scan</strong><small>Verify each physical barcode</small></div></div>
 </div>
 
 <% if (error) { %><div class="alert alert-danger" role="alert"><%= error %></div><% } %>
@@ -34,8 +42,8 @@
 <form method="POST" action="/inventory/receive" id="add-stock-form">
   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
-  <div class="card shadow-sm mb-4">
-    <div class="card-header bg-white py-3"><h2 class="h5 mb-0">Receipt details</h2></div>
+  <div class="card receive-card shadow-sm mb-4">
+    <div class="card-header bg-white py-3"><h2 class="h5 mb-0">Where is this stock going?</h2><div class="small text-muted mt-1">Set the site and add a reference if you have one.</div></div>
     <div class="card-body">
       <div class="row g-3">
         <div class="col-md-6">
@@ -53,10 +61,10 @@
     </div>
   </div>
 
-  <div class="card shadow-sm">
+  <div class="card receive-card shadow-sm">
     <div class="card-header bg-white py-3 d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2">
-      <div><h2 class="h5 mb-1">Items to add</h2><p class="text-muted small mb-0">Add a row for each item type. Quantity means physical units or containers.</p></div>
-      <button type="button" class="btn btn-outline-primary" id="add-stock-line">+ Add another item</button>
+      <div><h2 class="h5 mb-1">Items to add</h2><p class="text-muted small mb-0">Each physical unit gets its own barcode. Add one row per item type.</p></div>
+      <button type="button" class="btn btn-outline-primary" id="add-stock-line">＋ Add item row</button>
     </div>
     <div class="card-body" id="stock-lines">
       <% submittedLines.forEach((line, index) => { %>
@@ -82,8 +90,8 @@
               <div class="form-text">For example, 4 barrels creates four individually barcoded instances.</div>
             </div>
           </div>
-          <details class="mt-3">
-            <summary class="text-primary" style="cursor:pointer">Brand and traceability details <span class="text-muted">(optional)</span></summary>
+          <details class="traceability-details mt-3">
+            <summary>Brand and traceability details <span class="text-muted">Optional</span></summary>
             <div class="row g-3 mt-1">
               <div class="col-md-6 col-xl-4"><label class="form-label">Brand</label><input class="form-control" name="lines[<%= index %>][brand]" maxlength="100" value="<%= line.brand || '' %>" placeholder="e.g. Shell"></div>
               <div class="col-md-6 col-xl-4"><label class="form-label">Batch number</label><input class="form-control" name="lines[<%= index %>][batchNumber]" maxlength="100" value="<%= line.batchNumber || '' %>"></div>
@@ -113,7 +121,7 @@
       <div class="col-lg-7"><label class="form-label fw-semibold">Item master</label><select class="form-select stock-item" name="lines[__INDEX__][itemMasterId]" required><option value="">Select item...</option><% itemMasters.forEach(item => { %><option value="<%= item.id %>" data-physical-unit="<%= item.unit || '' %>" data-instance-quantity="<%= item.instance_quantity ?? '' %>" data-quantity-unit="<%= item.instance_quantity_unit || '' %>"><%= item.item_code %> — <%= item.name %></option><% }) %></select><div class="item-instance-info small text-muted mt-2">Choose an item to see its configured quantity per physical unit.</div></div>
       <div class="col-lg-5"><label class="form-label fw-semibold">Number of physical instances</label><input type="number" class="form-control" name="lines[__INDEX__][quantity]" min="1" step="1" required><div class="form-text">Each physical unit receives its own barcode.</div></div>
     </div>
-    <details class="mt-3"><summary class="text-primary" style="cursor:pointer">Brand and traceability details <span class="text-muted">(optional)</span></summary><div class="row g-3 mt-1">
+    <details class="traceability-details mt-3"><summary>Brand and traceability details <span class="text-muted">Optional</span></summary><div class="row g-3 mt-1">
       <div class="col-md-6 col-xl-4"><label class="form-label">Brand</label><input class="form-control" name="lines[__INDEX__][brand]" maxlength="100"></div>
       <div class="col-md-6 col-xl-4"><label class="form-label">Batch number</label><input class="form-control" name="lines[__INDEX__][batchNumber]" maxlength="100"></div>
       <div class="col-md-6 col-xl-4"><label class="form-label">Serial number</label><input class="form-control" name="lines[__INDEX__][serialNumber]" maxlength="100" placeholder="Use for one physical instance only"></div>
@@ -122,6 +130,7 @@
     </div></details>
   </section>
 </template>
+</div>
 
 <script nonce="<%= cspNonce %>">
   (() => {
