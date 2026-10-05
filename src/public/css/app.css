@@ -80,3 +80,7 @@ main h1::after {
   .receive-steps { grid-template-columns: 1fr; gap: .45rem; }
   .receive-step { min-height: 58px; }
 }
+
+.item-master-filter { margin-bottom: .35rem; }
+.item-master-filter:focus { border-color: #8b9a70; box-shadow: 0 0 0 .2rem rgba(108, 125, 73, .14); }
+.item-master-filter-help { min-height: 1.2rem; margin: .2rem 0 .35rem; }
