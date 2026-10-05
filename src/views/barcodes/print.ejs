@@ -1,4 +1,10 @@
-<% const isReceiptFlow = typeof receiptFlow !== 'undefined' && receiptFlow; %>
+<%
+  const isReceiptFlow = typeof receiptFlow !== 'undefined' && receiptFlow;
+  const displayBarcodeCode = value => {
+    const code = String(value || '').trim();
+    return isReceiptFlow ? code.toUpperCase().replace(/\s+/g, '-') : code;
+  };
+%>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -65,6 +71,11 @@
     .receipt-status { margin: 8px 0; }
     .receipt-alert { padding: 9px 12px; margin: 10px 0; border-radius: 5px; background: #eaf4ec; color: #245b31; }
     .receipt-alert.error { background: #fdecec; color: #8a2525; }
+    .receipt-label-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 150px; overflow-y: auto; margin: 12px 0; padding: 2px; }
+    .receipt-label-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid #d5dce2; border-radius: 5px; background: #f5f7f9; font-size: 12px; }
+    .receipt-label-chip.scanned { border-color: #8bab7a; background: #edf5e9; color: #315528; }
+    .receipt-label-chip.pending { color: #52606d; }
+    .receipt-label-chip .scan-check { font-weight: 700; }
 
 
     /*
@@ -391,7 +402,7 @@
       <% if (error) { %><div class="receipt-alert error"><%= error %></div><% } %>
       <% if (batch.status === 'AWAITING_SCAN' && batch.labelCount > batch.scannedCount) { %>
         <% if (batch.labels_printed_at) { %><p>Print was started. Scan each physical label to verify it.</p><% } else { %><p>Print the labels before scanning them.</p><% } %>
-        <p class="small">Scan the full instance barcode printed on the label below, such as <strong><%= batch.labels.find(label => !label.scanned_at)?.instance_code || '' %></strong>. The item code alone is not a unique instance barcode.</p>
+        <p class="small">Scan the full instance barcode printed on the label below, such as <strong><%= displayBarcodeCode(batch.labels.find(label => !label.scanned_at)?.instance_code) %></strong>. The item code alone is not a unique instance barcode.</p>
         <form method="post" action="<%= scanAction %>">
           <input type="hidden" name="_csrf" value="<%= csrfToken %>">
           <input id="barcode-input" name="barcode" autocomplete="off" required placeholder="Scan barcode" autofocus <%= batch.labels_printed_at ? '' : 'disabled' %>>
@@ -406,6 +417,15 @@
       <% } else { %>
         <p>This receipt is complete. Labels can be reprinted for reference.</p>
       <% } %>
+      <div class="receipt-label-list" aria-label="Barcode scan checklist">
+        <% batch.labels.forEach(label => { %>
+          <div class="receipt-label-chip <%= label.scanned_at ? 'scanned' : 'pending' %>" title="<%= label.item_name %>">
+            <span class="scan-check"><%= label.scanned_at ? '✓' : '○' %></span>
+            <span><%= displayBarcodeCode(label.instance_code) %></span>
+            <span><%= label.scanned_at ? 'Scanned' : 'Pending' %></span>
+          </div>
+        <% }) %>
+      </div>
       <p><a href="<%= backUrl %>">Back to receipt</a></p>
     </section>
   <% } %>
@@ -428,7 +448,7 @@
             <div class="label-header">
               <div>
                 <div class="item-code">
-                  <%= label.item_code %>
+                  <%= displayBarcodeCode(label.item_code) %>
                 </div>
 
                 <div class="item-name">
@@ -438,7 +458,7 @@
             </div>
 
             <div class="instance-code">
-              <%= label.instance_code %>
+              <%= displayBarcodeCode(label.instance_code) %>
             </div>
 
             <% if (label.site_name) { %>
@@ -457,12 +477,12 @@
 
             <svg
               class="barcode"
-              data-barcode="<%= label.barcode %>"
-              aria-label="Barcode <%= label.barcode %>"
+              data-barcode="<%= displayBarcodeCode(label.barcode) %>"
+              aria-label="Barcode <%= displayBarcodeCode(label.barcode) %>"
             ></svg>
 
             <div class="barcode-value">
-              <%= label.barcode %>
+              <%= displayBarcodeCode(label.barcode) %>
             </div>
 
           </div>

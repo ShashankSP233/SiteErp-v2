@@ -1738,7 +1738,7 @@ async function markGoodsReceiptLabelsPrinted({ goodsReceiptId, performedBy }) {
 }
 
 async function scanGoodsReceiptBarcode({ goodsReceiptId, barcode, performedBy }) {
-    const value = String(barcode || '').replace(/\s+/g, '').toUpperCase();
+    const value = itemInstanceRepo.normalizeBarcodeCode(barcode);
     if (!value) throw new Error('Scan or enter a barcode.');
     return db.tx(async tx => {
         const batch = await tx.one(
@@ -1754,7 +1754,7 @@ async function scanGoodsReceiptBarcode({ goodsReceiptId, barcode, performedBy })
         const result = await tx.query(
             `UPDATE inventory_receipt_labels
              SET scanned_at = now(), scanned_by = ?
-             WHERE receipt_batch_id = ? AND UPPER(barcode) = ? AND scanned_at IS NULL
+             WHERE receipt_batch_id = ? AND REPLACE(UPPER(barcode), ' ', '-') = ? AND scanned_at IS NULL
              RETURNING instance_code`,
             [performedBy, batch.id, value]
         );
@@ -1762,7 +1762,7 @@ async function scanGoodsReceiptBarcode({ goodsReceiptId, barcode, performedBy })
         if (!rows.length) {
             const exists = await tx.query(
                 `SELECT scanned_at FROM inventory_receipt_labels
-                 WHERE receipt_batch_id = ? AND UPPER(barcode) = ?`,
+                 WHERE receipt_batch_id = ? AND REPLACE(UPPER(barcode), ' ', '-') = ?`,
                 [batch.id, value]
             );
             if ((exists.rows || exists).length) throw new Error('This barcode was already scanned.');
@@ -1772,10 +1772,10 @@ async function scanGoodsReceiptBarcode({ goodsReceiptId, barcode, performedBy })
                  ORDER BY id LIMIT 5`,
                 [batch.id]
             );
-            const codes = (expected.rows || expected).map(row => row.instance_code);
+            const codes = (expected.rows || expected).map(row => itemInstanceRepo.normalizeBarcodeCode(row.instance_code));
             throw new Error(`Barcode “${value}” is not in this receipt. Scan one of the labels shown${codes.length ? ` (for example: ${codes.join(', ')})` : ''}.`);
         }
-        return rows[0];
+        return { ...rows[0], instance_code: itemInstanceRepo.normalizeBarcodeCode(rows[0].instance_code) };
     });
 }
 
@@ -2249,6 +2249,8 @@ async function confirmGoodsReceipt({
         );
         for (const label of (labelsResult.rows || labelsResult)) {
             const damaged = label.item_condition === 'DAMAGED';
+            const instanceCode = itemInstanceRepo.normalizeBarcodeCode(label.instance_code);
+            const barcode = itemInstanceRepo.normalizeBarcodeCode(label.barcode);
             const instance = await tx.one(
                 `INSERT INTO item_instances (
                     item_master_id, instance_code, barcode, brand,
@@ -2259,8 +2261,8 @@ async function confirmGoodsReceipt({
                  RETURNING *`,
                 [
                     label.item_master_id,
-                    label.instance_code,
-                    label.barcode,
+                    instanceCode,
+                    barcode,
                     label.brand,
                     label.instance_quantity,
                     label.instance_quantity,
