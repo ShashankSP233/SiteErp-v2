@@ -1,7 +1,12 @@
 <%
   const isReceiptFlow = typeof receiptFlow !== 'undefined' && receiptFlow;
+  const printableLabels = isReceiptFlow && batch.status === 'AWAITING_SCAN'
+    ? labels.filter(label => !label.scanned_at)
+    : labels;
   const labelPages = [];
-  for (let i = 0; i < labels.length; i += 16) labelPages.push(labels.slice(i, i + 16));
+  for (let i = 0; i < printableLabels.length; i += 16) {
+    labelPages.push(printableLabels.slice(i, i + 16));
+  }
   const displayBarcodeCode = value => {
     const code = String(value || '').trim();
     return isReceiptFlow ? code.toUpperCase().replace(/\s+/g, '-') : code;
@@ -167,6 +172,21 @@
     }
 
 
+    .label-main {
+      display: flex;
+      align-items: flex-start;
+      gap: 2mm;
+      min-height: 0;
+      flex: 1;
+    }
+
+    .label-details {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+
     /*
     * Header
     */
@@ -225,42 +245,39 @@
     */
 
     .barcode-wrapper {
-      width: 100%;
-
-      margin-top: 2.5mm;
-
+      width: 34mm;
+      height: 34mm;
+      flex: 0 0 34mm;
       display: flex;
-      flex-direction: column;
-
       align-items: center;
       justify-content: center;
     }
 
 
     .barcode {
-      width: 58mm;
-      height: 18mm;
+      width: 34mm;
+      height: 34mm;
 
       display: block;
+      object-fit: contain;
     }
 
 
     .barcode-value {
       width: 100%;
 
-      margin-top: 0.8mm;
+      margin-top: 1mm;
+      padding-top: 0.8mm;
+      border-top: 0.2mm solid #bbb;
 
       text-align: center;
 
       font-family: monospace;
 
-      font-size: 5.5pt;
-      line-height: 1;
-
-      white-space: nowrap;
-
-      overflow: hidden;
-      text-overflow: ellipsis;
+      font-size: 8pt;
+      font-weight: 700;
+      line-height: 1.05;
+      overflow-wrap: anywhere;
     }
 
 
@@ -268,32 +285,19 @@
     * Footer
     */
 
-    .label-footer {
-      margin-top: auto;
-
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-
-      gap: 2mm;
-
+    .label-meta {
+      display: grid;
+      gap: 1.5mm;
+      margin-top: 3mm;
       font-size: 6pt;
-
       line-height: 1.05;
-
       color: #555;
     }
 
-
-    .quantity {
-      white-space: nowrap;
-    }
-
-
-    .status {
-      text-align: right;
-
-      white-space: nowrap;
+    .label-meta strong {
+      display: block;
+      margin-bottom: 0.5mm;
+      color: #333;
     }
 
 
@@ -369,8 +373,8 @@
 
 
       .barcode {
-        width: 58mm;
-        height: 18mm;
+        width: 34mm;
+        height: 34mm;
       }
 
     }
@@ -415,8 +419,8 @@
     </button>
 
     <div class="info">
-      <%= labels.length %>
-      label<%= labels.length === 1 ? '' : 's' %>
+      <%= printableLabels.length %>
+      label<%= printableLabels.length === 1 ? '' : 's' %>
     </div>
   </div>
 
@@ -460,10 +464,14 @@
     </section>
   <% } %>
 
-  <% if (!labels.length) { %>
+  <% if (!printableLabels.length) { %>
 
     <div class="empty">
-      No inventory instances were selected for printing.
+      <% if (isReceiptFlow && batch.status === 'AWAITING_SCAN' && labels.length) { %>
+        No pending labels remain to print. Complete the receipt after confirming all scans.
+      <% } else { %>
+        No inventory instances were selected for printing.
+      <% } %>
     </div>
 
   <% } else { %>
@@ -475,7 +483,8 @@
 
         <div class="label">
 
-          <div>
+          <div class="label-main">
+            <div class="label-details">
             <div class="label-header">
               <div>
                 <div class="item-code">
@@ -502,37 +511,25 @@
                 <% } %>
               </div>
             <% } %>
+            <% if (label.brand) { %><div class="site">Brand: <%= label.brand %></div><% } %>
+            <% if (label.serial_number) { %><div class="site">Serial: <%= label.serial_number %></div><% } %>
+            <div class="label-meta">
+              <div><strong>Qty</strong><%= label.current_quantity %> <%= label.unit || label.item_unit || '' %></div>
+              <div><strong>Status</strong><%= label.lifecycle_status || '' %></div>
+            </div>
+            </div>
+
+            <div class="barcode-wrapper">
+              <svg
+                class="barcode"
+                data-barcode="<%= displayBarcodeCode(label.barcode) %>"
+                aria-label="Barcode <%= displayBarcodeCode(label.barcode) %>"
+              ></svg>
+            </div>
           </div>
 
-          <div class="barcode-wrapper">
-
-            <svg
-              class="barcode"
-              data-barcode="<%= displayBarcodeCode(label.barcode) %>"
-              aria-label="Barcode <%= displayBarcodeCode(label.barcode) %>"
-            ></svg>
-
-            <div class="barcode-value">
-              <%= displayBarcodeCode(label.barcode) %>
-            </div>
-
-          </div>
-
-          <% if (label.brand) { %><div class="site">Brand: <%= label.brand %></div><% } %>
-          <% if (label.serial_number) { %><div class="site">Serial: <%= label.serial_number %></div><% } %>
-
-          <div class="label-footer">
-
-            <div class="quantity">
-              Qty:
-              <%= label.current_quantity %>
-              <%= label.unit || label.item_unit || '' %>
-            </div>
-
-            <div class="status">
-              <%= label.lifecycle_status || '' %>
-            </div>
-
+          <div class="barcode-value">
+            <%= displayBarcodeCode(label.barcode) %>
           </div>
 
         </div>
@@ -544,7 +541,7 @@
 
   <% } %>
 
-<script src="/vendor/jsbarcode/JsBarcode.all.min.js"></script>
+<script src="/vendor/bwipjs/bwip-js-min.js"></script>
 
 <script
   nonce="<%= cspNonce %>"
@@ -554,7 +551,7 @@
     document.currentScript.dataset.receiptBackUrl || null;
   document.addEventListener('DOMContentLoaded', function () {
 
-    // Generate every barcode.
+    // Render Data Matrix symbols using the barcode values already stored.
     document
       .querySelectorAll('svg[data-barcode]')
       .forEach(function (element) {
@@ -564,25 +561,29 @@
           return;
         }
 
-        JsBarcode(element, value, {
-          format: 'CODE128',
-          displayValue: false,
+        try {
+          const markup = bwipjs.toSVG({
+            bcid: 'datamatrix',
+            text: value,
+            scale: 4,
+            padding: 4,
+            backgroundcolor: 'FFFFFF'
+          });
 
-          /*
-          * Keep the barcode inside the fixed
-          * 58mm × 18mm label area.
-          */
-          width: 1.5,
-          height: 68,
+          const parsed = new DOMParser().parseFromString(markup, 'image/svg+xml');
+          if (parsed.querySelector('parsererror')) {
+            throw new Error('Data Matrix SVG could not be parsed.');
+          }
 
-          margin: 0,
-
-          /*
-          * Do not add JsBarcode text.
-          * Site-ERP renders the barcode value separately.
-          */
-          text: ''
-        });
+          const renderedSvg = parsed.documentElement;
+          renderedSvg.setAttribute('class', 'barcode');
+          renderedSvg.setAttribute('role', 'img');
+          renderedSvg.setAttribute('aria-label', `Data Matrix barcode ${value}`);
+          element.replaceWith(document.importNode(renderedSvg, true));
+        } catch (error) {
+          console.error('Data Matrix rendering failed for barcode:', value, error);
+          element.textContent = 'Barcode rendering failed';
+        }
       });
 
     // Attach the print handler ONCE.

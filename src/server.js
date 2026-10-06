@@ -76,6 +76,16 @@ try {
   );
 }
 
+try {
+  // bwip-js does not export its package.json, so resolve its Node entry point
+  // and serve the browser bundle from the same dist directory.
+  const bwipJsDist = path.dirname(require.resolve('bwip-js'));
+
+  app.use('/vendor/bwipjs', express.static(bwipJsDist));
+} catch (_) {
+  console.warn('[warn] bwip-js not found — run "npm install".');
+}
+
 // Sessions: Postgres-backed in pg mode (multi-instance safe); in-memory for the
 // local PGlite test mode (fine for a single local process).
 const sessionOptions = {
