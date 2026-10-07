@@ -110,11 +110,14 @@ router.get('/vendors', requireAuth, async (req, res, next) => {
 // Create Vendor
 // ------------------------------------------------------------
 
-router.get('/vendors/new', ...managerOnly, async (req, res, next) => {
+router.get('/vendors/new', requireAuth, requireRole('admin', 'manager'), async (req, res, next) => {
     try {
-        await renderForm(res, {
+        res.render('vendors/form', {
+            title: 'Add Vendor',
             vendor: {},
+            formAction: '/vendors',
             isEdit: false,
+            formErrors: [],
             nextVendorCode: await vendorRepo.nextVendorCode()
         });
     } catch (err) {

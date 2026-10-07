@@ -38,7 +38,7 @@
                     <div class="col-md-6">
                         <label for="vendorCodeView" class="form-label">Vendor Code</label>
                         <input type="text" class="form-control" id="vendorCodeView" readonly
-                               value="<%= isEdit ? v.vendor_code : (nextVendorCode || '') %>">
+                               value="<%= isEdit ? v.vendor_code : (typeof nextVendorCode !== 'undefined' ? nextVendorCode : '') %>"
                         <div class="form-text">
                             <%= isEdit ? 'The code cannot be changed.' : 'Assigned automatically when you save.' %>
                         </div>
