@@ -57,6 +57,7 @@
                             <tr>
                                 <th>Vendor Code</th>
                                 <th>Name</th>
+                                <th>GST / PAN</th>
                                 <th>Contact</th>
                                 <th>Phone</th>
                                 <th>Email</th>
@@ -73,6 +74,15 @@
                                 <tr>
                                     <td>
                                         <strong><%= vendor.vendor_code %></strong>
+                                    </td>
+                                    <td>
+                                        <% if (vendor.gst_no) { %>
+                                            <span class="small text-muted">GST</span> <%= vendor.gst_no %>
+                                        <% } else if (vendor.pan_no) { %>
+                                            <span class="small text-muted">PAN</span> <%= vendor.pan_no %>
+                                        <% } else { %>
+                                            -
+                                        <% } %>
                                     </td>
 
                                     <td>
@@ -102,7 +112,7 @@
                                     <% if (currentUser && ['admin', 'manager'].includes(currentUser.role)) { %>
                                         <td class="text-end">
                                             <div class="d-inline-flex gap-1">
-
+                                                <a href="/vendors/<%= vendor.id %>" class="btn btn-sm btn-outline-secondary">View</a>
                                                 <a
                                                     href="/vendors/<%= vendor.id %>/edit"
                                                     class="btn btn-sm btn-outline-primary"
@@ -202,7 +212,7 @@
                             <% if (currentUser && ['admin', 'manager'].includes(currentUser.role)) { %>
 
                                 <div class="d-flex gap-2 mt-3">
-
+                                    <a href="/vendors/<%= vendor.id %>" class="btn btn-sm btn-outline-secondary flex-fill">View</a>
                                     <a
                                         href="/vendors/<%= vendor.id %>/edit"
                                         class="btn btn-sm btn-outline-primary flex-fill"

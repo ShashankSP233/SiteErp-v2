@@ -1,227 +1,220 @@
+<%
+    const v = vendor || {};
+    const taxType = v.tax_type || ((v.pan_no && !v.gst_no) ? 'PAN' : 'GST');
+    const errs = typeof formErrors !== 'undefined' ? formErrors : [];
+    const docLink = (kind, file) => file
+        ? `<div class="form-text">Current file: <a href="/vendors/${v.id}/documents/${kind}" target="_blank" rel="noopener">view</a>. Choose a new file only to replace it.</div>`
+        : '';
+%>
 <div class="container-fluid py-3">
 
     <div class="mb-4">
-        <h2 class="mb-1">
-            <%= isEdit ? 'Edit Vendor' : 'Add Vendor' %>
-        </h2>
-
+        <h2 class="mb-1"><%= isEdit ? 'Edit Vendor' : 'Add Vendor' %></h2>
         <p class="text-muted mb-0">
-            <%= isEdit
-                ? 'Update vendor information.'
-                : 'Create a new procurement vendor.'
-            %>
+            <%= isEdit ? 'Update vendor information.' : 'Create a new procurement vendor.' %>
         </p>
     </div>
 
-
-
-    <div class="card shadow-sm">
-        <div class="card-header">
-            <strong>Vendor Details</strong>
+    <% if (errs.length) { %>
+        <div class="alert alert-danger">
+            <strong>Please fix the following:</strong>
+            <ul class="mb-0">
+                <% errs.forEach(e => { %><li><%= e %></li><% }) %>
+            </ul>
+            <% if (!isEdit) { %><div class="small mt-2">Re-select the document files before saving again.</div><% } %>
         </div>
+    <% } %>
 
-        <div class="card-body">
+    <!-- The CSRF token is also sent in the URL because multipart bodies are not parsed before the CSRF check. -->
+    <form method="POST" action="<%= formAction %>?_csrf=<%= csrfToken %>" enctype="multipart/form-data">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
-            <form method="POST" action="<%= formAction %>">
-
-                <input
-                    type="hidden"
-                    name="_csrf"
-                    value="<%= csrfToken %>"
-                >
-
+        <!-- ================= Vendor details ================= -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header"><strong>Vendor Details</strong></div>
+            <div class="card-body">
                 <div class="row g-3">
 
-                    <!-- Vendor Code -->
                     <div class="col-md-6">
-                        <label for="vendorCode" class="form-label">
-                            Vendor Code <span class="text-danger">*</span>
-                        </label>
-
-                        <input
-                            type="text"
-                            class="form-control"
-                            id="vendorCode"
-                            name="vendorCode"
-                            value="<%= vendor.vendor_code || '' %>"
-                            required
-                            maxlength="100"
-                            autocomplete="off"
-                        >
-
+                        <label for="vendorCodeView" class="form-label">Vendor Code</label>
+                        <input type="text" class="form-control" id="vendorCodeView" readonly
+                               value="<%= isEdit ? v.vendor_code : (nextVendorCode || '') %>">
                         <div class="form-text">
-                            Unique internal code for this vendor.
+                            <%= isEdit ? 'The code cannot be changed.' : 'Assigned automatically when you save.' %>
                         </div>
                     </div>
 
-                    <!-- Vendor Name -->
                     <div class="col-md-6">
-                        <label for="name" class="form-label">
-                            Vendor Name <span class="text-danger">*</span>
-                        </label>
-
-                        <input
-                            type="text"
-                            class="form-control"
-                            id="name"
-                            name="name"
-                            value="<%= vendor.name || '' %>"
-                            required
-                            maxlength="200"
-                        >
+                        <label for="name" class="form-label">Vendor Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="name" name="name"
+                               value="<%= v.name || '' %>" required maxlength="200">
                     </div>
 
-                    <!-- Contact Person -->
                     <div class="col-md-6">
-                        <label for="contactPerson" class="form-label">
-                            Contact Person
-                        </label>
-
-                        <input
-                            type="text"
-                            class="form-control"
-                            id="contactPerson"
-                            name="contactPerson"
-                            value="<%= vendor.contact_person || '' %>"
-                            maxlength="200"
-                        >
+                        <label for="contactPerson" class="form-label">Contact Person</label>
+                        <input type="text" class="form-control" id="contactPerson" name="contactPerson"
+                               value="<%= v.contact_person || '' %>" maxlength="200">
                     </div>
 
-                    <!-- Email -->
                     <div class="col-md-6">
-                        <label for="email" class="form-label">
-                            Email
-                        </label>
-
-                        <input
-                            type="email"
-                            class="form-control"
-                            id="email"
-                            name="email"
-                            value="<%= vendor.email || '' %>"
-                            maxlength="254"
-                        >
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email"
+                               value="<%= v.email || '' %>" maxlength="254">
                     </div>
 
-                    <!-- Phone -->
                     <div class="col-md-6">
-                        <label for="phone" class="form-label">
-                            Phone
-                        </label>
-
-                        <input
-                            type="text"
-                            class="form-control"
-                            id="phone"
-                            name="phone"
-                            value="<%= vendor.phone || '' %>"
-                            maxlength="50"
-                        >
+                        <label for="phone" class="form-label">Phone</label>
+                        <input type="text" class="form-control" id="phone" name="phone"
+                               value="<%= v.phone || '' %>" maxlength="50">
                     </div>
 
-                    <!-- Tax Identifier -->
-                    <div class="col-md-6">
-                        <label for="taxIdentifier" class="form-label">
-                            Tax Identifier
-                        </label>
-
-                        <input
-                            type="text"
-                            class="form-control"
-                            id="taxIdentifier"
-                            name="taxIdentifier"
-                            value="<%= vendor.tax_identifier || '' %>"
-                            maxlength="100"
-                        >
-                    </div>
-
-                    <!-- Address -->
                     <div class="col-12">
-                        <label for="address" class="form-label">
-                            Address
-                        </label>
-
-                        <textarea
-                            class="form-control"
-                            id="address"
-                            name="address"
-                            rows="3"
-                            maxlength="1000"
-                        ><%= vendor.address || '' %></textarea>
+                        <label for="address" class="form-label">Address</label>
+                        <textarea class="form-control" id="address" name="address" rows="3"
+                                  maxlength="1000"><%= v.address || '' %></textarea>
                     </div>
 
-                    <!-- Notes -->
                     <div class="col-12">
-                        <label for="notes" class="form-label">
-                            Notes
-                        </label>
-
-                        <textarea
-                            class="form-control"
-                            id="notes"
-                            name="notes"
-                            rows="3"
-                            maxlength="2000"
-                        ><%= vendor.notes || '' %></textarea>
+                        <label for="notes" class="form-label">Notes</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="3"
+                                  maxlength="2000"><%= v.notes || '' %></textarea>
                     </div>
 
                     <% if (isEdit) { %>
-
                         <div class="col-12">
-
                             <div class="form-check">
-                                <input
-                                    type="hidden"
-                                    name="isActive"
-                                    value="false"
-                                >
-
-                                <input
-                                    class="form-check-input"
-                                    type="checkbox"
-                                    id="isActive"
-                                    name="isActive"
-                                    value="true"
-                                    <%= vendor.is_active ? 'checked' : '' %>
-                                >
-
-                                <label
-                                    class="form-check-label"
-                                    for="isActive"
-                                >
-                                    Vendor is active
-                                </label>
+                                <input type="hidden" name="isActive" value="false">
+                                <input class="form-check-input" type="checkbox" id="isActive" name="isActive"
+                                       value="true" <%= v.is_active ? 'checked' : '' %>>
+                                <label class="form-check-label" for="isActive">Vendor is active</label>
                             </div>
-
                         </div>
-
                     <% } %>
-
                 </div>
-
-                <hr class="my-4">
-
-                <div class="d-flex flex-wrap gap-2">
-
-                    <button
-                        type="submit"
-                        class="btn btn-primary"
-                    >
-                        <%= isEdit ? 'Update Vendor' : 'Create Vendor' %>
-                    </button>
-
-                    <a
-                        href="/vendors"
-                        class="btn btn-outline-secondary"
-                    >
-                        Cancel
-                    </a>
-
-                </div>
-
-            </form>
-
+            </div>
         </div>
-    </div>
 
+        <!-- ================= Tax registration ================= -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header"><strong>Tax Registration</strong></div>
+            <div class="card-body">
+
+                <div class="mb-3">
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="taxType" id="taxGst" value="GST"
+                               <%= taxType === 'GST' ? 'checked' : '' %>>
+                        <label class="form-check-label" for="taxGst">GST registered</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="taxType" id="taxPan" value="PAN"
+                               <%= taxType === 'PAN' ? 'checked' : '' %>>
+                        <label class="form-check-label" for="taxPan">Not GST registered (use PAN)</label>
+                    </div>
+                </div>
+
+                <div class="row g-3" id="gstSection">
+                    <div class="col-md-6">
+                        <label for="gstNo" class="form-label">GST Number <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control text-uppercase" id="gstNo" name="gstNo"
+                               value="<%= v.gst_no || '' %>" maxlength="15" autocomplete="off"
+                               pattern="[0-9]{2}[A-Za-z]{5}[0-9]{4}[A-Za-z][1-9A-Za-z][Zz][0-9A-Za-z]"
+                               title="15-character GSTIN, e.g. 27ABCDE1234F1Z5" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="gstCertificate" class="form-label">GST Certificate <span class="text-danger">*</span></label>
+                        <input type="file" class="form-control" id="gstCertificate" name="gstCertificate"
+                               accept=".pdf,.jpg,.jpeg,.png,.webp" <%= v.gst_certificate_file ? '' : 'required' %>>
+                        <%- docLink('gst', v.gst_certificate_file) %>
+                    </div>
+                </div>
+
+                <div class="row g-3" id="panSection">
+                    <div class="col-md-6">
+                        <label for="panNo" class="form-label">PAN Number <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control text-uppercase" id="panNo" name="panNo"
+                               value="<%= v.pan_no || '' %>" maxlength="10" autocomplete="off"
+                               pattern="[A-Za-z]{5}[0-9]{4}[A-Za-z]"
+                               title="10-character PAN, e.g. ABCDE1234F" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="panCertificate" class="form-label">PAN Certificate <span class="text-danger">*</span></label>
+                        <input type="file" class="form-control" id="panCertificate" name="panCertificate"
+                               accept=".pdf,.jpg,.jpeg,.png,.webp" <%= v.pan_certificate_file ? '' : 'required' %>>
+                        <%- docLink('pan', v.pan_certificate_file) %>
+                    </div>
+                </div>
+
+                <hr>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label for="udyamId" class="form-label">Udyam ID</label>
+                        <input type="text" class="form-control text-uppercase" id="udyamId" name="udyamId"
+                               value="<%= v.udyam_id || '' %>" maxlength="30" autocomplete="off"
+                               pattern="[Uu][Dd][Yy][Aa][Mm]-[A-Za-z]{2}-[0-9]{2}-[0-9]{7}"
+                               title="Format UDYAM-XX-00-0000000">
+                        <div class="form-text">Optional. Format: UDYAM-MH-12-0001234</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= Bank details ================= -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header"><strong>Bank Account Details</strong></div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label for="bankAccountNo" class="form-label">Account Number <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="bankAccountNo" name="bankAccountNo"
+                               value="<%= v.bank_account_no || '' %>" required maxlength="24" autocomplete="off"
+                               inputmode="numeric">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="bankName" class="form-label">Bank Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="bankName" name="bankName"
+                               value="<%= v.bank_name || '' %>" required maxlength="150">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="ifscCode" class="form-label">IFSC Code <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control text-uppercase" id="ifscCode" name="ifscCode"
+                               value="<%= v.ifsc_code || '' %>" required maxlength="11" autocomplete="off"
+                               pattern="[A-Za-z]{4}0[A-Za-z0-9]{6}" title="11 characters, e.g. HDFC0001234">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="cancelledCheque" class="form-label">Cancelled Cheque Photo <span class="text-danger">*</span></label>
+                        <input type="file" class="form-control" id="cancelledCheque" name="cancelledCheque"
+                               accept=".pdf,.jpg,.jpeg,.png,.webp" <%= v.cancelled_cheque_file ? '' : 'required' %>>
+                        <%- docLink('cheque', v.cancelled_cheque_file) %>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2">
+            <button type="submit" class="btn btn-primary"><%= isEdit ? 'Update Vendor' : 'Create Vendor' %></button>
+            <a href="/vendors" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+    </form>
 </div>
+
+<script nonce="<%= cspNonce %>">
+(function () {
+    var gst = document.getElementById('gstSection');
+    var pan = document.getElementById('panSection');
+    var radios = document.querySelectorAll('input[name="taxType"]');
+
+    function setSection(section, on) {
+        section.classList.toggle('d-none', !on);
+        // disabled controls are neither validated nor submitted
+        section.querySelectorAll('input').forEach(function (el) { el.disabled = !on; });
+    }
+    function sync() {
+        var isGst = document.getElementById('taxGst').checked;
+        setSection(gst, isGst);
+        setSection(pan, !isGst);
+    }
+    radios.forEach(function (r) { r.addEventListener('change', sync); });
+    sync();
+})();
+</script>

@@ -1,0 +1,71 @@
+<%
+    const dash = x => (x === null || x === undefined || x === '') ? '-' : x;
+    const doc = (kind, file) => file
+        ? `<a href="/vendors/${vendor.id}/documents/${kind}" target="_blank" rel="noopener">View document</a>`
+        : '<span class="text-muted">Not uploaded</span>';
+%>
+<div class="container-fluid py-3">
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <div>
+            <h2 class="mb-1"><%= vendor.name %></h2>
+            <p class="text-muted mb-0">
+                <%= vendor.vendor_code %>
+                <% if (vendor.is_active) { %><span class="badge bg-success ms-2">Active</span><% } else { %><span class="badge bg-secondary ms-2">Inactive</span><% } %>
+            </p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="/vendors/<%= vendor.id %>/edit" class="btn btn-primary">Edit</a>
+            <a href="/vendors" class="btn btn-outline-secondary">Back</a>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header"><strong>Contact</strong></div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-4">Contact person</dt><dd class="col-sm-8"><%= dash(vendor.contact_person) %></dd>
+                        <dt class="col-sm-4">Email</dt><dd class="col-sm-8"><%= dash(vendor.email) %></dd>
+                        <dt class="col-sm-4">Phone</dt><dd class="col-sm-8"><%= dash(vendor.phone) %></dd>
+                        <dt class="col-sm-4">Address</dt><dd class="col-sm-8"><%= dash(vendor.address) %></dd>
+                        <dt class="col-sm-4">Notes</dt><dd class="col-sm-8"><%= dash(vendor.notes) %></dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header"><strong>Tax Registration</strong></div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <% if (vendor.gst_no) { %>
+                            <dt class="col-sm-5">GST number</dt><dd class="col-sm-7"><%= vendor.gst_no %></dd>
+                            <dt class="col-sm-5">GST certificate</dt><dd class="col-sm-7"><%- doc('gst', vendor.gst_certificate_file) %></dd>
+                        <% } else { %>
+                            <dt class="col-sm-5">PAN number</dt><dd class="col-sm-7"><%= dash(vendor.pan_no) %></dd>
+                            <dt class="col-sm-5">PAN certificate</dt><dd class="col-sm-7"><%- doc('pan', vendor.pan_certificate_file) %></dd>
+                        <% } %>
+                        <dt class="col-sm-5">Udyam ID</dt><dd class="col-sm-7"><%= dash(vendor.udyam_id) %></dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header"><strong>Bank Account</strong></div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-3">Account number</dt><dd class="col-sm-9"><%= dash(vendor.bank_account_no) %></dd>
+                        <dt class="col-sm-3">Bank name</dt><dd class="col-sm-9"><%= dash(vendor.bank_name) %></dd>
+                        <dt class="col-sm-3">IFSC code</dt><dd class="col-sm-9"><%= dash(vendor.ifsc_code) %></dd>
+                        <dt class="col-sm-3">Cancelled cheque</dt><dd class="col-sm-9"><%- doc('cheque', vendor.cancelled_cheque_file) %></dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
