@@ -163,7 +163,7 @@ async function getByInstanceId(instanceId, user) {
     throw new Error("User is required.");
   }
 
-  const params = [Number(instanceId)];
+    const params = [];
 
   let accessJoin = "";
 
@@ -177,6 +177,8 @@ async function getByInstanceId(instanceId, user) {
        AND sa.assigned_until IS NULL
     `;
   }
+
+  params.push(Number(instanceId)); // WHERE ii.id = ? comes after the join
 
   return db.one(
     `
@@ -247,7 +249,7 @@ async function getByCodeOrBarcode(code, user) {
     return null;
   }
 
-  const params = [value, value];
+  const params = [];
 
   let accessJoin = "";
 
@@ -261,7 +263,7 @@ async function getByCodeOrBarcode(code, user) {
        AND sa.assigned_until IS NULL
     `;
   }
-
+  params.push(value, value); // WHERE instance_code = ? OR barcode = ? comes after the join
   return db.one(
     `
       SELECT
