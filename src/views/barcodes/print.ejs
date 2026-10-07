@@ -1,94 +1,358 @@
-<%
-  const isReceiptFlow = typeof receiptFlow !== 'undefined' && receiptFlow;
-  const printableLabels = isReceiptFlow && batch.status === 'AWAITING_SCAN'
-    ? labels.filter(label => !label.scanned_at)
-    : labels;
+<% const isReceiptFlow=typeof receiptFlow !=='undefined' && receiptFlow; const printableLabels=isReceiptFlow &&
+  batch.status==='AWAITING_SCAN' ? labels.filter(label=> !label.scanned_at)
+  : labels;
   const labelPages = [];
-  for (let i = 0; i < printableLabels.length; i += 16) {
-    labelPages.push(printableLabels.slice(i, i + 16));
-  }
-  const displayBarcodeCode = value => {
+  for (let i = 0; i < printableLabels.length; i +=16) { labelPages.push(printableLabels.slice(i, i + 16)); } const
+    displayBarcodeCode=value=> {
     const code = String(value || '').trim();
     return isReceiptFlow ? code.toUpperCase().replace(/\s+/g, '-') : code;
-  };
-%>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
+    };
+    const scanTime = label => {
+    const d = new Date(label.scanned_at);
+    return isNaN(d.getTime()) ? 0 : d.getTime();
+    };
+    const allBatchLabels = isReceiptFlow ? (batch.labels || []) : [];
+    const pendingLabels = allBatchLabels.filter(label => !label.scanned_at);
+    // Oldest -> newest gives each scan its running number; we then show newest first.
+    const scannedLabels = allBatchLabels
+    .filter(label => label.scanned_at)
+    .sort((a, b) => scanTime(a) - scanTime(b))
+    .map((label, index) => Object.assign({}, label, { scanNo: index + 1 }))
+    .reverse();
+    %>
+    <!DOCTYPE html>
+    <html lang="en">
 
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  >
+    <head>
+      <meta charset="UTF-8">
 
-  <title><%= title || 'Print Barcode Labels' %></title>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <style>
-    @page {
-      size: A4 landscape;
-      margin: 0;
-    }
+      <title>
+        <%= title || 'Print Barcode Labels' %>
+      </title>
 
-    * {
-      box-sizing: border-box;
-    }
+      <style>
+        @page {
+          size: A4 landscape;
+          margin: 0;
+        }
 
-    html,
-    body {
-      margin: 0;
-      padding: 0;
-      background: #eee;
-      font-family: Arial, Helvetica, sans-serif;
-    }
+        * {
+          box-sizing: border-box;
+        }
 
-    .print-toolbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+        html,
+        body {
+          margin: 0;
+          padding: 0;
+          background: #eee;
+          font-family: Arial, Helvetica, sans-serif;
+        }
 
-      padding: 12px;
-      margin: 12px;
+        .print-toolbar {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
 
-      background: #fff;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-    }
+          padding: 12px;
+          margin: 12px;
 
-    .print-toolbar button {
-      padding: 8px 14px;
+          background: #fff;
+          border: 1px solid #ddd;
+          border-radius: 6px;
+        }
 
-      border: 1px solid #222;
-      border-radius: 4px;
+        .print-toolbar button {
+          padding: 8px 14px;
 
-      background: #fff;
-      cursor: pointer;
-    }
+          border: 1px solid #222;
+          border-radius: 4px;
 
-    .print-toolbar .primary {
-      background: #111;
-      color: #fff;
-    }
+          background: #fff;
+          cursor: pointer;
+        }
 
-    .receipt-controls { max-width: 1040px; margin: 16px auto 20px; padding: 22px 24px; background: #fff; border: 1px solid #dce2e8; border-top: 4px solid #6c7d49; border-radius: 10px; box-shadow: 0 5px 18px rgba(28, 39, 52, .08); }
-    .receipt-controls form { display: flex; gap: 10px; margin-top: 14px; }
-    .receipt-controls input { flex: 1; min-width: 200px; padding: 11px 13px; border: 1px solid #b8c2ce; border-radius: 6px; font-size: 15px; }
-    .receipt-controls input:focus { outline: 3px solid rgba(49, 96, 255, .18); border-color: #3160ff; }
-    .receipt-controls a, .receipt-controls button { padding: 10px 16px; cursor: pointer; border-radius: 6px; }
-    .receipt-controls form button { border: 1px solid #315cff; background: #315cff; color: #fff; font-weight: 600; }
-    .receipt-title { margin: 0 0 6px; font-size: 25px; }
-    .receipt-status { display: flex; align-items: center; gap: 12px; margin: 12px 0; }
-    .receipt-progress { height: 8px; flex: 1; max-width: 420px; accent-color: #6c7d49; }
-    .receipt-alert { padding: 10px 13px; margin: 12px 0; border-radius: 6px; background: #edf5e9; color: #315528; }
-    .receipt-alert.error { background: #fdecec; color: #8a2525; }
-    .receipt-label-list { display: flex; flex-wrap: wrap; gap: 7px; max-height: 210px; overflow-y: auto; margin: 14px 0; padding: 10px; border: 1px solid #e0e5ea; border-radius: 7px; background: #f8f9fb; }
-    .receipt-label-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; border: 1px solid #d5dce2; border-radius: 999px; background: #fff; font-size: 12px; }
-    .receipt-label-chip.scanned { border-color: #9ab387; background: #edf5e9; color: #315528; }
-    .receipt-label-chip.pending { color: #52606d; }
-    .receipt-label-chip .scan-check { font-weight: 700; }
+        .print-toolbar .primary {
+          background: #111;
+          color: #fff;
+        }
+
+        .receipt-controls {
+          max-width: 1040px;
+          margin: 16px auto 20px;
+          padding: 22px 24px;
+          background: #fff;
+          border: 1px solid #dce2e8;
+          border-top: 4px solid #6c7d49;
+          border-radius: 10px;
+          box-shadow: 0 5px 18px rgba(28, 39, 52, .08);
+        }
+
+        .receipt-controls form {
+          display: flex;
+          gap: 10px;
+          margin-top: 14px;
+        }
+
+        .receipt-controls input {
+          flex: 1;
+          min-width: 200px;
+          padding: 11px 13px;
+          border: 1px solid #b8c2ce;
+          border-radius: 6px;
+          font-size: 15px;
+        }
+
+        .receipt-controls input:focus {
+          outline: 3px solid rgba(49, 96, 255, .18);
+          border-color: #3160ff;
+        }
+
+        .receipt-controls a,
+        .receipt-controls button {
+          padding: 10px 16px;
+          cursor: pointer;
+          border-radius: 6px;
+        }
+
+        .receipt-controls form button {
+          border: 1px solid #315cff;
+          background: #315cff;
+          color: #fff;
+          font-weight: 600;
+        }
+
+        .receipt-title {
+          margin: 0 0 6px;
+          font-size: 25px;
+        }
+
+        .receipt-status {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin: 12px 0;
+        }
+
+        .receipt-progress {
+          height: 8px;
+          flex: 1;
+          max-width: 420px;
+          accent-color: #6c7d49;
+        }
+
+        .receipt-alert {
+          padding: 10px 13px;
+          margin: 12px 0;
+          border-radius: 6px;
+          background: #edf5e9;
+          color: #315528;
+        }
+
+        .receipt-alert.error {
+          background: #fdecec;
+          color: #8a2525;
+        }
+
+        /* Two-column scan layout: left = still to scan, right = checkout receipt */
+        .scan-layout {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+          gap: 20px;
+          align-items: start;
+          margin-top: 8px;
+        }
+
+        .scan-col,
+        .scan-receipt {
+          min-width: 0;
+        }
+
+        .scan-panel-title {
+          display: flex;
+          justify-content: space-between;
+          align-items: baseline;
+          margin: 15px 0 8px;
+          font-size: 13px;
+          font-weight: 700;
+          letter-spacing: .06em;
+          text-transform: uppercase;
+          color: #52606d;
+        }
+
+        .scan-panel-title .count {
+          font-size: 12px;
+          letter-spacing: 0;
+          text-transform: none;
+          font-weight: 600;
+        }
+
+        /* Left: pending list (a row disappears as soon as it is scanned) */
+        .pending-list {
+          list-style: none;
+          margin: 14px 0 0;
+          padding: 6px;
+          /* 5 rows x 40px + 12px padding + 2px border = exactly 5 rows visible */
+          max-height: 214px;
+          overflow-y: auto;
+          border: 1px solid #e0e5ea;
+          border-radius: 7px;
+          background: #f8f9fb;
+        }
+
+        .pending-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          height: 40px;
+          /* fixed row height so the 5-row maths holds */
+          padding: 0 10px;
+          border-bottom: 1px solid #e8ecf0;
+          font-size: 13px;
+        }
+
+        .pending-item:last-child {
+          border-bottom: 0;
+        }
+
+        .pending-item .dot {
+          color: #9aa5b1;
+        }
+
+        .pending-item .code {
+          font-family: monospace;
+          font-weight: 700;
+        }
+
+        .pending-item .name {
+          margin-left: auto;
+          color: #52606d;
+          font-size: 12px;
+          text-align: right;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .pending-done {
+          margin: 14px 0 0;
+          padding: 14px;
+          border-radius: 7px;
+          background: #edf5e9;
+          color: #315528;
+          font-weight: 600;
+          text-align: center;
+        }
+
+        /* Right: supermarket-style receipt tape (newest scan on top) */
+        .scan-receipt {
+          background: #fffef9;
+          border: 1px solid #e3dfcf;
+          border-radius: 4px;
+          box-shadow: 0 3px 10px rgba(28, 39, 52, .08);
+          padding: 14px 16px 12px;
+          font-family: "Courier New", Courier, monospace;
+        }
+
+        .scan-receipt-head {
+          text-align: center;
+          padding-bottom: 10px;
+          border-bottom: 2px dashed #c9c4ae;
+        }
+
+        .scan-receipt-head strong {
+          display: block;
+          font-size: 15px;
+          letter-spacing: .08em;
+          text-transform: uppercase;
+        }
+
+        .scan-receipt-head span {
+          font-size: 12px;
+          color: #6b6a5c;
+        }
+
+        .scan-lines {
+          list-style: none;
+          margin: 0;
+          padding: 0;
+          max-height: 340px;
+          overflow-y: auto;
+        }
+
+        .scan-line {
+          display: grid;
+          grid-template-columns: 34px minmax(0, 1fr) auto;
+          column-gap: 8px;
+          padding: 8px 0;
+          border-bottom: 1px dotted #d6d2bf;
+          font-size: 13px;
+        }
+
+        .scan-line .no {
+          color: #8a8873;
+        }
+
+        .scan-line .desc {
+          font-weight: 700;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .scan-line .qty {
+          text-align: right;
+          white-space: nowrap;
+        }
+
+        .scan-line .sub {
+          grid-column: 2 / 4;
+          font-size: 11px;
+          color: #6b6a5c;
+        }
+
+        .scan-line.latest {
+          background: #fff3b0;
+          animation: scan-flash 1.6s ease-out forwards;
+        }
+
+        @keyframes scan-flash {
+          from {
+            background: #ffe66d;
+          }
+
+          to {
+            background: transparent;
+          }
+        }
+
+        .scan-empty {
+          padding: 28px 0;
+          text-align: center;
+          color: #8a8873;
+          font-size: 13px;
+        }
+
+        .scan-total {
+          display: flex;
+          justify-content: space-between;
+          margin-top: 10px;
+          padding-top: 10px;
+          border-top: 2px dashed #c9c4ae;
+          font-size: 14px;
+          font-weight: 700;
+          text-transform: uppercase;
+        }
+
+        @media screen and (max-width: 800px) {
+          .scan-layout {
+            grid-template-columns: 1fr;
+          }
+        }
 
 
-    /*
+        /*
     * A4 LANDSCAPE
     *
     * Page:
@@ -113,522 +377,631 @@
     */
 
 
-    .labels-page {
-      width: 281mm;
-      height: 194mm;
-      margin: 8mm auto;
-      padding: 0;
-      background: #fff;
-      break-after: page;
-      page-break-after: always;
-    }
+        .labels-page {
+          width: 281mm;
+          height: 194mm;
+          margin: 8mm auto;
+          padding: 0;
+          background: #fff;
+          break-after: page;
+          page-break-after: always;
+        }
 
-    .labels-page:last-of-type { break-after: auto; page-break-after: auto; }
+        .labels-page:last-of-type {
+          break-after: auto;
+          page-break-after: auto;
+        }
 
-    .labels-container {
-      width: 281mm;
-      height: 194mm;
+        .labels-container {
+          width: 281mm;
+          height: 194mm;
 
-      display: grid;
+          display: grid;
 
-      grid-template-columns:
-        repeat(4, 68mm);
+          grid-template-columns:
+            repeat(4, 68mm);
 
-      grid-template-rows:
-        repeat(4, 46.25mm);
+          grid-template-rows:
+            repeat(4, 46.25mm);
 
-      column-gap: 3mm;
-      row-gap: 3mm;
+          column-gap: 3mm;
+          row-gap: 3mm;
 
-      margin: 0;
-      padding: 0;
+          margin: 0;
+          padding: 0;
 
-      background: #fff;
-    }
+          background: #fff;
+        }
 
 
-    /*
+        /*
     * Individual label
     */
 
-    .label {
-      width: 68mm;
-      height: 46.25mm;
+        .label {
+          width: 68mm;
+          height: 46.25mm;
 
-      padding: 3mm;
+          padding: 3mm;
 
-      background: #fff;
+          background: #fff;
 
-      border: 0.25mm solid #222;
-      border-radius: 2mm;
+          border: 0.25mm solid #222;
+          border-radius: 2mm;
 
-      display: flex;
-      flex-direction: column;
+          display: flex;
+          flex-direction: column;
 
-      overflow: hidden;
+          overflow: hidden;
 
-      break-inside: avoid;
-      page-break-inside: avoid;
-    }
-
-
-    .label-main {
-      display: flex;
-      align-items: flex-start;
-      gap: 2mm;
-      min-height: 0;
-      flex: 1;
-    }
-
-    .label-details {
-      flex: 1;
-      min-width: 0;
-      overflow: hidden;
-    }
+          break-inside: avoid;
+          page-break-inside: avoid;
+        }
 
 
-    /*
+        .label-main {
+          display: flex;
+          align-items: flex-start;
+          gap: 2mm;
+          min-height: 0;
+          flex: 1;
+        }
+
+        .label-details {
+          flex: 1;
+          min-width: 0;
+          overflow: hidden;
+        }
+
+
+        /*
     * Header
     */
 
-    .label-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
+        .label-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
 
-      gap: 2mm;
-    }
-
-
-    .item-code {
-      font-size: 9pt;
-      font-weight: 700;
-
-      line-height: 1.05;
-    }
+          gap: 2mm;
+        }
 
 
-    .item-name {
-      margin-top: 0.8mm;
+        .item-code {
+          font-size: 9pt;
+          font-weight: 700;
 
-      font-size: 6.5pt;
-
-      line-height: 1.1;
-    }
-
-
-    .instance-code {
-      margin-top: 1.5mm;
-
-      font-size: 7.5pt;
-      font-weight: 700;
-
-      line-height: 1.05;
-
-      word-break: break-word;
-    }
+          line-height: 1.05;
+        }
 
 
-    .site {
-      margin-top: 1mm;
+        .item-name {
+          margin-top: 0.8mm;
 
-      font-size: 6pt;
+          font-size: 6.5pt;
 
-      line-height: 1.05;
-    }
+          line-height: 1.1;
+        }
 
 
-    /*
+        .instance-code {
+          margin-top: 1.5mm;
+
+          font-size: 7.5pt;
+          font-weight: 700;
+
+          line-height: 1.05;
+
+          word-break: break-word;
+        }
+
+
+        .site {
+          margin-top: 1mm;
+
+          font-size: 6pt;
+
+          line-height: 1.05;
+        }
+
+
+        /*
     * Barcode
     *
     * Physically larger than the previous version.
     */
 
-    .barcode-wrapper {
-      width: 34mm;
-      height: 34mm;
-      flex: 0 0 34mm;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
+        .barcode-wrapper {
+          width: 34mm;
+          height: 34mm;
+          flex: 0 0 34mm;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
 
 
-    .barcode {
-      width: 34mm;
-      height: 34mm;
+        .barcode {
+          width: 34mm;
+          height: 34mm;
 
-      display: block;
-      object-fit: contain;
-    }
-
-
-    .barcode-value {
-      width: 100%;
-
-      margin-top: 1mm;
-      padding-top: 0.8mm;
-      border-top: 0.2mm solid #bbb;
-
-      text-align: center;
-
-      font-family: monospace;
-
-      font-size: 8pt;
-      font-weight: 700;
-      line-height: 1.05;
-      overflow-wrap: anywhere;
-    }
+          display: block;
+          object-fit: contain;
+        }
 
 
-    /*
+        .barcode-value {
+          width: 100%;
+
+          margin-top: 1mm;
+          padding-top: 0.8mm;
+          border-top: 0.2mm solid #bbb;
+
+          text-align: center;
+
+          font-family: monospace;
+
+          font-size: 8pt;
+          font-weight: 700;
+          line-height: 1.05;
+          overflow-wrap: anywhere;
+        }
+
+
+        /*
     * Footer
     */
 
-    .label-meta {
-      display: grid;
-      gap: 1.5mm;
-      margin-top: 3mm;
-      font-size: 6pt;
-      line-height: 1.05;
-      color: #555;
-    }
+        .label-meta {
+          display: grid;
+          gap: 1.5mm;
+          margin-top: 3mm;
+          font-size: 6pt;
+          line-height: 1.05;
+          color: #555;
+        }
 
-    .label-meta strong {
-      display: block;
-      margin-bottom: 0.5mm;
-      color: #333;
-    }
+        .label-meta strong {
+          display: block;
+          margin-bottom: 0.5mm;
+          color: #333;
+        }
 
 
-    /*
+        /*
     * PRINT
     */
 
-    @media print {
+        @media print {
 
-      html,
-      body {
-        width: 297mm;
-        min-height: 210mm;
+          html,
+          body {
+            width: 297mm;
+            min-height: 210mm;
 
-        margin: 0;
-        padding: 0;
+            margin: 0;
+            padding: 0;
 
-        background: #fff;
-      }
-
-
-      .print-toolbar {
-        display: none !important;
-      }
-
-      .receipt-controls { display: none !important; }
+            background: #fff;
+          }
 
 
-      .labels-page {
-        width: 281mm;
-        height: 194mm;
-        margin: 8mm;
-        padding: 0;
-        break-after: page;
-        page-break-after: always;
-      }
+          .print-toolbar {
+            display: none !important;
+          }
 
-      .labels-page:last-of-type { break-after: auto; page-break-after: auto; }
-
-      .labels-container {
-        width: 281mm;
-        height: 194mm;
-        margin: 0;
-        padding: 0;
-
-        display: grid;
-
-        grid-template-columns:
-          repeat(4, 68mm);
-
-        grid-template-rows:
-          repeat(4, 46.25mm);
-
-        column-gap: 3mm;
-        row-gap: 3mm;
-
-        background: #fff;
-      }
+          .receipt-controls {
+            display: none !important;
+          }
 
 
-      .label {
-        width: 68mm;
-        height: 46.25mm;
+          .labels-page {
+            width: 281mm;
+            height: 194mm;
+            margin: 8mm;
+            padding: 0;
+            break-after: page;
+            page-break-after: always;
+          }
 
-        padding: 3mm;
+          .labels-page:last-of-type {
+            break-after: auto;
+            page-break-after: auto;
+          }
 
-        border: 0.25mm solid #000;
-        border-radius: 2mm;
+          .labels-container {
+            width: 281mm;
+            height: 194mm;
+            margin: 0;
+            padding: 0;
 
-        break-inside: avoid;
-        page-break-inside: avoid;
-      }
+            display: grid;
+
+            grid-template-columns:
+              repeat(4, 68mm);
+
+            grid-template-rows:
+              repeat(4, 46.25mm);
+
+            column-gap: 3mm;
+            row-gap: 3mm;
+
+            background: #fff;
+          }
 
 
-      .barcode {
-        width: 34mm;
-        height: 34mm;
-      }
+          .label {
+            width: 68mm;
+            height: 46.25mm;
 
-    }
+            padding: 3mm;
+
+            border: 0.25mm solid #000;
+            border-radius: 2mm;
+
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
 
 
-    /*
+          .barcode {
+            width: 34mm;
+            height: 34mm;
+          }
+
+        }
+
+
+        /*
     * Screen preview
     *
     * On smaller screens, allow horizontal scrolling
     * instead of changing the physical print dimensions.
     */
 
-    @media screen and (max-width: 1200px) {
+        @media screen and (max-width: 1200px) {
 
-      .labels-page {
-        margin-left: 8mm;
-        margin-right: 8mm;
-      }
-
-    }
-
-  </style>
-</head>
-
-<body>
-
-  <div class="print-toolbar">
-    <% if (isReceiptFlow) { %>
-      <form method="post" action="<%= printAction %>">
-        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-        <button type="submit" class="primary">Print Labels</button>
-      </form>
-    <% } else { %>
-      <button type="button" class="primary" id="printLabelsButton">Print Labels</button>
-    <% } %>
-
-    <button
-      type="button"
-      id="closeLabelsButton"
-    >
-      Close
-    </button>
-
-    <div class="info">
-      <%= printableLabels.length %>
-      label<%= printableLabels.length === 1 ? '' : 's' %>
-    </div>
-  </div>
-
-  <% if (isReceiptFlow) { %>
-    <section class="receipt-controls" id="scanner">
-      <h1 class="receipt-title"><%= batch.reference_number || `GRN ${batch.grn_number}` %> — Barcode check</h1>
-      <div><%= batch.site_code %> — <%= batch.site_name %></div>
-      <div class="receipt-status">
-        <strong><%= batch.scannedCount %> / <%= batch.labelCount %> scanned</strong>
-        <progress class="receipt-progress" value="<%= batch.scannedCount %>" max="<%= batch.labelCount || 1 %>" aria-label="Barcode scan progress"></progress>
-      </div>
-      <% if (success) { %><div class="receipt-alert"><%= success %></div><% } %>
-      <% if (error) { %><div class="receipt-alert error"><%= error %></div><% } %>
-      <% if (batch.status === 'AWAITING_SCAN' && batch.labelCount > batch.scannedCount) { %>
-        <% if (batch.labels_printed_at) { %><p>Print was started. Scan each physical label to verify it.</p><% } else { %><p>Print the labels before scanning them.</p><% } %>
-        <p class="small">Scan the full instance barcode printed on the label below, such as <strong><%= displayBarcodeCode(batch.labels.find(label => !label.scanned_at)?.instance_code) %></strong>. The item code alone is not a unique instance barcode.</p>
-        <form method="post" action="<%= scanAction %>">
-          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-          <input id="barcode-input" name="barcode" autocomplete="off" required placeholder="Scan barcode" autofocus <%= batch.labels_printed_at ? '' : 'disabled' %>>
-          <button type="submit" <%= batch.labels_printed_at ? '' : 'disabled' %>>Record Scan</button>
-        </form>
-      <% } else if (batch.status === 'AWAITING_SCAN') { %>
-        <p>All labels have been scanned. Complete the receipt to add items to inventory.</p>
-        <form method="post" action="<%= finishAction %>">
-          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-          <button type="submit"><%= finishText %></button>
-        </form>
-      <% } else { %>
-        <p>This receipt is complete. Labels can be reprinted for reference.</p>
-      <% } %>
-      <div class="receipt-label-list" aria-label="Barcode scan checklist">
-        <% batch.labels.forEach(label => { %>
-          <div class="receipt-label-chip <%= label.scanned_at ? 'scanned' : 'pending' %>" title="<%= label.item_name %>">
-            <span class="scan-check"><%= label.scanned_at ? '✓' : '○' %></span>
-            <span><%= displayBarcodeCode(label.instance_code) %></span>
-            <span><%= label.scanned_at ? 'Scanned' : 'Pending' %></span>
-          </div>
-        <% }) %>
-      </div>
-      <p><a href="<%= backUrl %>">Back to receipt</a></p>
-    </section>
-  <% } %>
-
-  <% if (!printableLabels.length) { %>
-
-    <div class="empty">
-      <% if (isReceiptFlow && batch.status === 'AWAITING_SCAN' && labels.length) { %>
-        No pending labels remain to print. Complete the receipt after confirming all scans.
-      <% } else { %>
-        No inventory instances were selected for printing.
-      <% } %>
-    </div>
-
-  <% } else { %>
-
-    <% labelPages.forEach(function(pageLabels) { %>
-    <div class="labels-page"><div class="labels-container">
-
-      <% pageLabels.forEach(function(label) { %>
-
-        <div class="label">
-
-          <div class="label-main">
-            <div class="label-details">
-            <div class="label-header">
-              <div>
-                <div class="item-code">
-                  <%= displayBarcodeCode(label.item_code) %>
-                </div>
-
-                <div class="item-name">
-                  <%= label.item_name %>
-                </div>
-              </div>
-            </div>
-
-           
-
-            <% if (label.site_name) { %>
-              <div class="site">
-                Site:
-                <%= label.site_name %>
-
-                <% if (label.site_code) { %>
-                  (<%= label.site_code %>)
-                <% } %>
-              </div>
-            <% } %>
-            <% if (label.brand) { %><div class="site">Brand: <%= label.brand %></div><% } %>
-            <% if (label.serial_number) { %><div class="site">Serial: <%= label.serial_number %></div><% } %>
-            <div class="label-meta">
-              <div><strong>Qty</strong><%= label.current_quantity %> <%= label.unit || label.item_unit || '' %></div>
-              <div><strong>Status</strong><%= label.lifecycle_status || '' %></div>
-            </div>
-            </div>
-
-            <div class="barcode-wrapper">
-              <svg
-                class="barcode"
-                data-barcode="<%= displayBarcodeCode(label.barcode) %>"
-                aria-label="Barcode <%= displayBarcodeCode(label.barcode) %>"
-              ></svg>
-            </div>
-          </div>
-
-          <div class="barcode-value">
-            <%= displayBarcodeCode(label.barcode) %>
-          </div>
-
-        </div>
-
-      <% }); %>
-
-    </div></div>
-    <% }); %>
-
-  <% } %>
-
-<script src="/vendor/bwipjs/bwip-js-min.js"></script>
-
-<script
-  nonce="<%= cspNonce %>"
-  data-receipt-back-url="<%= isReceiptFlow ? backUrl : '' %>"
->
-  const receiptBackUrl =
-    document.currentScript.dataset.receiptBackUrl || null;
-  document.addEventListener('DOMContentLoaded', function () {
-
-    // Render Data Matrix symbols using the barcode values already stored.
-    document
-      .querySelectorAll('svg[data-barcode]')
-      .forEach(function (element) {
-        const value = element.dataset.barcode;
-
-        if (!value) {
-          return;
-        }
-
-        try {
-          const markup = bwipjs.toSVG({
-            bcid: 'datamatrix',
-            text: value,
-            scale: 4,
-            padding: 4,
-            backgroundcolor: 'FFFFFF'
-          });
-
-          const parsed = new DOMParser().parseFromString(markup, 'image/svg+xml');
-          if (parsed.querySelector('parsererror')) {
-            throw new Error('Data Matrix SVG could not be parsed.');
+          .labels-page {
+            margin-left: 8mm;
+            margin-right: 8mm;
           }
 
-          const renderedSvg = parsed.documentElement;
-          renderedSvg.setAttribute('class', 'barcode');
-          renderedSvg.setAttribute('role', 'img');
-          renderedSvg.setAttribute('aria-label', `Data Matrix barcode ${value}`);
-          element.replaceWith(document.importNode(renderedSvg, true));
-        } catch (error) {
-          console.error('Data Matrix rendering failed for barcode:', value, error);
-          element.textContent = 'Barcode rendering failed';
         }
-      });
+      </style>
+    </head>
 
-    // Attach the print handler ONCE.
-    const printButton =
-      document.getElementById('printLabelsButton');
+    <body>
 
-    if (printButton) {
-      printButton.addEventListener('click', function () {
-        window.print();
-      });
-    }
+      <div class="print-toolbar">
+        <% if (isReceiptFlow) { %>
+          <form method="post" action="<%= printAction %>">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <button type="submit" class="primary">Print Labels</button>
+          </form>
+          <% } else { %>
+            <button type="button" class="primary" id="printLabelsButton">Print Labels</button>
+            <% } %>
 
-    // Attach the close handler ONCE.
-    const closeButton =
-      document.getElementById('closeLabelsButton');
+              <button type="button" id="closeLabelsButton">
+                Close
+              </button>
 
-    if (closeButton) {
-      closeButton.addEventListener('click', function () {
-        if (receiptBackUrl) { window.location.href = receiptBackUrl; return; }
-        if (window.history.length > 1) {
-          window.history.back();
-        } else {
-          window.location.href = '/inventory/labels';
-        }
-      });
-    }
+              <div class="info">
+                <%= printableLabels.length %>
+                  label<%= printableLabels.length===1 ? '' : 's' %>
+              </div>
+      </div>
 
-    const scannerInput = document.getElementById('barcode-input');
-    if (scannerInput && !scannerInput.disabled) {
-      const focusScanner = function () {
-        scannerInput.focus({ preventScroll: true });
-      };
+      <% if (isReceiptFlow) { %>
+        <section class="receipt-controls" id="scanner">
+          <h1 class="receipt-title">
+            <%= batch.reference_number || `GRN ${batch.grn_number}` %> — Barcode check
+          </h1>
+          <div>
+            <%= batch.site_code %> — <%= batch.site_name %>
+          </div>
+          <div class="receipt-status">
+            <strong>
+              <%= batch.scannedCount %> / <%= batch.labelCount %> scanned
+            </strong>
+            <progress class="receipt-progress" value="<%= batch.scannedCount %>" max="<%= batch.labelCount || 1 %>"
+              aria-label="Barcode scan progress"></progress>
+          </div>
+          <% if (success) { %>
+            <div class="receipt-alert">
+              <%= success %>
+            </div>
+            <% } %>
+              <% if (error) { %>
+                <div class="receipt-alert error">
+                  <%= error %>
+                </div>
+                <% } %>
+                  <div class="scan-layout">
+                    <div class="scan-col">
+                      <% if (batch.status==='AWAITING_SCAN' && batch.labelCount> batch.scannedCount) { %>
+                        <% if (batch.labels_printed_at) { %>
+                          <p>Print was started. Scan each physical label to verify it.</p>
+                          <% } else { %>
+                            <p>Print the labels before scanning them.</p>
+                            <% } %>
+                              <p class="small">Scan the full instance barcode printed on the label below, such as
+                                <strong>
+                                  <%= displayBarcodeCode(batch.labels.find(label=> !label.scanned_at)?.instance_code) %>
+                                </strong>. The item code alone is not a unique instance barcode.</p>
+                              <form method="post" action="<%= scanAction %>">
+                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                <input id="barcode-input" name="barcode" autocomplete="off" required
+                                  placeholder="Scan barcode" autofocus <%=batch.labels_printed_at ? '' : 'disabled' %>>
+                                <button type="submit" <%=batch.labels_printed_at ? '' : 'disabled' %>>Record
+                                  Scan</button>
+                              </form>
+                              <% } else if (batch.status==='AWAITING_SCAN' ) { %>
+                                <p>All labels have been scanned. Complete the receipt to add items to inventory.</p>
+                                <form method="post" action="<%= finishAction %>">
+                                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                  <button type="submit">
+                                    <%= finishText %>
+                                  </button>
+                                </form>
+                                <% } else { %>
+                                  <p>This receipt is complete. Labels can be reprinted for reference.</p>
+                                  <% } %>
+                                    <% if (batch.status==='AWAITING_SCAN' ) { %>
+                                      <% if (pendingLabels.length) { %>
+                                        <h2 class="scan-panel-title">
+                                          <span>Still to scan</span>
+                                          <span class="count">
+                                            <%= pendingLabels.length %> left
+                                          </span>
+                                        </h2>
+                                        <ul class="pending-list" aria-label="Labels still to scan">
+                                          <% pendingLabels.forEach(label=> { %>
+                                            <li class="pending-item" title="<%= label.item_name %>">
+                                              <span class="dot">○</span>
+                                              <span class="code">
+                                                <%= displayBarcodeCode(label.instance_code) %>
+                                              </span>
+                                              <span class="name">
+                                                <%= label.item_name %>
+                                              </span>
+                                            </li>
+                                            <% }) %>
+                                        </ul>
+                                        <% } else { %>
+                                          <div class="pending-done">✓ Nothing left to scan</div>
+                                          <% } %>
+                                            <% } %>
+                    </div>
+                    <aside class="scan-receipt" aria-label="Scanned items">
+                      <div class="scan-receipt-head">
+                        <strong>Scanned items</strong>
+                        <span>
+                          <%= batch.site_code %> — <%= batch.reference_number || `GRN ${batch.grn_number}` %>
+                        </span>
+                      </div>
+                      <% if (scannedLabels.length) { %>
+                        <ul class="scan-lines">
+                          <% scannedLabels.forEach((label, index)=> { %>
+                            <% const t=scanTime(label); %>
+                              <li class="scan-line<%= index === 0 ? ' latest' : '' %>">
+                                <span class="no">
+                                  <%= String(label.scanNo).padStart(2, '0' ) %>
+                                </span>
+                                <span class="desc" title="<%= label.item_name %>">
+                                  <%= label.item_name %>
+                                </span>
+                                <span class="qty">
+                                  <%= label.current_quantity %>
+                                    <%= label.unit || label.item_unit || '' %>
+                                </span>
+                                <span class="sub">
+                                  <%= displayBarcodeCode(label.instance_code) %>
+                                    <% if (t) { %> · <time class="scan-time"
+                                        datetime="<%= new Date(t).toISOString() %>"></time>
+                                      <% } %>
+                                </span>
+                              </li>
+                              <% }) %>
+                        </ul>
+                        <% } else { %>
+                          <div class="scan-empty">No items scanned yet.<br>Scan a label to add it here.</div>
+                          <% } %>
+                            <div class="scan-total">
+                              <span>Items scanned</span>
+                              <span>
+                                <%= scannedLabels.length %> / <%= batch.labelCount %>
+                              </span>
+                            </div>
+                    </aside>
+                  </div>
+                  <p><a href="<%= backUrl %>">Back to receipt</a></p>
+        </section>
+        <% } %>
 
-      // The scan POST redirects back to this page with #scanner. Restore focus
-      // after the browser has completed navigation to the fragment.
-      window.addEventListener('load', function () {
-        window.setTimeout(focusScanner, 100);
-      }, { once: true });
+          <% if (!printableLabels.length) { %>
 
-      focusScanner();
-    }
-    if (new URLSearchParams(window.location.search).get('print') === '1') {
-      window.addEventListener('load', function () { window.print(); });
-    }
+            <div class="empty">
+              <% if (isReceiptFlow && batch.status==='AWAITING_SCAN' && labels.length) { %>
+                No pending labels remain to print. Complete the receipt after confirming all scans.
+                <% } else { %>
+                  No inventory instances were selected for printing.
+                  <% } %>
+            </div>
 
-  });
-</script>
+            <% } else { %>
 
-</body>
-</html>
+              <% labelPages.forEach(function(pageLabels) { %>
+                <div class="labels-page">
+                  <div class="labels-container">
+
+                    <% pageLabels.forEach(function(label) { %>
+
+                      <div class="label">
+
+                        <div class="label-main">
+                          <div class="label-details">
+                            <div class="label-header">
+                              <div>
+                                <div class="item-code">
+                                  <%= displayBarcodeCode(label.item_code) %>
+                                </div>
+
+                                <div class="item-name">
+                                  <%= label.item_name %>
+                                </div>
+                              </div>
+                            </div>
+
+
+
+                            <% if (label.site_name) { %>
+                              <div class="site">
+                                Site:
+                                <%= label.site_name %>
+
+                                  <% if (label.site_code) { %>
+                                    (<%= label.site_code %>)
+                                      <% } %>
+                              </div>
+                              <% } %>
+                                <% if (label.brand) { %>
+                                  <div class="site">Brand: <%= label.brand %>
+                                  </div>
+                                  <% } %>
+                                    <% if (label.serial_number) { %>
+                                      <div class="site">Serial: <%= label.serial_number %>
+                                      </div>
+                                      <% } %>
+                                        <div class="label-meta">
+                                          <div><strong>Qty</strong>
+                                            <%= label.current_quantity %>
+                                              <%= label.unit || label.item_unit || '' %>
+                                          </div>
+                                          <div><strong>Status</strong>
+                                            <%= label.lifecycle_status || '' %>
+                                          </div>
+                                        </div>
+                          </div>
+
+                          <div class="barcode-wrapper">
+                            <svg class="barcode" data-barcode="<%= displayBarcodeCode(label.barcode) %>"
+                              aria-label="Barcode <%= displayBarcodeCode(label.barcode) %>"></svg>
+                          </div>
+                        </div>
+
+                        <div class="barcode-value">
+                          <%= displayBarcodeCode(label.barcode) %>
+                        </div>
+
+                      </div>
+
+                      <% }); %>
+
+                  </div>
+                </div>
+                <% }); %>
+
+                  <% } %>
+
+                    <script src="/vendor/bwipjs/bwip-js-min.js"></script>
+
+                    <script nonce="<%= cspNonce %>" data-receipt-back-url="<%= isReceiptFlow ? backUrl : '' %>">
+                      const receiptBackUrl =
+                        document.currentScript.dataset.receiptBackUrl || null;
+                      document.addEventListener('DOMContentLoaded', function () {
+
+                        // Render Data Matrix symbols using the barcode values already stored.
+                        document
+                          .querySelectorAll('svg[data-barcode]')
+                          .forEach(function (element) {
+                            const value = element.dataset.barcode;
+
+                            if (!value) {
+                              return;
+                            }
+
+                            try {
+                              const markup = bwipjs.toSVG({
+                                bcid: 'datamatrix',
+                                text: value,
+                                scale: 4,
+                                padding: 4,
+                                backgroundcolor: 'FFFFFF'
+                              });
+
+                              const parsed = new DOMParser().parseFromString(markup, 'image/svg+xml');
+                              if (parsed.querySelector('parsererror')) {
+                                throw new Error('Data Matrix SVG could not be parsed.');
+                              }
+
+                              const renderedSvg = parsed.documentElement;
+                              renderedSvg.setAttribute('class', 'barcode');
+                              renderedSvg.setAttribute('role', 'img');
+                              renderedSvg.setAttribute('aria-label', `Data Matrix barcode ${value}`);
+                              element.replaceWith(document.importNode(renderedSvg, true));
+                            } catch (error) {
+                              console.error('Data Matrix rendering failed for barcode:', value, error);
+                              element.textContent = 'Barcode rendering failed';
+                            }
+                          });
+
+                        // Attach the print handler ONCE.
+                        const printButton =
+                          document.getElementById('printLabelsButton');
+
+                        if (printButton) {
+                          printButton.addEventListener('click', function () {
+                            window.print();
+                          });
+                        }
+
+                        // Attach the close handler ONCE.
+                        const closeButton =
+                          document.getElementById('closeLabelsButton');
+
+                        if (closeButton) {
+                          closeButton.addEventListener('click', function () {
+                            if (receiptBackUrl) { window.location.href = receiptBackUrl; return; }
+                            if (window.history.length > 1) {
+                              window.history.back();
+                            } else {
+                              window.location.href = '/inventory/labels';
+                            }
+                          });
+                        }
+
+                        const scannerInput = document.getElementById('barcode-input');
+                        if (scannerInput && !scannerInput.disabled) {
+                          const focusScanner = function () {
+                            scannerInput.focus({ preventScroll: true });
+                          };
+
+                          // The scan POST redirects back to this page with #scanner. Restore focus
+                          // after the browser has completed navigation to the fragment.
+                          window.addEventListener('load', function () {
+                            window.setTimeout(focusScanner, 100);
+                          }, { once: true });
+
+                          focusScanner();
+                        }
+                        if (new URLSearchParams(window.location.search).get('print') === '1') {
+                          window.addEventListener('load', function () { window.print(); });
+                        }
+
+                        // Cosmetic only: show scan times in the browser's local timezone.
+                        try {
+                          document.querySelectorAll('time.scan-time').forEach(function (el) {
+                            const d = new Date(el.getAttribute('datetime'));
+                            if (!isNaN(d.getTime())) {
+                              el.textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                            }
+                          });
+                        } catch (e) { /* ignore */ }
+
+                      });
+                    </script>
+
+    </body>
+
+    </html>
