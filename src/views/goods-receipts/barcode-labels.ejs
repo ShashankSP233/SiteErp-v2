@@ -70,7 +70,7 @@
         <% if (batch.status === 'AWAITING_SCAN' && batch.labelCount > batch.scannedCount) { %>
             <form class="scan-form" method="post" action="<%= scanAction %>">
                 <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                <input id="barcode-input" name="barcode" autocomplete="off" required placeholder="Scan barcode" autofocus>
+                <input id="barcode-input" name="barcode"  data-scan="submit" autocomplete="off" required placeholder="Scan barcode" autofocus>
                 <button class="btn" type="submit">Record Scan</button>
             </form>
         <% } else if (batch.status === 'AWAITING_SCAN') { %>
@@ -103,6 +103,7 @@
     </section>
 </main>
 <script src="/vendor/jsbarcode/JsBarcode.all.min.js"></script>
+<script src="/js/scanner.js"></script>
 <script nonce="<%= cspNonce %>">
     document.querySelectorAll('svg[data-barcode]').forEach(function (element) {
         JsBarcode(element, element.dataset.barcode, {

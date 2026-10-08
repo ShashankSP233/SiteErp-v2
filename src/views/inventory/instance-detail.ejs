@@ -20,7 +20,7 @@
   <form method="get" action="/inventory/instances/lookup" class="card card-body shadow-sm">
     <label for="instance-code" class="form-label fw-semibold">Barcode or instance code</label>
     <div class="d-flex gap-2">
-      <input id="instance-code" type="search" name="code" class="form-control" value="<%= code || '' %>" placeholder="Scan barcode or enter instance code" autocomplete="off" required autofocus>
+      <input id="instance-code"  type="search" name="code" data-scan="submit" class="form-control" value="<%= code || '' %>" placeholder="Scan barcode or enter instance code" autocomplete="off" required autofocus>
       <button type="submit" class="btn btn-primary">Find Instance</button>
     </div>
   </form>

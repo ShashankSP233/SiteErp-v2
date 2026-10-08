@@ -77,6 +77,10 @@ try {
 }
 
 try {
+  app.use('/vendor/zxing', express.static(path.join(__dirname, '..', 'node_modules', '@zxing', 'library', 'umd')));
+} catch (_) { console.warn('[warn] @zxing/library not found — run "npm install".'); }
+
+try {
   // bwip-js does not export its package.json, so resolve its Node entry point
   // and serve the browser bundle from the same dist directory.
   const bwipJsDist = path.dirname(require.resolve('bwip-js'));

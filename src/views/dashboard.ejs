@@ -45,7 +45,7 @@
         <h2 class="h5 mb-1">Find a physical instance</h2>
         <p class="text-muted small mb-3">Scan a barcode or enter an instance code.</p>
         <form method="get" action="/inventory/instances/lookup" class="d-flex gap-2">
-          <input type="search" name="code" class="form-control" placeholder="Scan barcode or enter instance code" aria-label="Scan or enter a barcode or instance code" autocomplete="off" autofocus required>
+          <input type="search" name="code" data-scan="submit" class="form-control" placeholder="Scan barcode or enter instance code" aria-label="Scan or enter a barcode or instance code" autocomplete="off" autofocus required>
           <button type="submit" class="btn btn-primary px-4">Look up</button>
         </form>
       </div>

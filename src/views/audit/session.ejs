@@ -10,7 +10,7 @@
   <div class="col-lg-5">
     <div class="card shadow-sm"><div class="card-body">
       <label class="form-label"><strong>Scan barcode</strong></label>
-      <input id="scanInput" class="form-control form-control-lg" placeholder="Scan or type a code, press Enter" autocomplete="off" autofocus>
+      <input id="scanInput" class="form-control form-control-lg" data-scan="enter" data-scan-continuous placeholder="Scan or type a code, press Enter" autocomplete="off" autofocus>
       <div id="scanMsg" class="mt-2 small"></div>
       <div class="d-flex gap-3 mt-3">
         <div>Matched: <span class="badge text-bg-success" id="cMatched"><%= counts.matched || 0 %></span></div>
