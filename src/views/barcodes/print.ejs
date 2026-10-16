@@ -439,9 +439,15 @@
         }
 
 
+        .label-header {
+          flex: 0 0 auto;
+          min-width: 0;
+          margin-bottom: 1.5mm;
+        }
+
         .label-main {
           display: flex;
-          align-items: flex-start;
+          align-items: center;
           gap: 2mm;
           min-height: 0;
           flex: 1;
@@ -459,31 +465,22 @@
     * Header
     */
 
-        .label-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-
-          gap: 2mm;
-        }
-
-
         .item-code {
-          font-size: 9pt;
+          font-size: 8pt;
           font-weight: 700;
 
-          line-height: 1.05;
+          line-height: 1;
           overflow-wrap: anywhere;
           word-break: break-word;
         }
 
 
         .item-name {
-          margin-top: 0.8mm;
+          margin-top: 0.6mm;
 
-          font-size: 6.5pt;
+          font-size: 6pt;
 
-          line-height: 1.1;
+          line-height: 1.05;
           overflow-wrap: anywhere;
           word-break: break-word;
         }
@@ -519,9 +516,9 @@
     */
 
         .barcode-wrapper {
-          width: 31mm;
-          height: 31mm;
-          flex: 0 0 31mm;
+          width: 25mm;
+          height: 25mm;
+          flex: 0 0 25mm;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -529,8 +526,8 @@
 
 
         .barcode {
-          width: 31mm;
-          height: 31mm;
+          width: 25mm;
+          height: 25mm;
 
           display: block;
           object-fit: contain;
@@ -548,7 +545,7 @@
 
           font-family: monospace;
 
-          font-size: 8pt;
+          font-size: 6.5pt;
           font-weight: 700;
           line-height: 1.05;
           overflow-wrap: anywhere;
@@ -653,8 +650,8 @@
 
 
           .barcode {
-            width: 31mm;
-            height: 31mm;
+            width: 25mm;
+            height: 25mm;
           }
 
         }
@@ -847,21 +844,13 @@
 
                       <div class="label">
 
+                        <div class="label-header">
+                          <div class="item-code"><%= displayBarcodeCode(label.item_code) %></div>
+                          <div class="item-name"><%= label.item_name %></div>
+                        </div>
+
                         <div class="label-main">
                           <div class="label-details">
-                            <div class="label-header">
-                              <div>
-                                <div class="item-code">
-                                  <%= displayBarcodeCode(label.item_code) %>
-                                </div>
-
-                                <div class="item-name">
-                                  <%= label.item_name %>
-                                </div>
-                              </div>
-                            </div>
-
-
 
                             <% if (label.site_name) { %>
                               <div class="site">
