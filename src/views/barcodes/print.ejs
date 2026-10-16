@@ -450,7 +450,8 @@
         .label-details {
           flex: 1;
           min-width: 0;
-          overflow: hidden;
+          overflow: visible;
+          overflow-wrap: anywhere;
         }
 
 
@@ -472,6 +473,8 @@
           font-weight: 700;
 
           line-height: 1.05;
+          overflow-wrap: anywhere;
+          word-break: break-word;
         }
 
 
@@ -481,6 +484,8 @@
           font-size: 6.5pt;
 
           line-height: 1.1;
+          overflow-wrap: anywhere;
+          word-break: break-word;
         }
 
 
@@ -502,6 +507,8 @@
           font-size: 6pt;
 
           line-height: 1.05;
+          overflow-wrap: anywhere;
+          word-break: break-word;
         }
 
 
@@ -512,9 +519,9 @@
     */
 
         .barcode-wrapper {
-          width: 34mm;
-          height: 34mm;
-          flex: 0 0 34mm;
+          width: 31mm;
+          height: 31mm;
+          flex: 0 0 31mm;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -522,8 +529,8 @@
 
 
         .barcode {
-          width: 34mm;
-          height: 34mm;
+          width: 31mm;
+          height: 31mm;
 
           display: block;
           object-fit: contain;
@@ -554,11 +561,12 @@
 
         .label-meta {
           display: grid;
-          gap: 1.5mm;
-          margin-top: 3mm;
+          gap: 1mm;
+          margin-top: 2mm;
           font-size: 6pt;
           line-height: 1.05;
           color: #555;
+          overflow-wrap: anywhere;
         }
 
         .label-meta strong {
@@ -645,8 +653,8 @@
 
 
           .barcode {
-            width: 34mm;
-            height: 34mm;
+            width: 31mm;
+            height: 31mm;
           }
 
         }

@@ -4,6 +4,9 @@ const {
   issueInstance,
   createIssueBatch,
   getIssueBatch,
+  stageIssueBatchInstance,
+  removeStagedIssueBatchInstance,
+  finalizeIssueBatch,
   canAccessIssueBatch,
   listOpenIssueBatches,
   scanIssueBatchReturn,
@@ -123,23 +126,33 @@ router.post('/inventory/issue-batches/:batchId/scan', requireAuth, requireInvent
   try {
     const batch = await getIssueBatch(batchId);
     if (!await canAccessIssueBatch(req.session.user, batch)) throw new Error('You do not have access to this issue batch.');
-    const result = await issueInstance({
-      instanceCode: req.body.instanceCode,
-      issuedBy: req.session.user.id,
-      userRole: req.session.user.role,
-      batchId
-    });
-    await logAudit({
-      userId: req.session.user.id,
-      action: 'INVENTORY_ISSUE',
-      entity: 'inventory_issue',
-      entityId: result.issue.id,
-      details: { issueNumber: result.issue.issue_number, batchId, instanceCode: result.instance.instance_code, siteId: result.instance.site_id, quantity: result.issue.issued_quantity, scanned: true },
-      ip: req.ip,
-      userAgent: req.get('user-agent')
-    });
-    res.redirect(`/inventory/issue-batches/${batchId}?success=` + encodeURIComponent(`Added ${result.instance.instance_code} to the issue batch.`));
+    const instance = await stageIssueBatchInstance({ batchId, instanceCode: req.body.instanceCode, scannedBy: req.session.user.id });
+    res.redirect(`/inventory/issue-batches/${batchId}?success=` + encodeURIComponent(`Added ${instance.instance_code} to the pending issue list.`));
   } catch (error) { res.redirect(`/inventory/issue-batches/${batchId}?error=` + encodeURIComponent(error.message)); }
+});
+
+router.post('/inventory/issue-batches/:batchId/remove', requireAuth, requireInventoryManager, async (req, res) => {
+  const batchId = Number(req.params.batchId);
+  try {
+    const batch = await getIssueBatch(batchId);
+    if (!await canAccessIssueBatch(req.session.user, batch)) throw new Error('You do not have access to this issue batch.');
+    await removeStagedIssueBatchInstance({ batchId, instanceId: Number(req.body.instanceId) });
+    res.redirect(`/inventory/issue-batches/${batchId}?success=` + encodeURIComponent('Removed the instance from the pending list.'));
+  } catch (error) { res.redirect(`/inventory/issue-batches/${batchId}?error=${encodeURIComponent(error.message)}`); }
+});
+
+router.post('/inventory/issue-batches/:batchId/finalize', requireAuth, requireInventoryManager, async (req, res) => {
+  const batchId = Number(req.params.batchId);
+  try {
+    const batch = await getIssueBatch(batchId);
+    if (!await canAccessIssueBatch(req.session.user, batch)) throw new Error('You do not have access to this issue batch.');
+    const count = await finalizeIssueBatch({ batchId, issuedBy: req.session.user.id, userRole: req.session.user.role });
+    const issued = await getIssueBatch(batchId);
+    await logAudit({ userId: req.session.user.id, action: 'INVENTORY_ISSUE_BATCH', entity: 'inventory_issue_batch', entityId: batchId,
+      details: { count, instanceCodes: issued.issues.map(item => item.instance_code), recipientType: issued.recipient_type, recipientReference: issued.recipient_reference },
+      ip: req.ip, userAgent: req.get('user-agent') });
+    res.redirect(`/inventory/issue-batches/${batchId}?success=` + encodeURIComponent(`Issued ${count} item(s) to ${issued.recipient_reference}.`));
+  } catch (error) { res.redirect(`/inventory/issue-batches/${batchId}?error=${encodeURIComponent(error.message)}`); }
 });
 
 /*

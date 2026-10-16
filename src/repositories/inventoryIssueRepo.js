@@ -972,7 +972,73 @@ async function getIssueBatch(batchId) {
     [batchId]
   );
   batch.returnScannedIds = new Set((await db.many(`SELECT issue_id FROM inventory_issue_batch_return_scans WHERE batch_id=?`, [batchId])).map(row => Number(row.issue_id)));
+  batch.stagedInstances = await db.many(
+    `SELECT ii.id AS instance_id, ii.instance_code, ii.barcode, im.item_code, im.name AS item_name,
+            ii.current_quantity, ii.unit, k.kit_code
+     FROM inventory_issue_batch_staged_instances st
+     JOIN item_instances ii ON ii.id=st.instance_id
+     JOIN item_masters im ON im.id=ii.item_master_id
+     LEFT JOIN item_kit_lines kl ON kl.item_instance_id=ii.id
+     LEFT JOIN item_kits k ON k.id=kl.kit_id AND k.status='ACTIVE'
+     WHERE st.batch_id=? ORDER BY st.scanned_at, ii.instance_code`,
+    [batchId]
+  );
   return batch;
+}
+
+async function stageIssueBatchInstance({ batchId, instanceCode, scannedBy }) {
+  const batch = await db.one(`SELECT id, status, finalized_at FROM inventory_issue_batches WHERE id=?`, [batchId]);
+  if (!batch || batch.status !== 'OPEN' || batch.finalized_at) throw new Error('This issue batch is no longer accepting items.');
+  const code = String(instanceCode || '').trim();
+  if (!code) throw new Error('Scan or enter an instance code.');
+  const instance = await db.one(
+    `SELECT ii.id, ii.instance_code, ii.barcode, im.item_code, im.name AS item_name
+     FROM item_instances ii JOIN item_masters im ON im.id=ii.item_master_id
+     WHERE ii.instance_code=? OR ii.barcode=?`, [code, code]
+  );
+  if (!instance) throw new Error(`No item instance was found for ${code}.`);
+  const membership = await db.one(
+    `SELECT k.kit_id, k.kit_code FROM item_kit_lines l JOIN item_kits k ON k.id=l.kit_id
+     WHERE l.item_instance_id=? AND k.status='ACTIVE'`, [instance.id]
+  );
+  if (membership) {
+    const selected = await db.one(`SELECT 1 AS yes FROM inventory_issue_batch_kits WHERE batch_id=? AND kit_id=?`, [batchId, membership.kit_id]);
+    if (!selected) throw new Error(`Instance ${instance.instance_code} belongs to kit ${membership.kit_code}. Add that kit to this batch before scanning its members.`);
+  }
+  const alreadyStaged = await db.one(`SELECT 1 AS yes FROM inventory_issue_batch_staged_instances WHERE batch_id=? AND instance_id=?`, [batchId, instance.id]);
+  if (alreadyStaged) throw new Error(`${instance.instance_code} is already in the pending issue list.`);
+  await db.query(`INSERT INTO inventory_issue_batch_staged_instances(batch_id,instance_id,scanned_by) VALUES (?,?,?)`, [batchId, instance.id, scannedBy]);
+  return instance;
+}
+
+async function removeStagedIssueBatchInstance({ batchId, instanceId }) {
+  const batch = await db.one(`SELECT status, finalized_at FROM inventory_issue_batches WHERE id=?`, [batchId]);
+  if (!batch || batch.status !== 'OPEN' || batch.finalized_at) throw new Error('Items can only be removed before the batch is issued.');
+  const staged = await db.one(`SELECT 1 AS yes FROM inventory_issue_batch_staged_instances WHERE batch_id=? AND instance_id=?`, [batchId, instanceId]);
+  if (!staged) throw new Error('That pending item was not found in this batch.');
+  await db.query(`DELETE FROM inventory_issue_batch_staged_instances WHERE batch_id=? AND instance_id=?`, [batchId, instanceId]);
+}
+
+async function finalizeIssueBatch({ batchId, issuedBy, userRole }) {
+  const batch = await db.one(`SELECT status, finalized_at FROM inventory_issue_batches WHERE id=?`, [batchId]);
+  if (!batch || batch.status !== 'OPEN' || batch.finalized_at) throw new Error('This batch has already been issued or is no longer open.');
+  const staged = await db.many(`SELECT ii.instance_code FROM inventory_issue_batch_staged_instances st JOIN item_instances ii ON ii.id=st.instance_id WHERE st.batch_id=? ORDER BY st.scanned_at, st.instance_id`, [batchId]);
+  if (!staged.length) throw new Error('Scan at least one item before issuing this batch.');
+  const selectedKits = await db.many(`SELECT kit_id FROM inventory_issue_batch_kits WHERE batch_id=?`, [batchId]);
+  for (const { kit_id: kitId } of selectedKits) {
+    const members = await db.many(`SELECT item_instance_id FROM item_kit_lines WHERE kit_id=?`, [kitId]);
+    const stagedIds = await db.many(`SELECT instance_id FROM inventory_issue_batch_staged_instances WHERE batch_id=?`, [batchId]);
+    const stagedSet = new Set(stagedIds.map(row => Number(row.instance_id)));
+    const missing = members.filter(row => !stagedSet.has(Number(row.item_instance_id)));
+    if (missing.length) {
+      const kit = await db.one(`SELECT kit_code FROM item_kits WHERE id=?`, [kitId]);
+      throw new Error(`Scan all ${members.length} instances in kit ${kit.kit_code} before issuing this batch.`);
+    }
+  }
+  for (const item of staged) await issueInstance({ instanceCode: item.instance_code, issuedBy, userRole, batchId });
+  await db.query(`UPDATE inventory_issue_batches SET finalized_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=?`, [batchId]);
+  await db.query(`DELETE FROM inventory_issue_batch_staged_instances WHERE batch_id=?`, [batchId]);
+  return staged.length;
 }
 
 async function canAccessIssueBatch(user, batch) {
@@ -1009,6 +1075,7 @@ async function listOpenIssueBatches(user) {
 async function scanIssueBatchReturn({ batchId, instanceCode, returnedBy, userRole, reason }) {
   const batch = await getIssueBatch(batchId);
   if (!batch) throw new Error('Issue batch not found.');
+  if (!batch.finalized_at) throw new Error('This issue batch has not been issued yet.');
   if (batch.status === 'RETURNED') throw new Error('This issue batch is already fully returned.');
   for (const kit of batch.kits) {
     const issuedMembers = kit.items.filter(item => item.issue_status && ['OPEN','PARTIALLY_CONSUMED'].includes(item.issue_status));
@@ -1086,6 +1153,9 @@ module.exports = {
   issueInstance,
   createIssueBatch,
   getIssueBatch,
+  stageIssueBatchInstance,
+  removeStagedIssueBatchInstance,
+  finalizeIssueBatch,
   canAccessIssueBatch,
   listOpenIssueBatches,
   scanIssueBatchReturn,
