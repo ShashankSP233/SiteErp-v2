@@ -1,0 +1,17 @@
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <div class="text-muted small">Inventory / Receive Returns</div>
+    <h1 class="h3 mb-1">Receive Issued Batch</h1>
+    <p class="text-muted mb-0">Choose the recipient’s open issue batch, then scan each physical instance being returned.</p>
+  </div>
+  <a href="/inventory/issues" class="btn btn-outline-secondary">View Issued Items</a>
+</div>
+
+<section class="card shadow-sm">
+  <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center"><h2 class="h5 mb-0">Open Issue Batches</h2><span class="text-muted small"><%= batches.length %> awaiting return</span></div>
+  <% if (!batches.length) { %><div class="card-body text-center text-muted py-5">There are no open issue batches to receive.</div><% } else { %>
+    <div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Batch</th><th>Recipient</th><th>Site</th><th>Items</th><th>Status</th><th></th></tr></thead><tbody>
+      <% batches.forEach(batch => { %><tr><td><strong>BATCH-<%= String(batch.id).padStart(6,'0') %></strong><div class="small text-muted"><%= new Date(batch.created_at).toLocaleString() %></div></td><td><%= batch.recipient_type %><% if (batch.recipient_reference) { %><div class="small text-muted"><%= batch.recipient_reference %></div><% } %></td><td><%= batch.site_code || 'Not issued yet' %></td><td><%= batch.returned_count || 0 %> / <%= batch.item_count %> returned</td><td><span class="badge <%= batch.status === 'OPEN' ? 'text-bg-primary' : 'text-bg-warning' %>"><%= batch.status %></span></td><td class="text-end"><a class="btn btn-sm btn-primary" href="/inventory/returns/<%= batch.id %>">Select Batch</a></td></tr><% }) %>
+    </tbody></table></div>
+  <% } %>
+</section>

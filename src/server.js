@@ -122,6 +122,7 @@ app.use(require('./routes/authRoutes'));
 app.use(require('./routes/siteRoutes'));
 app.use(require('./routes/dashboardRoutes'));
 app.use(require('./routes/itemRoutes'));
+app.use(require('./routes/itemKitRoutes'));
 app.use(require('./routes/itemInstanceRoutes'));
 app.use(require('./routes/inventoryIssueRoutes'));
 app.use(require('./routes/inventoryMovementRoutes'));

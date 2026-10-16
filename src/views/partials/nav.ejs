@@ -20,9 +20,13 @@
         <a class="nav-link" href="/">Dashboard</a>
       </li>
 
-      <!-- Item Master -->
-      <li class="nav-item">
-        <a class="nav-link" href="/items">Items</a>
+      <!-- Item Master and Kits -->
+      <li class="nav-item dropdown">
+        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Items</a>
+        <ul class="dropdown-menu">
+          <li><a class="dropdown-item" href="/items">Item Masters</a></li>
+          <li><a class="dropdown-item" href="/kits">Kits</a></li>
+        </ul>
       </li>
 
       <!-- Inventory -->
@@ -72,6 +76,12 @@
             <li>
               <a class="dropdown-item" href="/inventory/issues">
                 Issue Inventory
+              </a>
+            </li>
+
+            <li>
+              <a class="dropdown-item" href="/inventory/returns">
+                Receive Returns
               </a>
             </li>
 

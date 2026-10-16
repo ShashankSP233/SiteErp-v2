@@ -9,7 +9,7 @@ async function allocateIssueNumber(tx) {
     `SELECT next_number
      FROM inventory_issue_counters
      WHERE id = 1
-     FOR UPDATE`
+     ${db.rowLock}`
   );
 
   if (result.rows.length === 0) {
@@ -26,7 +26,7 @@ async function allocateIssueNumber(tx) {
   await tx.query(
     `UPDATE inventory_issue_counters
      SET next_number = $1,
-         updated_at = now()
+         updated_at = CURRENT_TIMESTAMP
      WHERE id = 1`,
     [number + 1]
   );
@@ -41,9 +41,19 @@ async function issueInstance({
   recipientReference,
   reason,
   issuedBy,
-  userRole
+  userRole,
+  batchId = null
 }) {
   return db.tx(async (tx) => {
+
+    let batch = null;
+    if (batchId) {
+      batch = await tx.one(`SELECT * FROM inventory_issue_batches WHERE id=?${db.rowLock}`, [batchId]);
+      if (!batch || batch.status !== 'OPEN') throw new Error('This issue batch is no longer accepting items.');
+      recipientType = batch.recipient_type;
+      recipientReference = batch.recipient_reference;
+      reason = batch.reason;
+    }
 
     const normalizedInstanceCode =
       String(instanceCode || '').trim();
@@ -78,9 +88,9 @@ async function issueInstance({
        JOIN item_masters im
          ON im.id = ii.item_master_id
 
-       WHERE ii.instance_code = $1
+       WHERE ii.instance_code = $1 OR ii.barcode = $1
 
-       FOR UPDATE`,
+       ${db.rowLock}`,
       [normalizedInstanceCode]
     );
 
@@ -89,6 +99,24 @@ async function issueInstance({
     }
 
     const instance = instanceResult.rows[0];
+
+    const membership = await tx.one(
+      `SELECT l.kit_id, k.kit_code FROM item_kit_lines l JOIN item_kits k ON k.id=l.kit_id WHERE l.item_instance_id=? AND k.status='ACTIVE'`,
+      [instance.id]
+    );
+    if (membership && !batch) {
+      throw new Error(`Instance ${instance.instance_code} belongs to kit ${membership.kit_code}. Issue it as part of an issue batch.`);
+    }
+
+    if (batch) {
+      if (batch.site_id && Number(batch.site_id) !== Number(instance.site_id)) {
+        throw new Error('All instances in an issue batch must come from the same site.');
+      }
+      if (membership) {
+        const selected = await tx.one(`SELECT 1 FROM inventory_issue_batch_kits WHERE batch_id=? AND kit_id=?`, [batch.id, membership.kit_id]);
+        if (!selected) throw new Error(`Instance ${instance.instance_code} belongs to kit ${membership.kit_code}. Add that kit to this batch before issuing its instances.`);
+      }
+    }
 
     /*
      * The instance must currently belong to a site.
@@ -292,6 +320,7 @@ async function issueInstance({
      */
     const issueResult = await tx.query(
       `INSERT INTO inventory_issues (
+         batch_id,
          issue_number,
          instance_id,
          site_id,
@@ -313,10 +342,12 @@ async function issueInstance({
          $7,
          $8,
          $9,
-         $10
+         $10,
+         $11
        )
        RETURNING *`,
       [
+        batch ? batch.id : null,
         issueNumber,
         instance.id,
         instance.site_id,
@@ -329,6 +360,10 @@ async function issueInstance({
         issueStatus
       ]
     );
+
+    if (batch && !batch.site_id) {
+      await tx.query(`UPDATE inventory_issue_batches SET site_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`, [instance.site_id, batch.id]);
+    }
 
     /*
      * The ordinary issue path only allocates quantity.
@@ -388,7 +423,7 @@ async function issueInstance({
          SET
            current_quantity = $1,
            lifecycle_status = $2,
-           updated_at = now()
+           updated_at = CURRENT_TIMESTAMP
          WHERE id = $3`,
         [
           newInstanceQuantity,
@@ -561,8 +596,7 @@ async function consumeIssue({
          ON ii.id = inv.instance_id
        JOIN item_masters im
          ON im.id = ii.item_master_id
-       WHERE inv.id = $1
-       FOR UPDATE`,
+       WHERE inv.id = $1${db.rowLock}`,
       [issueId]
     );
 
@@ -650,7 +684,7 @@ async function consumeIssue({
        SET
          current_quantity = $1,
          lifecycle_status = $2,
-         updated_at = now()
+         updated_at = CURRENT_TIMESTAMP
        WHERE id = $3`,
       [
         newInstanceQuantity,
@@ -707,7 +741,8 @@ async function consumeIssue({
 async function returnIssue({
   issueId,
   returnedBy,
-  reason
+  reason,
+  userRole
 }) {
   return db.tx(async (tx) => {
     const issueResult = await tx.query(
@@ -727,7 +762,7 @@ async function returnIssue({
        JOIN item_instances ii
          ON ii.id = inv.instance_id
        WHERE inv.id = $1
-       FOR UPDATE`,
+       ${db.rowLock}`,
       [issueId]
     );
 
@@ -736,6 +771,20 @@ async function returnIssue({
     }
 
     const issue = issueResult.rows[0];
+
+    if (userRole !== 'admin') {
+      const access = await tx.query(
+        `SELECT 1 FROM site_assignments sa
+         JOIN sites s ON s.id=sa.site_id
+         WHERE sa.user_id=$1 AND sa.site_id=$2
+           AND sa.assigned_until IS NULL AND s.status='ACTIVE'
+         LIMIT 1`,
+        [returnedBy, issue.site_id]
+      );
+      if (!access.rows.length) {
+        throw new Error('You do not have permission to receive inventory for this site.');
+      }
+    }
 
     if (!['OPEN', 'PARTIALLY_CONSUMED'].includes(issue.status)) {
       throw new Error(
@@ -763,8 +812,7 @@ async function returnIssue({
     const siteResult = await tx.query(
       `SELECT id, status
        FROM sites
-       WHERE id = $1
-       FOR UPDATE`,
+       WHERE id = $1${db.rowLock}`,
       [issue.site_id]
     );
 
@@ -799,7 +847,7 @@ async function returnIssue({
        SET
          site_id = $1,
          lifecycle_status = 'ACTIVE',
-         updated_at = now()
+         updated_at = CURRENT_TIMESTAMP
        WHERE id = $2`,
       [
         issue.site_id,
@@ -852,10 +900,197 @@ async function returnIssue({
   });
 }
 
+async function findOpenIssueByInstanceCode(instanceCode) {
+  const normalized = String(instanceCode || '').trim();
+  if (!normalized) throw new Error('Scan or enter an instance code.');
+  const issue = await db.one(
+    `SELECT inv.id, inv.issue_number, inv.status, ii.instance_code,
+            im.item_code, im.name AS item_name, inv.recipient_type,
+            inv.recipient_reference, s.code AS site_code, s.name AS site_name
+     FROM inventory_issues inv
+     JOIN item_instances ii ON ii.id=inv.instance_id
+     JOIN item_masters im ON im.id=ii.item_master_id
+     LEFT JOIN sites s ON s.id=inv.site_id
+     WHERE (ii.instance_code=? OR ii.barcode=?) AND inv.status IN ('OPEN','PARTIALLY_CONSUMED')
+     ORDER BY inv.issued_at DESC LIMIT 1`,
+    [normalized, normalized]
+  );
+  if (!issue) throw new Error(`No open issue was found for instance ${normalized}.`);
+  return issue;
+}
+
+async function createIssueBatch({ recipientType, recipientReference, reason, issuedBy, kitIds = [] }) {
+  const uniqueKitIds = [...new Set((Array.isArray(kitIds) ? kitIds : [kitIds]).map(Number).filter(Number.isInteger))];
+  return db.tx(async tx => {
+    const result = await tx.query(
+      `INSERT INTO inventory_issue_batches(recipient_type,recipient_reference,reason,issued_by) VALUES (?,?,?,?) RETURNING id`,
+      [recipientType, recipientReference || null, reason || null, issuedBy]
+    );
+    const batchId = result.rows[0].id;
+    for (const kitId of uniqueKitIds) {
+      const kit = await tx.one(`SELECT id FROM item_kits WHERE id=? AND status='ACTIVE'`, [kitId]);
+      const members = await tx.one(`SELECT COUNT(*) AS n FROM item_kit_lines WHERE kit_id=?`, [kitId]);
+      if (!kit || Number(members.n) === 0) throw new Error('Choose active kits that contain physical instances.');
+      const consumables = await tx.one(
+        `SELECT COUNT(*) AS n FROM item_kit_lines l JOIN item_instances ii ON ii.id=l.item_instance_id JOIN item_masters im ON im.id=ii.item_master_id WHERE l.kit_id=? AND im.is_consumable=true`,
+        [kitId]
+      );
+      if (Number(consumables.n) > 0) throw new Error('A kit in an issue batch must contain returnable, non-consumable item instances.');
+      await tx.query(`INSERT INTO inventory_issue_batch_kits(batch_id,kit_id) VALUES (?,?)`, [batchId, kitId]);
+    }
+    return batchId;
+  });
+}
+
+async function getIssueBatch(batchId) {
+  const batch = await db.one(
+    `SELECT b.*, s.code AS site_code, s.name AS site_name, u.full_name AS issued_by_name
+     FROM inventory_issue_batches b LEFT JOIN sites s ON s.id=b.site_id JOIN users u ON u.id=b.issued_by WHERE b.id=?`,
+    [batchId]
+  );
+  if (!batch) return null;
+  batch.kits = await db.many(`SELECT k.id, k.kit_code, k.name FROM inventory_issue_batch_kits bk JOIN item_kits k ON k.id=bk.kit_id WHERE bk.batch_id=? ORDER BY k.kit_code`, [batchId]);
+  for (const kit of batch.kits) {
+    kit.items = await db.many(
+      `SELECT ii.instance_code, ii.item_master_id, im.item_code, im.name AS item_name, inv.id AS issue_id, inv.status AS issue_status
+       FROM item_kit_lines l JOIN item_instances ii ON ii.id=l.item_instance_id
+       JOIN item_masters im ON im.id=ii.item_master_id
+       LEFT JOIN inventory_issues inv ON inv.instance_id=ii.id AND inv.batch_id=?
+       WHERE l.kit_id=? ORDER BY im.item_code, ii.instance_code`,
+      [batchId, kit.id]
+    );
+  }
+  batch.issues = await db.many(
+    `SELECT inv.id, inv.issue_number, inv.issued_quantity, inv.remaining_quantity, inv.status, inv.issued_at,
+            ii.id AS instance_id, ii.instance_code, ii.barcode, ii.item_master_id, im.item_code, im.name AS item_name, ii.unit,
+            k.kit_code
+     FROM inventory_issues inv JOIN item_instances ii ON ii.id=inv.instance_id
+     JOIN item_masters im ON im.id=ii.item_master_id
+     LEFT JOIN item_kit_lines kl ON kl.item_instance_id=ii.id
+     LEFT JOIN item_kits k ON k.id=kl.kit_id AND k.status='ACTIVE'
+     WHERE inv.batch_id=? ORDER BY inv.issued_at, inv.id`,
+    [batchId]
+  );
+  batch.returnScannedIds = new Set((await db.many(`SELECT issue_id FROM inventory_issue_batch_return_scans WHERE batch_id=?`, [batchId])).map(row => Number(row.issue_id)));
+  return batch;
+}
+
+async function canAccessIssueBatch(user, batch) {
+  if (!user || !batch) return false;
+  if (user.role === 'admin') return true;
+  if (!batch.site_id) return Number(batch.issued_by) === Number(user.id);
+  return Boolean(await db.one(
+    `SELECT 1 FROM site_assignments sa JOIN sites s ON s.id=sa.site_id
+     WHERE sa.user_id=? AND sa.site_id=? AND sa.assigned_until IS NULL AND s.status='ACTIVE' LIMIT 1`,
+    [user.id, batch.site_id]
+  ));
+}
+
+async function listOpenIssueBatches(user) {
+  const where = user?.role === 'admin'
+    ? ''
+    : `AND ((b.site_id IS NULL AND b.issued_by=?) OR (b.site_id IS NOT NULL AND EXISTS (SELECT 1 FROM site_assignments sa JOIN sites ax ON ax.id=sa.site_id WHERE sa.user_id=? AND sa.site_id=b.site_id AND sa.assigned_until IS NULL AND ax.status='ACTIVE'))) `;
+  const params = user?.role === 'admin' ? [] : [user.id, user.id];
+  return db.many(
+    `SELECT b.id, b.recipient_type, b.recipient_reference, b.status, b.created_at,
+            b.site_id, s.code AS site_code, s.name AS site_name,
+            SUM(CASE WHEN inv.status<>'CLOSED' THEN 1 ELSE 0 END) AS item_count,
+            SUM(CASE WHEN inv.status='RETURNED' THEN 1 ELSE 0 END) AS returned_count
+     FROM inventory_issue_batches b LEFT JOIN inventory_issues inv ON inv.batch_id=b.id
+     LEFT JOIN sites s ON s.id=b.site_id
+     WHERE b.status IN ('OPEN','PARTIALLY_RETURNED') ${where}
+     GROUP BY b.id, s.code, s.name
+     HAVING SUM(CASE WHEN inv.status IN ('OPEN','PARTIALLY_CONSUMED') THEN 1 ELSE 0 END) > 0
+     ORDER BY b.created_at DESC`,
+    params
+  );
+}
+
+async function scanIssueBatchReturn({ batchId, instanceCode, returnedBy, userRole, reason }) {
+  const batch = await getIssueBatch(batchId);
+  if (!batch) throw new Error('Issue batch not found.');
+  if (batch.status === 'RETURNED') throw new Error('This issue batch is already fully returned.');
+  for (const kit of batch.kits) {
+    const issuedMembers = kit.items.filter(item => item.issue_status && ['OPEN','PARTIALLY_CONSUMED'].includes(item.issue_status));
+    const returnedMembers = kit.items.filter(item => item.issue_status === 'RETURNED');
+    if (returnedMembers.length === kit.items.length) continue;
+    if (issuedMembers.length !== kit.items.length) {
+      throw new Error(`Finish scanning every instance in kit ${kit.kit_code} into the issue batch before receiving any items.`);
+    }
+  }
+  const normalized = String(instanceCode || '').trim();
+  if (!normalized) throw new Error('Scan or enter an instance code.');
+  const issue = await db.one(
+    `SELECT inv.id, inv.issue_number, inv.instance_id, ii.instance_code
+     FROM inventory_issues inv JOIN item_instances ii ON ii.id=inv.instance_id
+     WHERE inv.batch_id=? AND (ii.instance_code=? OR ii.barcode=?) AND inv.status IN ('OPEN','PARTIALLY_CONSUMED')`,
+    [batchId, normalized, normalized]
+  );
+  if (!issue) throw new Error(`No unreturned issue for ${normalized} exists in this batch.`);
+  const membership = await db.one(
+    `SELECT k.id AS kit_id, k.kit_code FROM item_kit_lines l JOIN item_kits k ON k.id=l.kit_id
+     JOIN inventory_issue_batch_kits bk ON bk.kit_id=k.id AND bk.batch_id=?
+     WHERE l.item_instance_id=? AND k.status='ACTIVE'`,
+    [batchId, issue.instance_id]
+  );
+  if (!membership) {
+    const result = await returnIssue({ issueId: issue.id, returnedBy, userRole, reason });
+    await updateIssueBatchStatus(batchId);
+    return { ...result, completed: true, kitCode: null };
+  }
+
+  const expected = await db.many(
+    `SELECT inv.id, ii.instance_code FROM item_kit_lines l
+     JOIN inventory_issues inv ON inv.instance_id=l.item_instance_id AND inv.batch_id=?
+     JOIN item_instances ii ON ii.id=inv.instance_id
+     WHERE l.kit_id=? ORDER BY ii.instance_code`,
+    [batchId, membership.kit_id]
+  );
+  const memberCount = Number((await db.one(`SELECT COUNT(*) AS n FROM item_kit_lines WHERE kit_id=?`, [membership.kit_id])).n);
+  if (expected.length !== memberCount) {
+    throw new Error(`Kit ${membership.kit_code} cannot be received yet: all of its instances must first be issued in this batch.`);
+  }
+  const existingScan = await db.one(`SELECT 1 FROM inventory_issue_batch_return_scans WHERE batch_id=? AND issue_id=?`, [batchId, issue.id]);
+  if (existingScan) throw new Error(`${issue.instance_code} has already been scanned for kit ${membership.kit_code}. Scan another instance in the kit.`);
+  await db.query(`INSERT INTO inventory_issue_batch_return_scans(batch_id,issue_id,scanned_by) VALUES (?,?,?)`, [batchId, issue.id, returnedBy]);
+  const scanned = await db.many(`SELECT issue_id FROM inventory_issue_batch_return_scans WHERE batch_id=?`, [batchId]);
+  const scannedIds = new Set(scanned.map(row => Number(row.issue_id)));
+  const kitScanned = expected.filter(row => scannedIds.has(Number(row.id)));
+  if (kitScanned.length < memberCount) {
+    return { pending: true, instanceCode: issue.instance_code, kitCode: membership.kit_code, scannedCount: kitScanned.length, expectedCount: memberCount };
+  }
+  const returned = [];
+  for (const member of expected) {
+    returned.push(await returnIssue({ issueId: member.id, returnedBy, userRole, reason: reason || `Returned with kit ${membership.kit_code}` }));
+  }
+  await db.query(`DELETE FROM inventory_issue_batch_return_scans WHERE batch_id=? AND issue_id IN (${expected.map(() => '?').join(',')})`, [batchId, ...expected.map(row => row.id)]);
+  await updateIssueBatchStatus(batchId);
+  return { completed: true, kitCode: membership.kit_code, returned };
+}
+
+async function updateIssueBatchStatus(batchId) {
+  const result = await db.one(
+    `SELECT SUM(CASE WHEN status<>'CLOSED' THEN 1 ELSE 0 END) AS total,
+            SUM(CASE WHEN status='RETURNED' THEN 1 ELSE 0 END) AS returned
+     FROM inventory_issues WHERE batch_id=?`,
+    [batchId]
+  );
+  const total = Number(result.total || 0);
+  const returned = Number(result.returned || 0);
+  const status = total === 0 || returned === total ? 'RETURNED' : returned > 0 ? 'PARTIALLY_RETURNED' : 'OPEN';
+  await db.query(`UPDATE inventory_issue_batches SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`, [status, batchId]);
+}
+
 
 module.exports = {
   issueInstance,
+  createIssueBatch,
+  getIssueBatch,
+  canAccessIssueBatch,
+  listOpenIssueBatches,
+  scanIssueBatchReturn,
   listOpenIssuesForUser,
   consumeIssue,
-  returnIssue
+  returnIssue,
+  findOpenIssueByInstanceCode
 };

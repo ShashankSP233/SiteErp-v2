@@ -1,0 +1,35 @@
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <div class="text-muted small">Inventory / Item Master / Kit Details</div>
+    <h1 class="h3 mb-1"><%= kit.kit_code %> <span class="badge text-bg-primary">Kit</span></h1>
+    <p class="text-muted mb-0"><%= kit.name %><% if (kit.description) { %> — <%= kit.description %><% } %></p>
+  </div>
+  <div class="d-flex gap-2"><a href="/items" class="btn btn-outline-secondary">Back to Item Masters</a><a href="/kits" class="btn btn-outline-primary">Manage Kits</a></div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-4"><div class="card h-100 shadow-sm"><div class="card-body"><div class="small text-muted">Kit Code</div><strong class="fs-5"><%= kit.kit_code %></strong></div></div></div>
+  <div class="col-md-4"><div class="card h-100 shadow-sm"><div class="card-body"><div class="small text-muted">Kit Status</div><strong class="fs-5"><%= kit.status %></strong></div></div></div>
+  <div class="col-md-4"><div class="card h-100 shadow-sm"><div class="card-body"><div class="small text-muted">Physical Instances</div><strong class="fs-5"><%= kit.items.length %></strong></div></div></div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-header bg-white py-3"><h2 class="h5 mb-0">Kit Instances, Locations, and Movement History</h2></div>
+  <% if (!kit.items.length) { %><div class="card-body text-center text-muted">This kit has no instances.</div><% } else { %>
+    <div class="table-responsive"><table class="table table-hover align-middle mb-0">
+      <thead class="table-light"><tr><th>Item Master / Instance</th><th>Barcode</th><th>Quantity</th><th>Location</th><th>Status</th><th>Condition</th><th>Movement History</th></tr></thead>
+      <tbody><% kit.items.forEach((instance, index) => { const historyId = `kit-movement-${index}`; %>
+        <tr>
+          <td><a href="/items/<%= instance.item_master_id %>/ledger" class="fw-semibold"><%= instance.item_code %></a><div><a href="/inventory/instances/lookup?code=<%= encodeURIComponent(instance.instance_code) %>"><%= instance.instance_code %></a></div><small class="text-muted"><%= instance.item_name %></small></td>
+          <td><%= instance.barcode || '—' %></td>
+          <td><strong><%= instance.current_quantity %></strong> <%= instance.unit || '' %><div class="small text-muted">Original: <%= instance.original_quantity %> <%= instance.unit || '' %></div></td>
+          <td><% if (instance.site_code) { %><strong><%= instance.site_code %></strong><div class="small text-muted"><%= instance.site_name || '' %></div><% } else { %><span class="text-muted">No site</span><% } %></td>
+          <td><span class="badge <%= instance.lifecycle_status === 'ACTIVE' ? 'text-bg-success' : 'text-bg-secondary' %>"><%= instance.lifecycle_status %></span></td>
+          <td><%= instance.condition || '—' %></td>
+          <td><button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#<%= historyId %>" aria-expanded="false">View (<%= instance.movements.length %>)</button></td>
+        </tr>
+        <tr class="collapse" id="<%= historyId %>"><td colspan="7"><% if (!instance.movements.length) { %><span class="text-muted">No movement history is available for this instance.</span><% } else { %><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Date</th><th>Movement</th><th>From</th><th>To</th><th>Quantity</th><th>Reason</th></tr></thead><tbody><% instance.movements.forEach(movement => { %><tr><td><%= new Date(movement.created_at).toLocaleString() %></td><td><%= movement.movement_type %></td><td><%= movement.from_site_code || '—' %></td><td><%= movement.to_site_code || '—' %></td><td><%= movement.quantity %> <%= movement.unit || '' %></td><td><%= movement.reason || '—' %></td></tr><% }) %></tbody></table></div><% } %></td></tr>
+      <% }) %></tbody>
+    </table></div>
+  <% } %>
+</div>

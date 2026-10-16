@@ -8,6 +8,7 @@
   <% if (['admin', 'manager'].includes(currentUser?.role)) { %>
     <a href="/items/new" class="btn btn-primary">Create Item</a>
   <% } %>
+  <a href="/kits" class="btn btn-outline-primary">Manage Kits</a>
 </div>
 
 <form method="get" action="/items" class="card card-body shadow-sm mb-3">
@@ -38,7 +39,7 @@
     <h2 class="h5 mb-0">Inventory Item Types</h2>
   </div>
 
-  <% if (!items.length) { %>
+  <% if (!items.length && !(kits || []).length) { %>
     <div class="card-body text-center text-muted py-5">
       <% if (q) { %>
         No Item Masters match “<%= q %>”.
@@ -132,6 +133,19 @@
               </td>
             </tr>
           <% }) %>
+        <% (kits || []).forEach(kit => { %>
+          <tr class="table-primary-subtle">
+            <td><a class="text-decoration-none" href="/kits/<%= kit.id %>"><strong><%= kit.kit_code %></strong></a><span class="badge text-bg-primary ms-2">Kit</span></td>
+            <td><strong class="d-block"><%= kit.name %></strong><% if (kit.description) { %><small class="text-muted d-block"><%= kit.description %></small><% } %><% if (kit.items.length) { %><small class="d-block mt-1"><strong>Contents:</strong> <% kit.items.forEach((instance, index) => { %><% if (index) { %>, <% } %><%= instance.item_code %> / <%= instance.instance_code %><% }) %></small><% } else { %><small class="text-muted d-block mt-1">No instances added</small><% } %></td>
+            <td><span class="badge text-bg-light border">KIT</span></td>
+            <td class="text-nowrap"><strong>1</strong> <span class="text-muted">kit</span></td>
+            <td><span class="badge text-bg-secondary">No</span></td>
+            <td><span class="badge text-bg-secondary">No</span></td>
+            <td><span class="badge text-bg-success">Yes</span></td>
+            <td><span class="badge text-bg-success"><%= kit.status === 'ACTIVE' ? 'Active' : kit.status %></span></td>
+            <td class="text-end text-nowrap"><a href="/kits/<%= kit.id %>" class="btn btn-sm btn-outline-secondary">Details</a><a href="/kits" class="btn btn-sm btn-outline-primary ms-1">Manage</a></td>
+          </tr>
+        <% }) %>
         </tbody>
       </table>
     </div>

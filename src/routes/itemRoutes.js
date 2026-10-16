@@ -1,6 +1,7 @@
 const express = require('express');
 
 const itemMasterRepo = require('../repositories/itemMasterRepo');
+const { listKits } = require('../repositories/itemKitRepo');
 
 const {
   receiveInstances,
@@ -32,6 +33,7 @@ router.get(
     try {
       const q = String(req.query.q || '').trim();
       const allItems = await itemMasterRepo.listItemMasters();
+      const allKits = await listKits();
       const searchTerm = q.toLocaleLowerCase();
 
       const items = searchTerm
@@ -49,9 +51,14 @@ router.get(
           })
         : allItems;
 
+      const kits = searchTerm
+        ? allKits.filter(kit => [kit.kit_code, kit.name, kit.description, ...kit.items.flatMap(instance => [instance.instance_code, instance.item_code, instance.item_name])].filter(Boolean).join(' ').toLocaleLowerCase().includes(searchTerm))
+        : allKits;
+
       res.render('items/list', {
         title: 'Items',
         items,
+        kits,
         q
       });
     } catch (err) {

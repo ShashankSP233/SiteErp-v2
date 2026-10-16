@@ -1,0 +1,45 @@
+<div class="mb-4">
+  <div class="text-muted small">Inventory / Item Master</div>
+  <h1 class="h3 mb-1">Kits</h1>
+  <p class="text-muted mb-0">Build a kit from specific physical instances. Each instance remains part of its item master and can belong to only one kit.</p>
+</div>
+<% if (['admin','manager'].includes(currentUser?.role)) { %>
+<div class="card shadow-sm mb-4"><div class="card-header bg-white"><h2 class="h5 mb-0">Create kit</h2></div><div class="card-body">
+  <form method="post" action="/kits"><% if (typeof csrfToken !== 'undefined') { %><input type="hidden" name="_csrf" value="<%= csrfToken %>"><% } %>
+    <div class="row g-3"><div class="col-md-3"><label class="form-label">Kit code</label><input class="form-control" name="code" required maxlength="80" placeholder="SURVEY-KIT"></div><div class="col-md-3"><label class="form-label">Kit name</label><input class="form-control" name="name" required maxlength="160" placeholder="Survey Kit"></div><div class="col-md-6"><label class="form-label">Description</label><input class="form-control" name="description" maxlength="500"></div></div>
+    <div class="mt-3"><label class="form-label fw-semibold">Physical instances in this kit</label><div id="kit-lines"><div class="row g-2 mb-2 kit-line"><div class="col-md-5"><input class="form-control instance-search" type="search" placeholder="Type item code, name, or instance code" autocomplete="off" aria-label="Search instances"></div><div class="col-md-6"><select class="form-select" name="instanceIds" required><option value="">Select an unassigned instance</option><% instanceGroups.forEach(group => { %><optgroup label="<%= group.label %>"><% group.instances.forEach(instance => { %><option value="<%= instance.id %>" data-search="<%= `${group.label} ${instance.instance_code}`.toLowerCase() %>"><%= instance.instance_code %></option><% }) %></optgroup><% }) %></select></div><div class="col-md-1"><button class="btn btn-outline-danger" type="button" onclick="this.closest('.kit-line').remove()" aria-label="Remove">×</button></div></div></div><button class="btn btn-sm btn-outline-secondary" type="button" id="add-kit-line">Add instance</button></div>
+    <div class="text-end mt-3"><button class="btn btn-primary">Save Kit</button></div>
+  </form></div></div>
+<% } %>
+<div class="card shadow-sm"><div class="card-header bg-white"><h2 class="h5 mb-0">Kit definitions</h2></div>
+  <% if (!kits.length) { %><div class="card-body text-center text-muted">No kits are defined.</div><% } else { %>
+  <div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Kit</th><th>Physical instances</th><th>Status</th><th>Actions</th></tr></thead><tbody><% kits.forEach(kit => { %><tr><td><strong><%= kit.kit_code %></strong><div><%= kit.name %></div><% if (kit.description) { %><small class="text-muted"><%= kit.description %></small><% } %></td><td><ul class="mb-0"><% kit.items.forEach(item => { %><li><%= item.item_code %> — <%= item.item_name %> / <%= item.instance_code %></li><% }) %></ul></td><td><%= kit.status %></td><td class="text-nowrap"><a class="btn btn-sm btn-outline-secondary" href="/kits/<%= kit.id %>">Details</a><% if (['admin','manager'].includes(currentUser?.role)) { %><form class="d-inline" method="post" action="/kits/<%= kit.id %>/dismantle" onsubmit="return confirm('Dismantle this kit? This is allowed only after every instance has been returned to a site.');"><% if (typeof csrfToken !== 'undefined') { %><input type="hidden" name="_csrf" value="<%= csrfToken %>"><% } %><button class="btn btn-sm btn-outline-danger ms-1">Dismantle</button></form><% } %></td></tr><% }) %></tbody></table></div><% } %>
+</div>
+<script nonce="<%= cspNonce %>">
+document.getElementById('add-kit-line')?.addEventListener('click', () => {
+  const row = document.querySelector('.kit-line').cloneNode(true);
+  row.querySelector('select').value = '';
+  row.querySelector('.instance-search').value = '';
+  row.querySelectorAll('option').forEach(option => { option.hidden = false; option.disabled = false; });
+  row.querySelectorAll('optgroup').forEach(group => { group.hidden = false; });
+  document.getElementById('kit-lines').appendChild(row);
+});
+
+document.getElementById('kit-lines')?.addEventListener('input', event => {
+  if (!event.target.matches('.instance-search')) return;
+  const row = event.target.closest('.kit-line');
+  const query = event.target.value.trim().toLowerCase();
+  const select = row.querySelector('select');
+  select.querySelectorAll('optgroup').forEach(group => {
+    let hasMatch = false;
+    group.querySelectorAll('option').forEach(option => {
+      const matches = !query || option.dataset.search.includes(query);
+      option.hidden = !matches;
+      option.disabled = !matches;
+      hasMatch = hasMatch || matches;
+      if (!matches && option.selected) select.value = '';
+    });
+    group.hidden = !hasMatch;
+  });
+});
+</script>

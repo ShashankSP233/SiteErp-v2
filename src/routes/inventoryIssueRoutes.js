@@ -2,10 +2,15 @@ const express = require('express');
 
 const {
   issueInstance,
+  createIssueBatch,
+  getIssueBatch,
+  canAccessIssueBatch,
+  listOpenIssueBatches,
+  scanIssueBatchReturn,
   listOpenIssuesForUser,
   consumeIssue,
-  returnIssue
 } = require('../repositories/inventoryIssueRepo');
+const { listKits } = require('../repositories/itemKitRepo');
 
 const { logAudit } = require('../repositories/auditRepo');
 
@@ -28,6 +33,114 @@ function requireInventoryManager(req, res, next) {
 
   next();
 }
+
+router.get('/inventory/returns', requireAuth, requireInventoryManager, async (req, res, next) => {
+  try {
+    const batches = await listOpenIssueBatches(req.session.user);
+    res.render('inventory/returns', {
+      currentUser: req.session.user,
+      batches,
+      error: req.query.error || null,
+      success: req.query.success || null
+    });
+  } catch (error) { next(error); }
+});
+
+router.get('/inventory/returns/:batchId', requireAuth, requireInventoryManager, async (req, res, next) => {
+  try {
+    const batch = await getIssueBatch(Number(req.params.batchId));
+    if (!batch) return res.status(404).render('errors/404', { title: 'Issue batch not found' });
+    if (!await canAccessIssueBatch(req.session.user, batch)) return res.status(403).send('Forbidden');
+    res.render('inventory/batch-receive', { currentUser: req.session.user, batch, error: req.query.error || null, success: req.query.success || null });
+  } catch (error) { next(error); }
+});
+
+router.post('/inventory/returns/:batchId/scan', requireAuth, requireInventoryManager, async (req, res) => {
+  const batchId = Number(req.params.batchId);
+  try {
+    const batch = await getIssueBatch(batchId);
+    if (!await canAccessIssueBatch(req.session.user, batch)) throw new Error('You do not have access to this issue batch.');
+    const result = await scanIssueBatchReturn({
+      batchId,
+      instanceCode: req.body.instanceCode,
+      returnedBy: req.session.user.id,
+      userRole: req.session.user.role,
+      reason: req.body.reason
+    });
+    if (result.pending) {
+      return res.redirect(`/inventory/returns/${batchId}?success=${encodeURIComponent(`${result.kitCode}: scanned ${result.scannedCount} of ${result.expectedCount}; scan the remaining kit instances to receive the kit.`)}`);
+    }
+    await logAudit({
+      userId: req.session.user.id,
+      action: 'INVENTORY_RETURN',
+      entity: 'inventory_issue_batch',
+      entityId: batchId,
+      details: { kitCode: result.kitCode || null, instanceCode: result.instanceCode || null, instanceCodes: result.returned?.map(item => item.instanceCode) || null, scanned: true },
+      ip: req.ip,
+      userAgent: req.get('user-agent')
+    });
+    const message = result.kitCode ? `Kit ${result.kitCode} and all its instances received.` : `Received ${result.instanceCode}.`;
+    return res.redirect(`/inventory/returns/${batchId}?success=${encodeURIComponent(message)}`);
+  } catch (error) {
+    return res.redirect(`/inventory/returns/${batchId}?error=${encodeURIComponent(error.message || 'Failed to receive inventory.')}`);
+  }
+});
+
+router.get('/inventory/issue-batches/new', requireAuth, requireInventoryManager, async (req, res, next) => {
+  try {
+    const kits = await listKits();
+    res.render('inventory/batch-new', { currentUser: req.session.user, kits, error: req.query.error || null });
+  } catch (error) { next(error); }
+});
+
+router.post('/inventory/issue-batches', requireAuth, requireInventoryManager, async (req, res) => {
+  try {
+    const allowed = ['PROJECT','EMPLOYEE','DEPARTMENT','OTHER'];
+    if (!allowed.includes(req.body.recipientType)) throw new Error('Choose a valid recipient type.');
+    if (!String(req.body.recipientReference || '').trim()) throw new Error('Enter the recipient name or reference.');
+    const batchId = await createIssueBatch({
+      recipientType: req.body.recipientType,
+      recipientReference: req.body.recipientReference,
+      reason: req.body.reason,
+      issuedBy: req.session.user.id,
+      kitIds: req.body.kitIds || []
+    });
+    res.redirect(`/inventory/issue-batches/${batchId}`);
+  } catch (error) { res.redirect('/inventory/issue-batches/new?error=' + encodeURIComponent(error.message)); }
+});
+
+router.get('/inventory/issue-batches/:batchId', requireAuth, requireInventoryManager, async (req, res, next) => {
+  try {
+    const batch = await getIssueBatch(Number(req.params.batchId));
+    if (!batch) return res.status(404).render('errors/404', { title: 'Issue batch not found' });
+    if (!await canAccessIssueBatch(req.session.user, batch)) return res.status(403).send('Forbidden');
+    res.render('inventory/batch-issue', { currentUser: req.session.user, batch, error: req.query.error || null, success: req.query.success || null });
+  } catch (error) { next(error); }
+});
+
+router.post('/inventory/issue-batches/:batchId/scan', requireAuth, requireInventoryManager, async (req, res) => {
+  const batchId = Number(req.params.batchId);
+  try {
+    const batch = await getIssueBatch(batchId);
+    if (!await canAccessIssueBatch(req.session.user, batch)) throw new Error('You do not have access to this issue batch.');
+    const result = await issueInstance({
+      instanceCode: req.body.instanceCode,
+      issuedBy: req.session.user.id,
+      userRole: req.session.user.role,
+      batchId
+    });
+    await logAudit({
+      userId: req.session.user.id,
+      action: 'INVENTORY_ISSUE',
+      entity: 'inventory_issue',
+      entityId: result.issue.id,
+      details: { issueNumber: result.issue.issue_number, batchId, instanceCode: result.instance.instance_code, siteId: result.instance.site_id, quantity: result.issue.issued_quantity, scanned: true },
+      ip: req.ip,
+      userAgent: req.get('user-agent')
+    });
+    res.redirect(`/inventory/issue-batches/${batchId}?success=` + encodeURIComponent(`Added ${result.instance.instance_code} to the issue batch.`));
+  } catch (error) { res.redirect(`/inventory/issue-batches/${batchId}?error=` + encodeURIComponent(error.message)); }
+});
 
 /*
  * GET /inventory/issues
@@ -234,60 +347,5 @@ router.post(
     }
   }
 );
-
-router.post(
-  '/inventory/issues/:id/return',
-  requireAuth,
-  requireInventoryManager,
-  async (req, res) => {
-    const issueId = Number(req.params.id);
-    const { reason } = req.body;
-
-    try {
-      if (!Number.isInteger(issueId) || issueId <= 0) {
-        throw new Error('Invalid inventory issue.');
-      }
-
-      const result = await returnIssue({
-        issueId,
-        returnedBy: req.session.user.id,
-        reason
-      });
-
-      await logAudit({
-        userId: req.session.user.id,
-        action: 'INVENTORY_RETURN',
-        entity: 'inventory_issue',
-        entityId: issueId,
-        details: {
-          issueNumber: result.issueNumber,
-          instanceCode: result.instanceCode,
-          returnedQuantity: result.returnedQuantity,
-          unit: result.unit,
-          siteId: result.siteId,
-          reason: reason || null
-        },
-        ip: req.ip,
-        userAgent: req.get('user-agent')
-      });
-
-      return res.redirect(
-        `/inventory/issues?success=${encodeURIComponent(
-          `Returned ${result.returnedQuantity} ${result.unit} from ${result.issueNumber}.`
-        )}`
-      );
-    } catch (error) {
-      console.error('Failed to return inventory:', error);
-
-      return res.redirect(
-        `/inventory/issues?error=${encodeURIComponent(
-          error.message || 'Failed to return inventory.'
-        )}`
-      );
-    }
-  }
-);
-
-
 
 module.exports = router;
