@@ -1,4 +1,4 @@
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
   <div>
     <h1 class="h3 mb-1">Inventory Instances</h1>
     <p class="text-muted mb-0">
@@ -42,204 +42,47 @@
 <% } else { %>
 
   <div class="card">
-    <div class="card-body p-0">
+    <div class="card-header bg-white"><span class="text-muted small"><%= instances.length %> physical instance<%= instances.length === 1 ? '' : 's' %></span></div>
 
-      <div class="table-responsive">
-
-        <table class="table table-hover mb-0 align-middle">
-
-          <thead class="table-light">
+    <div class="d-none d-xl-block">
+      <table class="table table-hover mb-0 align-middle inventory-instance-table">
+        <colgroup><col style="width:19%"><col style="width:21%"><col style="width:13%"><col style="width:15%"><col style="width:12%"><col style="width:10%"><col style="width:10%"></colgroup>
+        <thead class="table-light"><tr><th>Instance</th><th>Item</th><th>Barcode</th><th>Stock</th><th>Site</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>
+          <% instances.forEach(instance => { const status = String(instance.lifecycle_status || '').toUpperCase(); %>
             <tr>
-              <th>Instance</th>
-              <th>Item</th>
-              <th>Brand</th>
-              <th>Barcode</th>
-              <th>Current</th>
-              <th>Allocated</th>
-              <th>Available</th>
-              <th>Site</th>
-              <th>Condition</th>
-              <th>Status</th>
-              <th>Received</th>
-              <th class="text-end">Actions</th>
+              <td class="text-break"><a href="/inventory/instances/lookup?code=<%= encodeURIComponent(instance.instance_code) %>" class="text-decoration-none"><strong><%= instance.instance_code %></strong></a></td>
+              <td class="text-break"><strong class="d-block"><%= instance.item_code %></strong><small class="text-muted"><%= instance.item_name %></small></td>
+              <td class="text-break"><code><%= instance.barcode || '—' %></code></td>
+              <td class="small"><div>Current: <%= Number(instance.current_quantity).toLocaleString() %> <%= instance.unit %></div><div>Allocated: <%= Number(instance.issued_quantity || 0).toLocaleString() %> <%= instance.unit %></div><strong>Available: <%= Number(instance.available_quantity ?? instance.current_quantity).toLocaleString() %> <%= instance.unit %></strong></td>
+              <td class="text-break"><% if (instance.site_code) { %><strong><%= instance.site_code %></strong><small class="d-block text-muted"><%= instance.site_name %></small><% } else { %><span class="text-muted">No site</span><% } %></td>
+              <td><span class="badge <%= status === 'ACTIVE' ? 'bg-primary' : status === 'CONSUMED' ? 'bg-secondary' : 'bg-warning text-dark' %>"><%= status === 'QUARANTINED' ? 'Quarantined' : (status || 'Unknown') %></span><span class="badge ms-1 <%= instance.condition === 'GOOD' ? 'bg-success' : 'bg-warning text-dark' %>"><%= instance.condition === 'GOOD' ? 'Good' : instance.condition %></span></td>
+              <td><div class="d-flex flex-wrap gap-1"><a href="/inventory/movements?instanceCode=<%= encodeURIComponent(instance.instance_code) %>" class="btn btn-sm btn-outline-secondary">History</a><% if (['admin', 'manager'].includes(currentUser.role) && instance.lifecycle_status === 'ACTIVE') { %><a href="/inventory/adjustment?instanceCode=<%= encodeURIComponent(instance.instance_code) %>" class="btn btn-sm btn-outline-primary">Adjust</a><% } %></div></td>
             </tr>
-          </thead>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
 
-          <tbody>
-
-            <% instances.forEach(instance => { %>
-
-              <tr>
-
-                <!-- Instance -->
-                <td>
-                  <a
-                    href="/inventory/instances/lookup?code=<%= encodeURIComponent(instance.instance_code) %>"
-                    class="text-decoration-none"
-                    title="View instance details"
-                  >
-                    <strong><%= instance.instance_code %></strong>
-                  </a>
-                </td>
-
-                <!-- Item -->
-                <td>
-                  <div>
-                    <strong>
-                      <%= instance.item_code %>
-                    </strong>
-                  </div>
-
-                  <small class="text-muted">
-                    <%= instance.item_name %>
-                  </small>
-                </td>
-
-                <td><%= instance.brand || '—' %></td>
-
-                <!-- Barcode -->
-                <td>
-                  <code>
-                    <%= instance.barcode %>
-                  </code>
-                </td>
-
-                <!-- Current quantity -->
-                <td>
-                  <%= Number(instance.current_quantity).toLocaleString() %>
-                  <%= instance.unit %>
-                </td>
-
-                <!-- Quantity allocated to active issues -->
-                <td>
-                  <%= Number(instance.issued_quantity || 0).toLocaleString() %>
-                  <%= instance.unit %>
-                </td>
-
-                <!-- Quantity actually available -->
-                <td>
-                  <strong>
-                    <%= Number(
-                      instance.available_quantity ?? instance.current_quantity
-                    ).toLocaleString() %>
-                    <%= instance.unit %>
-                  </strong>
-                </td>
-
-                <!-- Site -->
-                <td>
-                  <% if (instance.site_code) { %>
-
-                    <strong>
-                      <%= instance.site_code %>
-                    </strong>
-
-                    <br>
-
-                    <small class="text-muted">
-                      <%= instance.site_name %>
-                    </small>
-
-                  <% } else { %>
-
-                    <span class="text-muted">
-                      No site
-                    </span>
-
-                  <% } %>
-                </td>
-
-                <!-- Condition -->
-                <td>
-
-                  <% if (instance.condition === 'GOOD') { %>
-
-                    <span class="badge bg-success">
-                      Good
-                    </span>
-
-                  <% } else { %>
-
-                    <span class="badge bg-warning text-dark">
-                      <%= instance.condition %>
-                    </span>
-
-                  <% } %>
-
-                </td>
-
-                <!-- Status -->
-                <td>
-
-                  <% if (instance.lifecycle_status === 'ACTIVE') { %>
-
-                    <span class="badge bg-primary">
-                      Active
-                    </span>
-
-                  <% } else if (instance.lifecycle_status === 'CONSUMED') { %>
-
-                    <span class="badge bg-secondary">
-                      Consumed
-                    </span>
-
-                  <% } else { %>
-
-                    <span class="badge bg-warning text-dark">
-                      <%= instance.lifecycle_status === 'QUARANTINED' ? 'Quarantined' : instance.lifecycle_status %>
-                    </span>
-
-                  <% } %>
-
-                </td>
-
-                <!-- Received -->
-                <td>
-                  <small>
-                    <%= new Date(instance.created_at).toLocaleString() %>
-                  </small>
-                </td>
-                
-                <td class="text-end">
-                  <a
-                    href="/inventory/movements?instanceCode=<%= encodeURIComponent(instance.instance_code) %>"
-                    class="btn btn-sm btn-outline-secondary"
-                  >
-                    History
-                  </a>
-                </td>
-                <td class="text-end">
-
-                  <% if (['admin', 'manager'].includes(currentUser.role) &&
-                        instance.lifecycle_status === 'ACTIVE') { %>
-
-                    <a
-                      href="/inventory/adjustment?instanceCode=<%= encodeURIComponent(instance.instance_code) %>"
-                      class="btn btn-sm btn-outline-primary"
-                    >
-                      Adjust
-                    </a>
-
-                  <% } else { %>
-
-                    <span class="text-muted">
-                      —
-                    </span>
-
-                  <% } %>
-
-                </td>
-              </tr>
-
-            <% }) %>
-
-          </tbody>
-
-        </table>
-
-      </div>
-
+    <div class="d-xl-none">
+      <% instances.forEach(instance => { const status = String(instance.lifecycle_status || '').toUpperCase(); %>
+        <article class="border-top p-3 inventory-instance-card">
+          <div class="d-flex justify-content-between align-items-start gap-2"><div class="min-w-0"><a href="/inventory/instances/lookup?code=<%= encodeURIComponent(instance.instance_code) %>" class="text-decoration-none text-break"><strong><%= instance.instance_code %></strong></a><div class="mt-1"><strong class="d-block text-break"><%= instance.item_code %></strong><small class="text-muted"><%= instance.item_name %></small></div></div><span class="badge flex-shrink-0 <%= status === 'ACTIVE' ? 'bg-primary' : status === 'CONSUMED' ? 'bg-secondary' : 'bg-warning text-dark' %>"><%= status === 'QUARANTINED' ? 'Quarantined' : (status || 'Unknown') %></span></div>
+          <div class="row g-2 mt-2 small"><div class="col-4"><span class="text-muted d-block">Current</span><%= Number(instance.current_quantity).toLocaleString() %> <%= instance.unit %></div><div class="col-4"><span class="text-muted d-block">Allocated</span><%= Number(instance.issued_quantity || 0).toLocaleString() %> <%= instance.unit %></div><div class="col-4"><span class="text-muted d-block">Available</span><strong><%= Number(instance.available_quantity ?? instance.current_quantity).toLocaleString() %> <%= instance.unit %></strong></div></div>
+          <div class="mt-2 small"><span class="text-muted">Site:</span> <%= instance.site_code ? `${instance.site_code} — ${instance.site_name}` : 'No site' %><span class="badge ms-1 <%= instance.condition === 'GOOD' ? 'bg-success' : 'bg-warning text-dark' %>"><%= instance.condition === 'GOOD' ? 'Good' : instance.condition %></span></div>
+          <details class="mt-2 small"><summary class="text-primary">More details</summary><div class="mt-2 text-break"><span class="text-muted">Barcode:</span> <code><%= instance.barcode || '—' %></code></div><div><span class="text-muted">Brand:</span> <%= instance.brand || '—' %></div><div><span class="text-muted">Received:</span> <%= new Date(instance.created_at).toLocaleString() %></div></details>
+          <div class="d-flex flex-wrap gap-2 mt-3"><a href="/inventory/movements?instanceCode=<%= encodeURIComponent(instance.instance_code) %>" class="btn btn-sm btn-outline-secondary">Movement History</a><% if (['admin', 'manager'].includes(currentUser.role) && instance.lifecycle_status === 'ACTIVE') { %><a href="/inventory/adjustment?instanceCode=<%= encodeURIComponent(instance.instance_code) %>" class="btn btn-sm btn-outline-primary">Adjust</a><% } %></div>
+        </article>
+      <% }) %>
     </div>
   </div>
+
+  <style>
+    .inventory-instance-table { width:100%; table-layout:fixed; }
+    .inventory-instance-table th, .inventory-instance-table td { overflow-wrap:anywhere; }
+    .inventory-instance-card { min-width:0; overflow-wrap:anywhere; }
+    .inventory-instance-card .min-w-0 { min-width:0; }
+    .inventory-instance-card:first-of-type { border-top:0 !important; }
+  </style>
 
 <% } %>
