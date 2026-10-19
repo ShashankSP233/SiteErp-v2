@@ -1,3 +1,4 @@
+<div class="barcode-labels-page">
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-4">
   <div>
     <h1 class="h3 fw-bold mb-1">Barcode Labels</h1>
@@ -102,12 +103,12 @@
         </p>
       </div>
     <% } else { %>
-      <div class="table-responsive">
-        <table class="table table-hover table-striped align-middle mb-0 data-table">
+      <div class="barcode-labels-table-wrap">
+        <table class="table table-hover table-striped align-middle mb-0 data-table barcode-labels-table">
           <thead class="table-light">
             <tr>
               <% if (['admin', 'manager', 'operator'].includes(currentUser.role)) { %>
-                <th class="text-center" style="width: 48px;">
+                <th class="text-center selection-column">
                   <input
                     type="checkbox"
                     id="select-all"
@@ -117,13 +118,13 @@
                   >
                 </th>
               <% } %>
-              <th class="text-nowrap">Instance Code</th>
-              <th class="text-nowrap">Barcode</th>
-              <th>Item</th>
-              <th>Current Location</th>
-              <th class="text-nowrap text-end">Current Quantity</th>
-              <th>Status</th>
-              <th class="text-end">Action</th>
+              <th class="instance-code-cell">Instance Code</th>
+              <th class="barcode-column">Barcode</th>
+              <th class="item-column">Item</th>
+              <th class="location-column">Current Location</th>
+              <th class="quantity-column text-end">Current Quantity</th>
+              <th class="status-column">Status</th>
+              <th class="text-end action-column">Action</th>
             </tr>
           </thead>
 
@@ -139,7 +140,7 @@
 
               <tr>
                 <% if (['admin', 'manager', 'operator'].includes(currentUser.role)) { %>
-                  <td class="text-center">
+                  <td class="text-center selection-column">
                     <input
                       type="checkbox"
                       class="form-check-input label-checkbox"
@@ -150,20 +151,20 @@
                   </td>
                 <% } %>
 
-                <td class="text-nowrap">
+                <td class="instance-code-cell">
                   <strong><%= label.instance_code %></strong>
                 </td>
 
-                <td class="text-nowrap">
+                <td class="barcode-column barcode-cell">
                   <code><%= label.barcode || '—' %></code>
                 </td>
 
-                <td>
+                <td class="item-column">
                   <strong class="d-block"><%= label.item_code %></strong>
                   <span class="small text-muted"><%= label.item_name %></span>
                 </td>
 
-                <td>
+                <td class="location-column">
                   <% if (label.site_name) { %>
                     <strong><%= label.site_name %></strong>
                     <% if (label.site_code) { %>
@@ -174,18 +175,18 @@
                   <% } %>
                 </td>
 
-                <td class="text-nowrap text-end">
+                <td class="quantity-column text-end">
                   <%= Number(label.current_quantity || 0).toLocaleString() %>
                   <%= label.unit || label.item_unit || '' %>
                 </td>
 
-                <td>
+                <td class="status-column">
                   <span class="badge <%= statusClass %>">
                     <%= status || 'UNKNOWN' %>
                   </span>
                 </td>
 
-                <td class="text-end">
+                <td class="text-end action-column">
                   <a
                     href="/inventory/labels/print/<%= label.instance_id %>"
                     class="btn btn-sm btn-outline-primary"
@@ -203,6 +204,7 @@
     <% } %>
   </div>
 </form>
+</div>
 
 <script nonce="<%= cspNonce %>">
   document.addEventListener('DOMContentLoaded', function () {
