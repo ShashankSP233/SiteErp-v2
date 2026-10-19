@@ -93,7 +93,7 @@ main h1::after {
 .barcode-labels-table { width: 100%; table-layout: fixed; }
 .barcode-labels-page .barcode-labels-table th,
 .barcode-labels-page .barcode-labels-table td { min-width: 0; white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
-.barcode-labels-table .selection-column { width: 3rem; }
+.barcode-labels-table .selection-column { width: 2.25rem; padding-left: .35rem; padding-right: .35rem; }
 .barcode-labels-table .instance-code-cell { width: 13%; }
 .barcode-labels-table .barcode-column { width: 12%; }
 .barcode-labels-table .item-column { width: 20%; }
