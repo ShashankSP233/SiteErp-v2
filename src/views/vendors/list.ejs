@@ -76,6 +76,10 @@
                                         <strong><%= vendor.vendor_code %></strong>
                                     </td>
                                     <td>
+                                        <%= vendor.name %>
+                                    </td>
+
+                                    <td>
                                         <% if (vendor.gst_no) { %>
                                             <div><span class="small text-muted">GST</span> <%= vendor.gst_no %></div>
                                         <% } %>
@@ -85,10 +89,6 @@
                                         <% if (!vendor.gst_no && !vendor.pan_no) { %>
                                             -
                                         <% } %>
-                                    </td>
-
-                                    <td>
-                                        <%= vendor.name %>
                                     </td>
 
                                     <td>
