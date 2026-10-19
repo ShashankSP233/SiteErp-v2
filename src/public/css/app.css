@@ -93,31 +93,39 @@ main h1::after {
 .barcode-labels-table { width: 100%; table-layout: fixed; }
 .barcode-labels-page .barcode-labels-table th,
 .barcode-labels-page .barcode-labels-table td { min-width: 0; white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
-.barcode-labels-table .selection-column { width: 2.25rem; padding-left: .35rem; padding-right: .35rem; }
-.barcode-labels-table .instance-code-cell { width: 13%; }
-.barcode-labels-table .barcode-column { width: 12%; }
-.barcode-labels-table .item-column { width: 20%; }
-.barcode-labels-table .location-column { width: 16%; }
-.barcode-labels-table .quantity-column { width: 12%; }
+table.barcode-labels-table > :not(caption) > * > .selection-column {
+  box-sizing: border-box;
+  width: 2%;
+  min-width: 2%;
+  max-width: 2%;
+  padding-left: .25rem;
+  padding-right: .25rem;
+  text-align: center;
+}
+.barcode-labels-table .instance-code-cell { width: 19%; }
+.barcode-labels-table .barcode-column { width: 14%; }
+.barcode-labels-table .item-column { width: 22%; }
+.barcode-labels-table .location-column { width: 14%; }
+.barcode-labels-table .quantity-column { width: 13%; }
 .barcode-labels-table .status-column { width: 9%; }
-.barcode-labels-table .action-column { width: 8%; }
+.barcode-labels-table .action-column { width: 7%; }
 .barcode-labels-table .badge { white-space: normal; overflow-wrap: anywhere; }
 
 @media (max-width: 767.98px) {
   .barcode-labels-table .location-column,
   .barcode-labels-table .quantity-column { display: none; }
-  .barcode-labels-table .instance-code-cell { width: 20%; }
+  .barcode-labels-table .instance-code-cell { width: 24%; }
   .barcode-labels-table .barcode-column { width: 18%; }
   .barcode-labels-table .item-column { width: 25%; }
-  .barcode-labels-table .status-column { width: 14%; }
-  .barcode-labels-table .action-column { width: 10%; }
+  .barcode-labels-table .status-column { width: 16%; }
+  .barcode-labels-table .action-column { width: 15%; }
 }
 
 @media (max-width: 575.98px) {
   .barcode-labels-table .barcode-column { display: none; }
-  .barcode-labels-table .instance-code-cell { width: 25%; }
-  .barcode-labels-table .item-column { width: 28%; }
-  .barcode-labels-table .status-column { width: 16%; }
-  .barcode-labels-table .action-column { width: 12%; }
+  .barcode-labels-table .instance-code-cell { width: 29%; }
+  .barcode-labels-table .item-column { width: 33%; }
+  .barcode-labels-table .status-column { width: 20%; }
+  .barcode-labels-table .action-column { width: 16%; }
   .barcode-labels-table > :not(caption) > * > * { padding: .5rem .35rem; font-size: .82rem; }
 }
