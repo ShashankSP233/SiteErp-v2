@@ -102,11 +102,11 @@ table.barcode-labels-table > :not(caption) > * > .selection-column {
   padding-right: .25rem;
   text-align: center;
 }
-.barcode-labels-table .instance-code-cell { width: 19%; }
-.barcode-labels-table .barcode-column { width: 14%; }
+.barcode-labels-table .instance-code-cell { width: 22%; }
+.barcode-labels-table .barcode-column { width: 17%; }
 .barcode-labels-table .item-column { width: 22%; }
 .barcode-labels-table .location-column { width: 14%; }
-.barcode-labels-table .quantity-column { width: 13%; }
+.barcode-labels-table .quantity-column { width: 7%; }
 .barcode-labels-table .status-column { width: 9%; }
 .barcode-labels-table .action-column { width: 7%; }
 .barcode-labels-table .badge { white-space: normal; overflow-wrap: anywhere; }
