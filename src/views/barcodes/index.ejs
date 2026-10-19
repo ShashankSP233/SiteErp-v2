@@ -16,34 +16,35 @@
   </div>
 
   <div class="card-body">
-    <form method="get" action="/inventory/labels"
-          class="d-flex flex-column flex-sm-row align-items-sm-center gap-3">
+    <form method="get" action="/inventory/labels" class="row g-3 align-items-end">
       <input type="hidden" name="itemMasterId" value="<%= itemMasterId || '' %>">
-
-      <div class="form-check">
-        <input
-          id="active-only"
-          type="checkbox"
-          name="active"
-          value="1"
-          class="form-check-input"
-          <%= activeOnly ? 'checked' : '' %>
-        >
-        <label for="active-only" class="form-check-label">
-          Show active instances only
-        </label>
+      <div class="col-lg-4 col-md-6">
+        <label class="form-label" for="label-search">Search</label>
+        <input class="form-control" id="label-search" name="search" value="<%= search || '' %>" placeholder="Name, item code, instance code, or barcode">
       </div>
-
-      <div class="d-flex gap-2">
-        <button type="submit" class="btn btn-primary">Apply Filter</button>
-
-        <% if (activeOnly) { %>
-          <a
-            href="/inventory/labels<%= itemMasterId ? `?itemMasterId=${encodeURIComponent(itemMasterId)}` : '' %>"
-            class="btn btn-outline-secondary"
-          >
-            Clear
-          </a>
+      <div class="col-lg-3 col-md-6">
+        <label class="form-label" for="site-filter">Location</label>
+        <select class="form-select" id="site-filter" name="siteId"><option value="">All locations</option><% sites.forEach(site => { %><option value="<%= site.id %>" <%= Number(siteId) === Number(site.id) ? 'selected' : '' %>><%= site.code %> — <%= site.name %></option><% }) %></select>
+      </div>
+      <div class="col-lg-2 col-md-4">
+        <label class="form-label" for="status-filter">Status</label>
+        <select class="form-select" id="status-filter" name="status"><option value="">All statuses</option><% ['ACTIVE','QUARANTINED','IN_TRANSIT','CONSUMED','MIA','LOST','DISPOSED'].forEach(value => { %><option value="<%= value %>" <%= status === value ? 'selected' : '' %>><%= value.replace('_',' ') %></option><% }) %></select>
+      </div>
+      <div class="col-lg-2 col-md-4">
+        <label class="form-label" for="sort-filter">Sort by</label>
+        <select class="form-select" id="sort-filter" name="sort"><option value="newest" <%= sort === 'newest' ? 'selected' : '' %>>Newest</option><option value="name" <%= sort === 'name' ? 'selected' : '' %>>Item name</option><option value="itemCode" <%= sort === 'itemCode' ? 'selected' : '' %>>Item code</option><option value="instanceCode" <%= sort === 'instanceCode' ? 'selected' : '' %>>Instance code</option><option value="location" <%= sort === 'location' ? 'selected' : '' %>>Location</option><option value="status" <%= sort === 'status' ? 'selected' : '' %>>Status</option></select>
+      </div>
+      <div class="col-lg-1 col-md-4">
+        <label class="form-label" for="direction-filter">Order</label>
+        <select class="form-select" id="direction-filter" name="direction"><option value="asc" <%= direction === 'asc' ? 'selected' : '' %>>Ascending</option><option value="desc" <%= direction === 'desc' ? 'selected' : '' %>>Descending</option></select>
+      </div>
+      <div class="col-md-6">
+        <div class="form-check mb-2"><input id="active-only" type="checkbox" name="active" value="1" class="form-check-input" <%= activeOnly ? 'checked' : '' %>><label for="active-only" class="form-check-label">Show active instances only</label></div>
+      </div>
+      <div class="col-md-6 d-flex justify-content-md-end gap-2">
+        <button type="submit" class="btn btn-primary">Apply Filters</button>
+        <% if (search || siteId || status || activeOnly || sort !== 'newest' || direction !== 'desc') { %>
+          <a href="/inventory/labels<%= itemMasterId ? `?itemMasterId=${encodeURIComponent(itemMasterId)}` : '' %>" class="btn btn-outline-secondary">Clear Filters</a>
         <% } %>
       </div>
     </form>

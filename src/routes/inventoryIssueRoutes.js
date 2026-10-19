@@ -3,6 +3,7 @@ const express = require('express');
 const {
   issueInstance,
   createIssueBatch,
+  listIssueBatchCandidates,
   getIssueBatch,
   stageIssueBatchInstance,
   removeStagedIssueBatchInstance,
@@ -92,7 +93,8 @@ router.post('/inventory/returns/:batchId/scan', requireAuth, requireInventoryMan
 router.get('/inventory/issue-batches/new', requireAuth, requireInventoryManager, async (req, res, next) => {
   try {
     const kits = await listKits();
-    res.render('inventory/batch-new', { currentUser: req.session.user, kits, error: req.query.error || null });
+    const instances = await listIssueBatchCandidates();
+    res.render('inventory/batch-new', { currentUser: req.session.user, kits, instances, error: req.query.error || null });
   } catch (error) { next(error); }
 });
 
@@ -106,7 +108,8 @@ router.post('/inventory/issue-batches', requireAuth, requireInventoryManager, as
       recipientReference: req.body.recipientReference,
       reason: req.body.reason,
       issuedBy: req.session.user.id,
-      kitIds: req.body.kitIds || []
+      kitIds: req.body.kitIds || [],
+      instanceIds: req.body.instanceIds || []
     });
     res.redirect(`/inventory/issue-batches/${batchId}`);
   } catch (error) { res.redirect('/inventory/issue-batches/new?error=' + encodeURIComponent(error.message)); }

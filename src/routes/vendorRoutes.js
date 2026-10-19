@@ -66,7 +66,7 @@ function formModel(body, existing) {
         phone: body.phone,
         address: body.address,
         notes: body.notes,
-        tax_type: body.taxType === 'PAN' ? 'PAN' : 'GST',
+        tax_type: String(body.gstNo || '').trim() ? 'GST' : 'PAN',
         gst_no: body.gstNo,
         pan_no: body.panNo,
         udyam_id: body.udyamId,

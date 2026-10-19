@@ -77,10 +77,12 @@
                                     </td>
                                     <td>
                                         <% if (vendor.gst_no) { %>
-                                            <span class="small text-muted">GST</span> <%= vendor.gst_no %>
-                                        <% } else if (vendor.pan_no) { %>
-                                            <span class="small text-muted">PAN</span> <%= vendor.pan_no %>
-                                        <% } else { %>
+                                            <div><span class="small text-muted">GST</span> <%= vendor.gst_no %></div>
+                                        <% } %>
+                                        <% if (vendor.pan_no) { %>
+                                            <div><span class="small text-muted">PAN</span> <%= vendor.pan_no %></div>
+                                        <% } %>
+                                        <% if (!vendor.gst_no && !vendor.pan_no) { %>
                                             -
                                         <% } %>
                                     </td>

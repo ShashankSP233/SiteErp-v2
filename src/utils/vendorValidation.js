@@ -9,7 +9,9 @@ const upper = v => text(v).toUpperCase().replace(/\s+/g, '');
 
 function validateVendor(body, { existing = null, files = {} } = {}) {
   const errors = [];
-  const taxType = body.taxType === 'PAN' ? 'PAN' : 'GST';
+  const gstNo = upper(body.gstNo) || null;
+  const panNo = upper(body.panNo) || null;
+  const taxType = gstNo ? 'GST' : 'PAN';
 
   const values = {
     name: text(body.name),
@@ -19,8 +21,8 @@ function validateVendor(body, { existing = null, files = {} } = {}) {
     address: text(body.address) || null,
     notes: text(body.notes) || null,
     taxType,
-    gstNo: null, gstCertificateFile: null,
-    panNo: null, panCertificateFile: null,
+    gstNo, gstCertificateFile: null,
+    panNo, panCertificateFile: null,
     udyamId: upper(body.udyamId) || null,
     bankAccountNo: text(body.bankAccountNo).replace(/[\s-]/g, ''),
     bankName: text(body.bankName),
@@ -30,18 +32,22 @@ function validateVendor(body, { existing = null, files = {} } = {}) {
 
   if (!values.name) errors.push('Vendor name is required.');
 
-  if (taxType === 'GST') {
-    values.gstNo = upper(body.gstNo);
-    if (!values.gstNo) errors.push('GST number is required (or choose PAN if the vendor is not GST registered).');
-    else if (!GST_RE.test(values.gstNo)) errors.push('GST number is not a valid 15-character GSTIN.');
+  if (!values.gstNo && !values.panNo) {
+    errors.push('Enter at least one tax identifier: GST number, PAN number, or both.');
+  }
+  if (values.gstNo) {
+    if (!GST_RE.test(values.gstNo)) errors.push('GST number is not a valid 15-character GSTIN.');
     values.gstCertificateFile = files.gstCertificate?.filename || existing?.gst_certificate_file || null;
     if (!values.gstCertificateFile) errors.push('GST certificate is required.');
-  } else {
-    values.panNo = upper(body.panNo);
-    if (!values.panNo) errors.push('PAN number is required.');
-    else if (!PAN_RE.test(values.panNo)) errors.push('PAN number is not valid (format ABCDE1234F).');
+  } else if (files.gstCertificate) {
+    errors.push('Enter a GST number to upload a GST certificate.');
+  }
+  if (values.panNo) {
+    if (!PAN_RE.test(values.panNo)) errors.push('PAN number is not valid (format ABCDE1234F).');
     values.panCertificateFile = files.panCertificate?.filename || existing?.pan_certificate_file || null;
     if (!values.panCertificateFile) errors.push('PAN certificate is required.');
+  } else if (files.panCertificate) {
+    errors.push('Enter a PAN number to upload a PAN certificate.');
   }
 
   if (values.udyamId && !UDYAM_RE.test(values.udyamId)) {

@@ -736,7 +736,7 @@
                                 </strong>. The item code alone is not a unique instance barcode.</p>
                               <form method="post" action="<%= scanAction %>">
                                 <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                                <input id="barcode-input" name="barcode" autocomplete="off" required
+                                <input id="barcode-input" name="barcode" data-scan="submit" autocomplete="off" required
                                   placeholder="Scan barcode" autofocus <%=batch.labels_printed_at ? '' : 'disabled' %>>
                                 <button type="submit" <%=batch.labels_printed_at ? '' : 'disabled' %>>Record
                                   Scan</button>
@@ -902,6 +902,7 @@
                   <% } %>
 
                     <script src="/vendor/bwipjs/bwip-js-min.js"></script>
+                    <script src="/js/scanner.js"></script>
 
                     <script nonce="<%= cspNonce %>" data-receipt-back-url="<%= isReceiptFlow ? backUrl : '' %>">
                       const receiptBackUrl =

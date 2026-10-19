@@ -1,59 +1,86 @@
-<div class="mb-4"><div class="text-muted small">Inventory / Issue Batch</div><h1 class="h3 mb-1">Create Issue Batch</h1><p class="text-muted mb-0">Set one recipient, then scan each physical instance into the batch. Add a kit only when issuing all of its members together.</p></div>
+<div class="mb-4"><div class="text-muted small">Inventory / Issue Batch</div><h1 class="h3 mb-1">Create Issue Batch</h1><p class="text-muted mb-0">Choose a recipient, add kits if needed, then scan or search the individual instances for the pending issue list.</p></div>
 <% if (error) { %><div class="alert alert-danger alert-dismissible fade show" role="alert"><%= error %><button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div><% } %>
 
 <section class="card shadow-sm"><div class="card-header bg-white py-3"><h2 class="h5 mb-0">Batch Details</h2></div><div class="card-body">
-  <form method="post" action="/inventory/issue-batches"><% if (typeof csrfToken !== 'undefined') { %><input type="hidden" name="_csrf" value="<%= csrfToken %>"><% } %>
+  <form method="post" action="/inventory/issue-batches" id="issue-batch-form"><% if (typeof csrfToken !== 'undefined') { %><input type="hidden" name="_csrf" value="<%= csrfToken %>"><% } %>
     <div class="row g-3"><div class="col-md-4"><label class="form-label" for="recipientType">Recipient type</label><select class="form-select" id="recipientType" name="recipientType" required><option value="">Select recipient</option><option value="EMPLOYEE">Employee</option><option value="PROJECT">Project</option><option value="DEPARTMENT">Department</option><option value="OTHER">Other</option></select></div><div class="col-md-8"><label class="form-label" for="recipientReference">Recipient name / reference</label><input class="form-control" id="recipientReference" name="recipientReference" maxlength="255" required placeholder="Employee name or ID"></div><div class="col-12"><label class="form-label" for="reason">Reason (optional)</label><input class="form-control" id="reason" name="reason" maxlength="500"></div></div>
-    <div class="mt-4"><h3 class="h6">Kits included in this batch <span class="text-muted fw-normal">(optional)</span></h3><p class="small text-muted">Search and add kits here. You can also issue individual instances without adding a kit; scan them after starting the batch. Kit members must all be scanned individually.</p>
+
+    <div class="mt-4"><h3 class="h6">Kits <span class="text-muted fw-normal">(optional)</span></h3><p class="small text-muted">Type a kit code or name to see matching kits. Add a kit, then scan or add all its member instances below.</p>
       <% const activeKits = kits.filter(kit => kit.status === 'ACTIVE'); %>
-      <% if (!activeKits.length) { %><div class="text-muted small">No active kits are defined. You can still scan individual instances into the batch.</div><% } else { %>
-      <div class="row g-2 align-items-end"><div class="col-md-5"><label class="form-label" for="kit-search">Search kits</label><input class="form-control" type="search" id="kit-search" placeholder="Type kit code or name" autocomplete="off"></div><div class="col-md-5"><label class="form-label" for="kit-picker">Kit</label><select class="form-select" id="kit-picker"><option value="">Choose a kit</option><% activeKits.forEach(kit => { %><option value="<%= kit.id %>" data-search="<%= (kit.kit_code + ' ' + kit.name).toLowerCase() %>"><%= kit.kit_code %> — <%= kit.name %> (<%= kit.items.length %> instances)</option><% }) %></select></div><div class="col-md-2 d-grid"><button class="btn btn-outline-primary" type="button" id="add-kit">Add Kit</button></div></div>
+      <% if (!activeKits.length) { %><div class="text-muted small">No active kits are defined.</div><% } else { %>
+      <div class="row g-2 align-items-end"><div class="col-md-9"><label class="form-label" for="kit-search">Search kits</label><input class="form-control" id="kit-search" list="kit-options" placeholder="Type kit code or name" autocomplete="off"><datalist id="kit-options"><% activeKits.forEach(kit => { %><option value="<%= kit.kit_code %> — <%= kit.name %>" data-id="<%= kit.id %>"></option><% }) %></datalist></div><div class="col-md-3 d-grid"><button class="btn btn-outline-primary" type="button" id="add-kit">Add Kit</button></div></div>
       <div id="selected-kits" class="d-flex flex-wrap gap-2 mt-3" aria-live="polite"></div>
       <% } %>
     </div>
-    <div class="d-flex justify-content-between mt-4"><a href="/inventory/issues" class="btn btn-outline-secondary">Cancel</a><button class="btn btn-primary">Start Scanning</button></div>
+
+    <div class="mt-4"><h3 class="h6">Item instances to issue</h3><p class="small text-muted">Scan a barcode or type an instance code. Matching instances also appear as you type. Added instances can be removed before issuing.</p>
+      <% if (!instances.length) { %><div class="text-muted small">No available instances found.</div><% } else { %>
+      <div class="row g-2 align-items-end"><div class="col-md-9"><label class="form-label" for="instance-search">Scan or search instances</label><input class="form-control" id="instance-search" list="instance-options" data-scan="enter" placeholder="Scan barcode or type an instance code" autocomplete="off"><datalist id="instance-options"><% instances.forEach(instance => { const label = `${instance.item_code} — ${instance.item_name} · ${instance.site_code || ''}`; %><option value="<%= instance.instance_code %>" label="<%= label %>" data-id="<%= instance.id %>"></option><% if (instance.barcode && instance.barcode !== instance.instance_code) { %><option value="<%= instance.barcode %>" label="<%= label %>" data-id="<%= instance.id %>"></option><% } %><% }) %></datalist></div><div class="col-md-3 d-grid"><button class="btn btn-outline-primary" type="button" id="add-instance">Add Instance</button></div></div>
+      <% } %>
+      <div class="mt-3 border rounded" id="pending-list"><div class="p-3 text-center text-muted" id="pending-empty">No instances added yet.</div><div class="list-group list-group-flush" id="selected-instances" aria-live="polite"></div></div>
+      <div class="form-text mt-2">A kit cannot be issued until every instance in it has been added. The final review page lets you remove items before confirming the issue.</div>
+    </div>
+    <div class="d-flex justify-content-between mt-4"><a href="/inventory/issues" class="btn btn-outline-secondary">Cancel</a><button class="btn btn-primary">Review Issue List</button></div>
   </form>
 </div></section>
 
 <script nonce="<%= cspNonce %>">
 (() => {
-  const search = document.getElementById('kit-search');
-  const picker = document.getElementById('kit-picker');
-  const selected = document.getElementById('selected-kits');
-  if (!search || !picker || !selected) return;
+  const form = document.getElementById('issue-batch-form');
+  const kitInput = document.getElementById('kit-search');
+  const kitOptions = Array.from(document.querySelectorAll('#kit-options option'));
+  const selectedKits = document.getElementById('selected-kits');
+  const instanceInput = document.getElementById('instance-search');
+  const instanceOptions = Array.from(document.querySelectorAll('#instance-options option'));
+  const selectedInstances = document.getElementById('selected-instances');
+  const empty = document.getElementById('pending-empty');
 
-  search.addEventListener('input', () => {
-    const query = search.value.trim().toLowerCase();
-    picker.querySelectorAll('option[data-search]').forEach(option => {
-      option.hidden = Boolean(query) && !option.dataset.search.includes(query);
-    });
-    const current = picker.selectedOptions[0];
-    if (current?.hidden) picker.value = '';
-  });
+  const addChip = (container, name, id, text) => {
+    if (Array.from(container.querySelectorAll(`input[name="${name}"]`)).some(input => input.value === String(id))) return false;
+    const chip = document.createElement('div');
+    chip.className = name === 'kitIds' ? 'badge text-bg-primary d-inline-flex align-items-center gap-2 p-2' : 'list-group-item d-flex justify-content-between align-items-center gap-3';
+    const hidden = document.createElement('input'); hidden.type = 'hidden'; hidden.name = name; hidden.value = id;
+    const label = document.createElement('span'); label.textContent = text;
+    const remove = document.createElement('button'); remove.type = 'button'; remove.className = name === 'kitIds' ? 'btn-close btn-close-white' : 'btn btn-sm btn-outline-danger';
+    if (name !== 'kitIds') remove.textContent = 'Remove';
+    remove.setAttribute('aria-label', `Remove ${text}`);
+    remove.addEventListener('click', () => { chip.remove(); if (empty) empty.hidden = selectedInstances.children.length > 0; });
+    chip.append(hidden, label, remove); container.appendChild(chip);
+    if (empty) empty.hidden = true;
+    return true;
+  };
 
-  document.getElementById('add-kit').addEventListener('click', () => {
-    const option = picker.selectedOptions[0];
-    if (!option?.value) return;
-    if (selected.querySelector(`input[value="${CSS.escape(option.value)}"]`)) return;
-    const chip = document.createElement('span');
-    chip.className = 'badge text-bg-primary d-inline-flex align-items-center gap-2 p-2';
-    const hidden = document.createElement('input');
-    hidden.type = 'hidden';
-    hidden.name = 'kitIds';
-    hidden.value = option.value;
-    const label = document.createElement('span');
-    label.textContent = option.textContent;
-    const remove = document.createElement('button');
-    remove.type = 'button';
-    remove.className = 'btn-close btn-close-white';
-    remove.setAttribute('aria-label', `Remove ${option.textContent}`);
-    remove.addEventListener('click', () => chip.remove());
-    chip.append(hidden, label, remove);
-    selected.appendChild(chip);
-    picker.value = '';
-    search.value = '';
-    picker.querySelectorAll('option[data-search]').forEach(item => { item.hidden = false; });
-    search.focus();
+  if (kitInput && selectedKits) {
+    const addKit = () => {
+      const option = kitOptions.find(item => item.value.toLowerCase() === kitInput.value.trim().toLowerCase());
+      if (!option) return;
+      addChip(selectedKits, 'kitIds', option.dataset.id, option.value);
+      kitInput.value = '';
+    };
+    document.getElementById('add-kit').addEventListener('click', addKit);
+    kitInput.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); addKit(); } });
+  }
+
+  if (instanceInput && selectedInstances) {
+    const addInstance = () => {
+      const option = instanceOptions.find(item => item.value.toLowerCase() === instanceInput.value.trim().toLowerCase());
+      if (!option) return;
+      const label = option.label || option.value;
+      const added = addChip(selectedInstances, 'instanceIds', option.dataset.id, `${label} / ${option.value}`);
+      if (added) instanceInput.value = '';
+    };
+    document.getElementById('add-instance').addEventListener('click', addInstance);
+    instanceInput.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); addInstance(); } });
+  }
+
+  form.addEventListener('submit', event => {
+    const kitIds = Array.from(form.querySelectorAll('input[name="kitIds"]')).map(input => input.value);
+    const instanceIds = new Set(Array.from(form.querySelectorAll('input[name="instanceIds"]')).map(input => input.value));
+    if (kitIds.length) {
+      const kitItems = <%- JSON.stringify(activeKits.map(kit => ({ id: String(kit.id), instanceIds: kit.items.map(item => String(item.instance_id)) }))) %>;
+      const missing = kitItems.filter(kit => kitIds.includes(kit.id)).flatMap(kit => kit.instanceIds.filter(id => !instanceIds.has(id)));
+      if (missing.length) { event.preventDefault(); alert('Add every physical instance from the selected kit before continuing.'); }
+    }
   });
 })();
 </script>

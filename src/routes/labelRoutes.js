@@ -34,6 +34,12 @@ router.get(
       const itemMasterId = req.query.itemMasterId
         ? Number(req.query.itemMasterId)
         : null;
+      const siteId = req.query.siteId ? Number(req.query.siteId) : null;
+      const allowedStatuses = ['ACTIVE', 'QUARANTINED', 'IN_TRANSIT', 'CONSUMED', 'MIA', 'LOST', 'DISPOSED'];
+      const status = allowedStatuses.includes(req.query.status) ? req.query.status : '';
+      const sortOptions = ['newest', 'name', 'itemCode', 'instanceCode', 'location', 'status'];
+      const sort = sortOptions.includes(req.query.sort) ? req.query.sort : 'newest';
+      const direction = req.query.direction === 'asc' ? 'asc' : 'desc';
 
       if (
         itemMasterId !== null &&
@@ -45,18 +51,34 @@ router.get(
         });
       }
 
+      if (siteId !== null && (!Number.isInteger(siteId) || siteId <= 0)) {
+        return res.status(400).render('errors/400', { title: 'Invalid site', message: 'Invalid site ID.' });
+      }
+
       const labels = await label.listLabels({
         user: req.session.user,
         itemMasterId,
         onlyActive: req.query.active === '1',
+        search: String(req.query.search || '').trim().slice(0, 120),
+        siteId,
+        status,
+        sort,
+        direction,
         limit: 500,
       });
+      const sites = await label.listSitesForUser(req.session.user);
 
       res.render('barcodes/index', {
         title: 'Barcode Labels',
         labels,
+        sites,
         itemMasterId,
         activeOnly: req.query.active === '1',
+        search: String(req.query.search || '').trim().slice(0, 120),
+        siteId,
+        status,
+        sort,
+        direction,
       });
     } catch (err) {
       next(err);

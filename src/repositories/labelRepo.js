@@ -68,6 +68,11 @@ async function listLabels({
   itemMasterId = null,
   instanceId = null,
   onlyActive = false,
+  search = '',
+  siteId = null,
+  status = '',
+  sort = 'newest',
+  direction = 'desc',
   limit = 500,
 } = {}) {
   if (!user) {
@@ -93,6 +98,30 @@ async function listLabels({
   if (onlyActive) {
     where.push("ii.lifecycle_status = 'ACTIVE'");
   }
+
+  if (search) {
+    where.push(`(LOWER(ii.instance_code) LIKE ? OR LOWER(COALESCE(ii.barcode, '')) LIKE ? OR LOWER(im.item_code) LIKE ? OR LOWER(im.name) LIKE ?)`);
+    const pattern = `%${String(search).trim().toLowerCase()}%`;
+    params.push(pattern, pattern, pattern, pattern);
+  }
+  if (siteId !== null && siteId !== undefined && siteId !== '') {
+    where.push('ii.site_id = ?');
+    params.push(Number(siteId));
+  }
+  if (status) {
+    where.push('ii.lifecycle_status = ?');
+    params.push(status);
+  }
+
+  const orderBy = {
+    newest: 'ii.created_at',
+    name: 'im.name',
+    itemCode: 'im.item_code',
+    instanceCode: 'ii.instance_code',
+    location: 's.name',
+    status: 'ii.lifecycle_status'
+  }[sort] || 'ii.created_at';
+  const orderDirection = direction === 'asc' ? 'ASC' : 'DESC';
 
   const sql = `
     SELECT
@@ -139,9 +168,7 @@ async function listLabels({
 
     ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
 
-    ORDER BY
-      ii.created_at DESC,
-      ii.id DESC
+    ORDER BY ${orderBy} ${orderDirection}, im.item_code ASC, ii.instance_code ASC
 
     LIMIT ?
   `;
@@ -149,6 +176,18 @@ async function listLabels({
   params.push(Math.min(Number(limit) || 500, 5000));
 
   return db.many(sql, params);
+}
+
+async function listSitesForUser(user) {
+  if (user?.role === 'admin') {
+    return db.many(`SELECT id, code, name FROM sites WHERE status='ACTIVE' ORDER BY name`);
+  }
+  return db.many(
+    `SELECT DISTINCT s.id, s.code, s.name FROM sites s
+     JOIN site_assignments sa ON sa.site_id=s.id
+     WHERE s.status='ACTIVE' AND sa.user_id=? AND sa.assigned_until IS NULL
+     ORDER BY s.name`, [user.id]
+  );
 }
 
 /**
@@ -317,6 +356,7 @@ async function getByCodeOrBarcode(code, user) {
 
 module.exports = {
   listLabels,
+  listSitesForUser,
   getByInstanceId,
   getByCodeOrBarcode,
 };

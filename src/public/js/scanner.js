@@ -230,6 +230,8 @@
     btn.title = 'Scan with phone camera';
     btn.setAttribute('aria-label', 'Scan with phone camera');
     btn.innerHTML = CAMERA_ICON + '<span style="margin-left:6px">Scan</span>';
+    btn.disabled = input.disabled;
+    if (input.disabled) btn.title = 'Print the labels before scanning';
     btn.addEventListener('click', function () { openScanner(input); });
 
     if (input.classList.contains('form-control')) {

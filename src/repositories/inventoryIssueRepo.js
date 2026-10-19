@@ -919,8 +919,9 @@ async function findOpenIssueByInstanceCode(instanceCode) {
   return issue;
 }
 
-async function createIssueBatch({ recipientType, recipientReference, reason, issuedBy, kitIds = [] }) {
+async function createIssueBatch({ recipientType, recipientReference, reason, issuedBy, kitIds = [], instanceIds = [] }) {
   const uniqueKitIds = [...new Set((Array.isArray(kitIds) ? kitIds : [kitIds]).map(Number).filter(Number.isInteger))];
+  const uniqueInstanceIds = [...new Set((Array.isArray(instanceIds) ? instanceIds : [instanceIds]).map(Number).filter(Number.isInteger))];
   return db.tx(async tx => {
     const result = await tx.query(
       `INSERT INTO inventory_issue_batches(recipient_type,recipient_reference,reason,issued_by) VALUES (?,?,?,?) RETURNING id`,
@@ -938,8 +939,39 @@ async function createIssueBatch({ recipientType, recipientReference, reason, iss
       if (Number(consumables.n) > 0) throw new Error('A kit in an issue batch must contain returnable, non-consumable item instances.');
       await tx.query(`INSERT INTO inventory_issue_batch_kits(batch_id,kit_id) VALUES (?,?)`, [batchId, kitId]);
     }
+    if (uniqueInstanceIds.length) {
+      const candidates = await tx.many(
+        `SELECT ii.id, ii.instance_code, ii.site_id, ii.lifecycle_status, ii.current_quantity
+         FROM item_instances ii WHERE ii.id IN (${uniqueInstanceIds.map(() => '?').join(',')})`, uniqueInstanceIds
+      );
+      if (candidates.length !== uniqueInstanceIds.length) throw new Error('One or more selected instances no longer exist.');
+      for (const instance of candidates) {
+        if (!instance.site_id || instance.lifecycle_status !== 'ACTIVE' || Number(instance.current_quantity) <= 0) {
+          throw new Error(`Instance ${instance.instance_code} is not currently available at a site.`);
+        }
+        const open = await tx.one(`SELECT 1 AS yes FROM inventory_issues WHERE instance_id=? AND status IN ('OPEN','PARTIALLY_CONSUMED')`, [instance.id]);
+        if (open) throw new Error(`Instance ${instance.instance_code} already has an active issue.`);
+        const membership = await tx.one(`SELECT k.kit_id,k.kit_code FROM item_kit_lines l JOIN item_kits k ON k.id=l.kit_id WHERE l.item_instance_id=? AND k.status='ACTIVE'`, [instance.id]);
+        if (membership && !uniqueKitIds.includes(Number(membership.kit_id))) {
+          throw new Error(`Instance ${instance.instance_code} belongs to kit ${membership.kit_code}. Add that kit before selecting its members.`);
+        }
+        await tx.query(`INSERT INTO inventory_issue_batch_staged_instances(batch_id,instance_id,scanned_by) VALUES (?,?,?)`, [batchId, instance.id, issuedBy]);
+      }
+    }
     return batchId;
   });
+}
+
+async function listIssueBatchCandidates() {
+  return db.many(
+    `SELECT ii.id, ii.instance_code, ii.barcode, ii.current_quantity, ii.unit, ii.site_id,
+            im.item_code, im.name AS item_name, s.code AS site_code
+     FROM item_instances ii JOIN item_masters im ON im.id=ii.item_master_id
+     LEFT JOIN sites s ON s.id=ii.site_id
+     WHERE ii.lifecycle_status='ACTIVE' AND ii.site_id IS NOT NULL AND ii.current_quantity>0 AND im.status='ACTIVE'
+       AND NOT EXISTS (SELECT 1 FROM inventory_issues inv WHERE inv.instance_id=ii.id AND inv.status IN ('OPEN','PARTIALLY_CONSUMED'))
+     ORDER BY im.item_code, ii.instance_code`
+  );
 }
 
 async function getIssueBatch(batchId) {
@@ -1005,6 +1037,8 @@ async function stageIssueBatchInstance({ batchId, instanceCode, scannedBy }) {
     const selected = await db.one(`SELECT 1 AS yes FROM inventory_issue_batch_kits WHERE batch_id=? AND kit_id=?`, [batchId, membership.kit_id]);
     if (!selected) throw new Error(`Instance ${instance.instance_code} belongs to kit ${membership.kit_code}. Add that kit to this batch before scanning its members.`);
   }
+  const activeIssue = await db.one(`SELECT 1 AS yes FROM inventory_issues WHERE instance_id=? AND status IN ('OPEN','PARTIALLY_CONSUMED')`, [instance.id]);
+  if (activeIssue) throw new Error(`Instance ${instance.instance_code} already has an active issue and cannot be added again.`);
   const alreadyStaged = await db.one(`SELECT 1 AS yes FROM inventory_issue_batch_staged_instances WHERE batch_id=? AND instance_id=?`, [batchId, instance.id]);
   if (alreadyStaged) throw new Error(`${instance.instance_code} is already in the pending issue list.`);
   await db.query(`INSERT INTO inventory_issue_batch_staged_instances(batch_id,instance_id,scanned_by) VALUES (?,?,?)`, [batchId, instance.id, scannedBy]);
@@ -1024,6 +1058,24 @@ async function finalizeIssueBatch({ batchId, issuedBy, userRole }) {
   if (!batch || batch.status !== 'OPEN' || batch.finalized_at) throw new Error('This batch has already been issued or is no longer open.');
   const staged = await db.many(`SELECT ii.instance_code FROM inventory_issue_batch_staged_instances st JOIN item_instances ii ON ii.id=st.instance_id WHERE st.batch_id=? ORDER BY st.scanned_at, st.instance_id`, [batchId]);
   if (!staged.length) throw new Error('Scan at least one item before issuing this batch.');
+  const stagedDetails = await db.many(
+    `SELECT ii.id, ii.instance_code, ii.site_id, ii.lifecycle_status, ii.current_quantity
+     FROM inventory_issue_batch_staged_instances st JOIN item_instances ii ON ii.id=st.instance_id
+     WHERE st.batch_id=? ORDER BY st.scanned_at, st.instance_id`, [batchId]
+  );
+  const siteId = stagedDetails[0].site_id;
+  for (const instance of stagedDetails) {
+    if (instance.lifecycle_status !== 'ACTIVE' || Number(instance.current_quantity) <= 0 || !instance.site_id) {
+      throw new Error(`Instance ${instance.instance_code} is no longer available at a site.`);
+    }
+    if (Number(instance.site_id) !== Number(siteId)) throw new Error('All instances in an issue batch must come from the same site. Remove instances from other sites before issuing.');
+    const activeIssue = await db.one(`SELECT 1 AS yes FROM inventory_issues WHERE instance_id=? AND status IN ('OPEN','PARTIALLY_CONSUMED')`, [instance.id]);
+    if (activeIssue) throw new Error(`Instance ${instance.instance_code} already has an active issue and cannot be issued again.`);
+  }
+  if (userRole !== 'admin') {
+    const siteAccess = await db.one(`SELECT 1 AS yes FROM site_assignments sa JOIN sites s ON s.id=sa.site_id WHERE sa.user_id=? AND sa.site_id=? AND sa.assigned_until IS NULL AND s.status='ACTIVE'`, [issuedBy, siteId]);
+    if (!siteAccess) throw new Error('You do not have permission to issue inventory from this site.');
+  }
   const selectedKits = await db.many(`SELECT kit_id FROM inventory_issue_batch_kits WHERE batch_id=?`, [batchId]);
   for (const { kit_id: kitId } of selectedKits) {
     const members = await db.many(`SELECT item_instance_id FROM item_kit_lines WHERE kit_id=?`, [kitId]);
@@ -1152,6 +1204,7 @@ async function updateIssueBatchStatus(batchId) {
 module.exports = {
   issueInstance,
   createIssueBatch,
+  listIssueBatchCandidates,
   getIssueBatch,
   stageIssueBatchInstance,
   removeStagedIssueBatchInstance,

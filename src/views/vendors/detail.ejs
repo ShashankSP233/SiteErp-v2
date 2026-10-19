@@ -44,10 +44,12 @@
                         <% if (vendor.gst_no) { %>
                             <dt class="col-sm-5">GST number</dt><dd class="col-sm-7"><%= vendor.gst_no %></dd>
                             <dt class="col-sm-5">GST certificate</dt><dd class="col-sm-7"><%- doc('gst', vendor.gst_certificate_file) %></dd>
-                        <% } else { %>
+                        <% } %>
+                        <% if (vendor.pan_no) { %>
                             <dt class="col-sm-5">PAN number</dt><dd class="col-sm-7"><%= dash(vendor.pan_no) %></dd>
                             <dt class="col-sm-5">PAN certificate</dt><dd class="col-sm-7"><%- doc('pan', vendor.pan_certificate_file) %></dd>
                         <% } %>
+                        <% if (!vendor.gst_no && !vendor.pan_no) { %><dt class="col-sm-5">Tax identifiers</dt><dd class="col-sm-7">None recorded</dd><% } %>
                         <dt class="col-sm-5">Udyam ID</dt><dd class="col-sm-7"><%= dash(vendor.udyam_id) %></dd>
                     </dl>
                 </div>
