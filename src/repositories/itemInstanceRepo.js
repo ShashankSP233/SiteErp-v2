@@ -482,6 +482,35 @@ async function scanDirectReceiptBarcode({ batchId, barcode, performedBy }) {
   });
 }
 
+/** Remove a reserved label from an unfinished direct receipt (stock is not yet posted). */
+async function deleteDirectReceiptLabel({ batchId, labelId }) {
+  return db.tx(async tx => {
+    const batch = await tx.one(
+      `SELECT id, status FROM inventory_receipt_batches
+       WHERE id = ? AND source_type = 'DIRECT' FOR UPDATE`,
+      [batchId]
+    );
+    if (batch.status !== 'AWAITING_SCAN') throw new Error('Only unfinished receipts can be changed.');
+    const result = await tx.query(
+      `DELETE FROM inventory_receipt_labels
+       WHERE id = ? AND receipt_batch_id = ? RETURNING id`,
+      [labelId, batch.id]
+    );
+    if (!(result.rows || result).length) throw new Error('Receipt item was not found.');
+  });
+}
+
+async function discardDirectReceiptBatch(batchId) {
+  const result = await db.query(
+    `UPDATE inventory_receipt_batches
+     SET status = 'CANCELLED', updated_at = now()
+     WHERE id = ? AND source_type = 'DIRECT' AND status = 'AWAITING_SCAN'
+     RETURNING id`,
+    [batchId]
+  );
+  if (!(result.rows || result).length) throw new Error('This unfinished receipt was not found or can no longer be discarded.');
+}
+
 async function completeDirectReceiptBatch({ batchId, performedBy }) {
   return db.tx(async tx => {
     const batch = await tx.one(
@@ -782,6 +811,8 @@ module.exports = {
   listPendingDirectReceiptBatches,
   markDirectReceiptLabelsPrinted,
   scanDirectReceiptBarcode,
+  deleteDirectReceiptLabel,
+  discardDirectReceiptBatch,
   completeDirectReceiptBatch,
   listInstancesForUser,
   findInstanceForUser,

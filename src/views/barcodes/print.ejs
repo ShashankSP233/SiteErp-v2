@@ -235,6 +235,9 @@
           white-space: nowrap;
         }
 
+        .receipt-delete { margin-left: 8px; padding: 3px 7px; border: 1px solid #b42318; border-radius: 4px; background: #fff; color: #b42318; cursor: pointer; }
+        .scan-delete { grid-column: 2 / 4; justify-self: end; margin-top: 4px; padding: 3px 7px; border: 1px solid #b42318; border-radius: 4px; background: #fff; color: #b42318; cursor: pointer; font: 12px Arial, sans-serif; }
+
         .pending-done {
           margin: 14px 0 0;
           padding: 14px;
@@ -736,8 +739,8 @@
                                 </strong>. The item code alone is not a unique instance barcode.</p>
                               <form method="post" action="<%= scanAction %>">
                                 <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                                <input id="barcode-input" name="barcode" data-scan="submit" autocomplete="off" required
-                                  placeholder="Scan barcode" autofocus <%=batch.labels_printed_at ? '' : 'disabled' %>>
+                                  <input id="barcode-input" name="barcode" data-scan="submit" autocomplete="off" required
+                                    placeholder="Scan barcode" autofocus>
                                 <button type="submit" <%=batch.labels_printed_at ? '' : 'disabled' %>>Record
                                   Scan</button>
                               </form>
@@ -770,6 +773,10 @@
                                               <span class="name">
                                                 <%= label.item_name %>
                                               </span>
+                                                <form method="post" action="/inventory/receive/<%= batch.id %>/labels/<%= label.id %>/delete" onsubmit="return confirm('Remove this item from the unfinished receipt?')">
+                                                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                                  <button class="receipt-delete" type="submit" aria-label="Remove <%= label.instance_code %>">Remove</button>
+                                                </form>
                                             </li>
                                             <% }) %>
                                         </ul>
@@ -806,6 +813,12 @@
                                         datetime="<%= new Date(t).toISOString() %>"></time>
                                       <% } %>
                                 </span>
+                                <% if (batch.status === 'AWAITING_SCAN') { %>
+                                  <form method="post" action="/inventory/receive/<%= batch.id %>/labels/<%= label.id %>/delete" onsubmit="return confirm('Remove this item from the unfinished receipt?')">
+                                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                    <button class="scan-delete" type="submit">Remove from receipt</button>
+                                  </form>
+                                <% } %>
                               </li>
                               <% }) %>
                         </ul>
@@ -971,6 +984,18 @@
 
                         const scannerInput = document.getElementById('barcode-input');
                         if (scannerInput && !scannerInput.disabled) {
+                          // Barcode guns usually send Enter after the code. Submit explicitly so
+                          // the scan never depends on which form control the browser picks as default.
+                          scannerInput.addEventListener('keydown', function (event) {
+                            if (event.key !== 'Enter' || event.isComposing) return;
+                            event.preventDefault();
+                            const form = scannerInput.form;
+                            if (form && scannerInput.value.trim()) {
+                              const submitButton = form.querySelector('button[type="submit"]');
+                              if (form.requestSubmit) form.requestSubmit(submitButton || undefined);
+                              else form.submit();
+                            }
+                          });
                           const focusScanner = function () {
                             scannerInput.focus({ preventScroll: true });
                           };

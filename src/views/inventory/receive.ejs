@@ -32,7 +32,13 @@
             <div class="small text-muted"><%= receipt.item_type_count %> item type(s) · <%= receipt.scanned_count %> of <%= receipt.label_count %> labels scanned · Started <%= new Date(receipt.created_at).toLocaleString() %></div>
             <div class="small text-muted">Its barcode numbers are reserved. Resume this receipt to continue scanning the same labels instead of creating another batch.</div>
           </div>
-          <a href="/inventory/receive/<%= receipt.id %>/labels#scanner" class="btn btn-outline-primary flex-shrink-0">Resume receipt</a>
+          <div class="d-flex gap-2 flex-shrink-0">
+            <a href="/inventory/receive/<%= receipt.id %>/labels#scanner" class="btn btn-outline-primary">Resume receipt</a>
+            <form method="post" action="/inventory/receive/<%= receipt.id %>/discard" onsubmit="return confirm('Discard this unfinished receipt? Its reserved barcode numbers will remain unused.')">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button type="submit" class="btn btn-outline-danger">Discard receipt</button>
+            </form>
+          </div>
         </div>
       <% }) %>
     </div>

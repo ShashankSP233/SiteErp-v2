@@ -9,6 +9,8 @@ const {
   listPendingDirectReceiptBatches,
   markDirectReceiptLabelsPrinted,
   scanDirectReceiptBarcode,
+  deleteDirectReceiptLabel,
+  discardDirectReceiptBatch,
   completeDirectReceiptBatch,
   listInstancesForUser
 } = require('../repositories/itemInstanceRepo');
@@ -361,6 +363,44 @@ router.post(
       req.session.error = err.message;
     }
     return res.redirect(`/inventory/receive/${req.params.batchId}/labels#scanner`);
+  }
+);
+
+router.post(
+  '/inventory/receive/:batchId/labels/:labelId/delete',
+  requireAuth,
+  requireInventoryManager,
+  async (req, res) => {
+    try {
+      const batch = await getDirectReceiptBatch(req.params.batchId);
+      if (!await userCanAccessSite(req.session.user, batch.site_id)) {
+        return res.status(403).render('errors/403', { title: 'Access denied' });
+      }
+      await deleteDirectReceiptLabel({ batchId: req.params.batchId, labelId: req.params.labelId });
+      req.session.success = 'Receipt item removed.';
+    } catch (err) {
+      req.session.error = err.message;
+    }
+    return res.redirect(`/inventory/receive/${req.params.batchId}/labels#scanner`);
+  }
+);
+
+router.post(
+  '/inventory/receive/:batchId/discard',
+  requireAuth,
+  requireInventoryManager,
+  async (req, res) => {
+    try {
+      const batch = await getDirectReceiptBatch(req.params.batchId);
+      if (!await userCanAccessSite(req.session.user, batch.site_id)) {
+        return res.status(403).render('errors/403', { title: 'Access denied' });
+      }
+      await discardDirectReceiptBatch(req.params.batchId);
+      req.session.success = 'Unfinished receipt discarded.';
+    } catch (err) {
+      req.session.error = err.message;
+    }
+    return res.redirect('/inventory/receive');
   }
 );
 
