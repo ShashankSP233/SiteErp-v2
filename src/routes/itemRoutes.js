@@ -103,18 +103,47 @@ router.get(
         );
       }
 
-      const instances =
+      const allInstances =
         await itemMasterRepo.getItemMasterInstances(
           req.session.user,
           req.params.id
         );
+
+      const filters = {
+        site: String(req.query.site || '').trim(),
+        status: String(req.query.status || '').trim().toUpperCase(),
+        condition: String(req.query.condition || '').trim()
+      };
+      const sites = [...new Map(allInstances
+        .filter(instance => instance.site_id)
+        .map(instance => [String(instance.site_id), {
+          id: String(instance.site_id),
+          label: `${instance.site_code || ''}${instance.site_code && instance.site_name ? ' — ' : ''}${instance.site_name || ''}`
+        }])).values()].sort((a, b) => a.label.localeCompare(b.label));
+      const statuses = [...new Set(allInstances.map(instance => String(instance.lifecycle_status || '').toUpperCase()).filter(Boolean))].sort();
+      const conditions = [...new Set(allInstances.map(instance => String(instance.condition || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+      const instances = allInstances.filter(instance =>
+        (!filters.site || String(instance.site_id || '') === filters.site) &&
+        (!filters.status || String(instance.lifecycle_status || '').toUpperCase() === filters.status) &&
+        (!filters.condition || String(instance.condition || '') === filters.condition)
+      );
+      const damagedCount = allInstances.filter(instance => /damag/i.test(String(instance.condition || ''))).length;
+      const inTransitCount = allInstances.filter(instance => String(instance.lifecycle_status || '').toUpperCase() === 'IN_TRANSIT').length;
 
       res.render(
         'items/detail',
         {
           title: `Item Master - ${itemMaster.item_code}`,
           itemMaster,
-          instances
+          instances,
+          totalInstances: allInstances.length,
+          totalQuantity: allInstances.reduce((total, instance) => total + Number(instance.current_quantity || 0), 0),
+          sites,
+          statuses,
+          conditions,
+          filters,
+          damagedCount,
+          inTransitCount
         }
       );
 
