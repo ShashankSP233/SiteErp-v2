@@ -11,7 +11,9 @@
   'use strict';
 
   var ZXING_SRC = '/vendor/zxing/index.min.js';
-  var NATIVE_FORMATS = ['code_128', 'data_matrix', 'qr_code'];
+  // QR is the primary format used by inventory labels. Restricting the native
+  // detector avoids spending time trying unrelated linear barcode formats.
+  var NATIVE_FORMATS = ['qr_code'];
   var zxingPromise = null;
   var state = null; // the open scanner session, if any
 
@@ -46,7 +48,7 @@
     await loadZXing();
     var Z = window.ZXing;
     var hints = new Map();
-    hints.set(Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.CODE_128, Z.BarcodeFormat.DATA_MATRIX, Z.BarcodeFormat.QR_CODE]);
+    hints.set(Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.QR_CODE]);
     hints.set(Z.DecodeHintType.TRY_HARDER, true);
     var reader = new Z.MultiFormatReader();
     reader.setHints(hints);
@@ -80,7 +82,7 @@
     root.setAttribute('aria-label', 'Scan code with camera');
 
     var bar = el('div', 'display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;color:#fff;');
-    bar.appendChild(el('strong', '', 'Point the camera at the barcode'));
+    bar.appendChild(el('strong', '', 'Point the camera at the QR code'));
     var btns = el('div', 'display:flex;gap:8px;');
     var torch = el('button', 'display:none;padding:6px 12px;border:1px solid #fff;background:transparent;color:#fff;border-radius:6px;', 'Light');
     torch.type = 'button';
@@ -91,13 +93,17 @@
     var stage = el('div', 'position:relative;flex:1;min-height:0;');
     var video = el('video', 'width:100%;height:100%;object-fit:cover;');
     video.setAttribute('playsinline', ''); video.setAttribute('muted', ''); video.muted = true;
-    var box = el('div', 'position:absolute;left:8%;right:8%;top:50%;height:34%;transform:translateY(-50%);border:2px solid rgba(255,255,255,.85);border-radius:10px;box-shadow:0 0 0 9999px rgba(0,0,0,.35);pointer-events:none;');
+    var box = el('div', 'position:absolute;width:min(72vw,42vh);height:min(72vw,42vh);max-width:82%;max-height:72%;left:50%;top:50%;transform:translate(-50%,-50%);border:2px solid rgba(255,255,255,.9);border-radius:8px;box-shadow:0 0 0 9999px rgba(0,0,0,.35);pointer-events:none;');
     stage.appendChild(video); stage.appendChild(box);
 
-    var status = el('div', 'padding:12px;color:#fff;text-align:center;min-height:48px;', 'Starting camera…');
-    root.appendChild(bar); root.appendChild(stage); root.appendChild(status);
+    var footer = el('div', 'padding:12px;color:#fff;text-align:center;');
+    var status = el('div', 'min-height:32px;padding:4px;', 'Starting camera…');
+    var capture = el('button', 'padding:12px 24px;border:0;background:#0d6efd;color:#fff;border-radius:8px;font-weight:700;font-size:1rem;width:min(100%,360px);', 'Scan this QR');
+    capture.type = 'button'; capture.disabled = true;
+    footer.appendChild(status); footer.appendChild(capture);
+    root.appendChild(bar); root.appendChild(stage); root.appendChild(footer);
     document.body.appendChild(root);
-    return { root: root, video: video, status: status, torch: torch, close: close };
+    return { root: root, video: video, status: status, capture: capture, torch: torch, close: close };
   }
 
   function feedback(s) {
@@ -153,6 +159,20 @@
     s.onKey = function (e) { if (e.key === 'Escape') closeScanner(); };
     document.addEventListener('keydown', s.onKey);
     ui.close.addEventListener('click', closeScanner);
+    ui.capture.addEventListener('click', function () {
+      if (!s.detected || s.closed) return;
+      var code = s.detected;
+      s.last = code; s.lastAt = Date.now(); s.detected = '';
+      ui.capture.disabled = true;
+      feedback(s);
+      if (continuous) {
+        ui.status.textContent = 'Scanned: ' + code + ' — point at the next QR code';
+        applyCode(input, code, mode);
+      } else {
+        closeScanner();
+        applyCode(input, code, mode);
+      }
+    });
 
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       ui.status.textContent = window.isSecureContext === false
@@ -187,7 +207,7 @@
 
       var decode = await makeDecoder(ui.video);
       if (s.closed) return;
-      ui.status.textContent = 'Looking for a code…';
+      ui.status.textContent = 'Looking for a QR code…';
 
       var tick = async function () {
         if (s.closed) return;
@@ -198,15 +218,9 @@
             var code = raw && String(raw).trim();
             if (code && !s.closed && !(code === s.last && Date.now() - s.lastAt < 2500)) {
               s.last = code; s.lastAt = Date.now();
-              feedback(s);
-              if (continuous) {
-                ui.status.textContent = 'Scanned: ' + code;
-                applyCode(input, code, mode);
-              } else {
-                closeScanner();
-                applyCode(input, code, mode);
-                return;
-              }
+              s.detected = code;
+              ui.status.textContent = 'QR detected: ' + code;
+              ui.capture.disabled = false;
             }
           } catch (e) { /* ignore a bad frame */ }
           s.busy = false;
