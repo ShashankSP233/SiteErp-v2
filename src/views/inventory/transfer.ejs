@@ -33,9 +33,20 @@
       <a
         href="/inventory/transfers/<%= transfer.id %>/stn"
         class="btn btn-primary"
-        download
+        target="_blank"
+        rel="noopener"
       >
-        Download STN
+        Print STN
+      </a>
+
+      <a
+        href="/inventory/transfers/<%= transfer.id %>/barcodes"
+        class="btn btn-outline-primary <%= items.some(item => item.barcode) ? '' : 'disabled' %>"
+        target="_blank"
+        rel="noopener"
+        <%= items.some(item => item.barcode) ? '' : 'aria-disabled="true"' %>
+      >
+        Print Item Barcodes
       </a>
 
       <a
