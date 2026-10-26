@@ -29,6 +29,144 @@ const TRANSFER_ROLES = [
   'operator'
 ];
 
+function createStnPdf(transfer, items) {
+  const pageWidth = 842;
+  const pageHeight = 595;
+  const margin = 36;
+  const operations = [];
+  let y = pageHeight - margin;
+  let pages = [];
+
+  const safe = value => String(value ?? '—')
+    .normalize('NFKD')
+    .replace(/[^\x20-\x7E]/g, '?');
+  const pdfText = value => safe(value).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+  const text = (value, x, top, size = 9, bold = false) => {
+    operations.push(`BT /${bold ? 'F2' : 'F1'} ${size} Tf ${x} ${top - size} Td (${pdfText(value)}) Tj ET`);
+  };
+  const line = (x1, y1, x2, y2, gray = 0.78) => {
+    operations.push(`${gray} G ${x1} ${y1} m ${x2} ${y2} l S 0 G`);
+  };
+  const rect = (x, top, width, height, fill = 0.93) => {
+    operations.push(`${fill} g ${x} ${top - height} ${width} ${height} re f 0 g`);
+  };
+  const newPage = () => {
+    if (operations.length) pages.push(operations.splice(0));
+    y = pageHeight - margin;
+  };
+  const ensureSpace = height => { if (y - height < margin) newPage(); };
+  const wrap = (value, limit) => {
+    const words = safe(value).split(/\s+/);
+    const lines = [];
+    let current = '';
+    for (const word of words) {
+      if (word.length > limit) {
+        if (current) lines.push(current);
+        current = '';
+        for (let i = 0; i < word.length; i += limit) lines.push(word.slice(i, i + limit));
+      } else if ((current ? current.length + 1 : 0) + word.length > limit) {
+        lines.push(current); current = word;
+      } else current += `${current ? ' ' : ''}${word}`;
+    }
+    if (current) lines.push(current);
+    return lines.length ? lines : ['—'];
+  };
+  const section = title => {
+    ensureSpace(25); y -= 7; text(title.toUpperCase(), margin, y, 9, true);
+    y -= 5; line(margin, y, pageWidth - margin, y); y -= 13;
+  };
+
+  text('STOCK TRANSFER NOTE', margin, y, 19, true);
+  text(transfer.transfer_number, pageWidth - margin - 160, y, 14, true);
+  y -= 25;
+  text('Site to site inventory movement', margin, y, 9);
+  y -= 15; line(margin, y, pageWidth - margin, y, 0.35); y -= 18;
+
+  const field = (label, value, x, top, width = 360) => {
+    text(label.toUpperCase(), x, top, 7, true);
+    const lines = wrap(value, Math.floor(width / 5.3));
+    lines.slice(0, 2).forEach((item, i) => text(item, x, top - 11 - i * 11, 9));
+  };
+  const date = value => value ? new Date(value).toLocaleString() : '—';
+  field('From site', `${transfer.from_site_code} — ${transfer.from_site_name}`, margin, y);
+  field('To site', `${transfer.to_site_code} — ${transfer.to_site_name}`, 430, y);
+  y -= 35;
+  field('Status', transfer.status.replaceAll('_', ' '), margin, y);
+  field('Created', date(transfer.created_at), 240, y);
+  field('Prepared by', transfer.created_by_name || '—', 430, y);
+  field('Dispatched', `${date(transfer.dispatched_at)}${transfer.dispatched_by_name ? ` by ${transfer.dispatched_by_name}` : ''}`, 620, y, 180);
+  y -= 37;
+
+  section(`Items (${items.length})`);
+  const columns = [
+    { title: '#', width: 25, limit: 4 }, { title: 'Instance code', width: 92, limit: 17 },
+    { title: 'Barcode', width: 92, limit: 17 }, { title: 'Item code', width: 75, limit: 14 },
+    { title: 'Description', width: 190, limit: 36 }, { title: 'Quantity', width: 75, limit: 13 },
+    { title: 'Status', width: 80, limit: 15 }, { title: 'Received at', width: 105, limit: 20 }
+  ];
+  const tableX = margin;
+  const row = (values, header = false) => {
+    const wrapped = values.map((value, index) => wrap(value, columns[index].limit));
+    const rowHeight = Math.max(22, Math.min(44, Math.max(...wrapped.map(lines => lines.length)) * 10 + 8));
+    ensureSpace(rowHeight + 3);
+    if (header) rect(tableX, y, pageWidth - margin * 2, rowHeight, 0.9);
+    line(tableX, y, pageWidth - margin, y);
+    let x = tableX;
+    columns.forEach((column, index) => {
+      wrapped[index].slice(0, 3).forEach((value, lineIndex) => text(value, x + 3, y - 5 - lineIndex * 10, 7, header));
+      x += column.width;
+      line(x, y, x, y - rowHeight);
+    });
+    line(tableX, y - rowHeight, pageWidth - margin, y - rowHeight);
+    y -= rowHeight;
+  };
+  row(columns.map(column => column.title), true);
+  items.forEach((item, index) => row([
+    index + 1, item.instance_code, item.barcode || '—', item.item_code, item.item_name,
+    `${Number(item.quantity).toLocaleString()} ${item.unit}`, item.status.replaceAll('_', ' '),
+    item.received_at ? date(item.received_at) : '—'
+  ]));
+  if (!items.length) row(['', 'No items have been added to this transfer.', '', '', '', '', '', '']);
+
+  section('Transfer notes');
+  const noteLines = wrap(transfer.notes || '—', 130);
+  noteLines.forEach(noteLine => {
+    ensureSpace(13); text(noteLine, margin, y, 9); y -= 13;
+  });
+  ensureSpace(65); y -= 45;
+  line(margin, y, 365, y, 0.35); line(430, y, pageWidth - margin, y, 0.35);
+  text('Released by (name, signature and date)', margin, y - 5, 8);
+  text('Received by (name, signature and date)', 430, y - 5, 8);
+
+  pages.push(operations.splice(0));
+  const objects = [];
+  const addObject = value => { objects.push(value); return objects.length; };
+  const catalogId = addObject('');
+  const pagesId = addObject('');
+  const fontRegularId = addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
+  const fontBoldId = addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+  const pageIds = [];
+  pages.forEach(pageOps => {
+    const stream = pageOps.join('\n');
+    const streamId = addObject(`<< /Length ${Buffer.byteLength(stream, 'ascii')} >>\nstream\n${stream}\nendstream`);
+    const pageId = addObject(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 ${fontRegularId} 0 R /F2 ${fontBoldId} 0 R >> >> /Contents ${streamId} 0 R >>`);
+    pageIds.push(pageId);
+  });
+  objects[catalogId - 1] = `<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
+  objects[pagesId - 1] = `<< /Type /Pages /Kids [${pageIds.map(id => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`;
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  objects.forEach((object, index) => {
+    offsets.push(Buffer.byteLength(pdf, 'ascii'));
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xrefOffset = Buffer.byteLength(pdf, 'ascii');
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  offsets.slice(1).forEach(offset => { pdf += `${String(offset).padStart(10, '0')} 00000 n \n`; });
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return Buffer.from(pdf, 'ascii');
+}
+
 
 /*
  * Transfer list.
@@ -247,49 +385,10 @@ router.get(
       }
 
       const { transfer, items } = result;
-      const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-      }[char]));
-      const date = value => value ? new Date(value).toLocaleString() : '—';
-      const rows = items.map((item, index) => `
-        <tr>
-          <td>${index + 1}</td><td>${escape(item.instance_code)}</td>
-          <td>${escape(item.barcode || '—')}</td><td>${escape(item.item_code)}</td>
-          <td>${escape(item.item_name)}</td><td>${escape(Number(item.quantity).toLocaleString())} ${escape(item.unit)}</td>
-          <td>${escape(item.status.replaceAll('_', ' '))}</td>
-          <td>${escape(item.received_at ? date(item.received_at) : '—')}</td>
-        </tr>`).join('');
-
-      const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escape(transfer.transfer_number)} - Stock Transfer Note</title>
-        <style>
-          @page{size:A4;margin:16mm}*{box-sizing:border-box}body{font:13px Arial,sans-serif;color:#17202a;margin:0}
-          header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #263b55;padding-bottom:14px;margin-bottom:20px}
-          h1{font-size:24px;margin:0 0 5px}.number{font-size:18px;font-weight:bold;color:#263b55}h2{font-size:14px;margin:22px 0 8px;text-transform:uppercase;letter-spacing:.04em}
-          .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 28px}.field{padding:8px 0;border-bottom:1px solid #d7dde3}.label{display:block;color:#65717d;font-size:10px;text-transform:uppercase;margin-bottom:4px}
-          table{width:100%;border-collapse:collapse;font-size:11px}th,td{border:1px solid #cbd2d9;padding:7px;text-align:left}th{background:#eef2f6}td:first-child{text-align:center}
-          .notes{border:1px solid #cbd2d9;min-height:50px;padding:9px;white-space:pre-wrap}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:50px;margin-top:50px}.sign{border-top:1px solid #263b55;padding-top:8px;color:#46515b}
-          footer{margin-top:28px;padding-top:8px;border-top:1px solid #d7dde3;color:#65717d;font-size:10px}.print{margin:12px 0;padding:8px 14px}
-          @media print{.print{display:none}}
-        </style></head><body>
-        <button class="print" onclick="window.print()">Print Stock Transfer Note</button>
-        <header><div><h1>Stock Transfer Note</h1><div>Site to site inventory movement</div></div><div class="number">${escape(transfer.transfer_number)}</div></header>
-        <div class="grid">
-          <div class="field"><span class="label">From site</span><strong>${escape(transfer.from_site_code)} — ${escape(transfer.from_site_name)}</strong></div>
-          <div class="field"><span class="label">To site</span><strong>${escape(transfer.to_site_code)} — ${escape(transfer.to_site_name)}</strong></div>
-          <div class="field"><span class="label">Status</span>${escape(transfer.status.replaceAll('_', ' '))}</div>
-          <div class="field"><span class="label">Created</span>${escape(date(transfer.created_at))}</div>
-          <div class="field"><span class="label">Prepared by</span>${escape(transfer.created_by_name || '—')}</div>
-          <div class="field"><span class="label">Dispatched</span>${escape(date(transfer.dispatched_at))}${transfer.dispatched_by_name ? ` by ${escape(transfer.dispatched_by_name)}` : ''}</div>
-        </div>
-        <h2>Items (${items.length})</h2><table><thead><tr><th>#</th><th>Instance code</th><th>Barcode</th><th>Item code</th><th>Description</th><th>Quantity</th><th>Status</th><th>Received at</th></tr></thead><tbody>${rows || '<tr><td colspan="8">No items have been added to this transfer.</td></tr>'}</tbody></table>
-        <h2>Transfer notes</h2><div class="notes">${escape(transfer.notes || '—')}</div>
-        <div class="signatures"><div class="sign">Released by (name, signature and date)</div><div class="sign">Received by (name, signature and date)</div></div>
-        <footer>Generated ${escape(date(new Date()))} · ${escape(transfer.transfer_number)}</footer>
-        </body></html>`;
-
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="${transfer.transfer_number}.html"`);
-      res.send(html);
+      const pdf = createStnPdf(transfer, items);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${transfer.transfer_number}.pdf"`);
+      res.send(pdf);
     } catch (error) {
       next(error);
     }
