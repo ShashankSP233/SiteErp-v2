@@ -33,7 +33,7 @@
       <button
         type="button"
         class="btn btn-primary"
-        onclick="window.print()"
+        id="print-stn-button"
       >
         Print STN
       </button>
@@ -726,3 +726,9 @@
     <h2>Transfer notes</h2><div class="notes"><%= transfer.notes || '-' %></div>
     <div class="signatures"><div class="sign">Released by (name, signature and date)</div><div class="sign">Received by (name, signature and date)</div></div>
   </section>
+
+  <script nonce="<%= cspNonce %>">
+    document.getElementById('print-stn-button').addEventListener('click', function () {
+      window.print();
+    });
+  </script>
