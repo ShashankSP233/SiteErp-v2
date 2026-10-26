@@ -30,14 +30,13 @@
 
 
     <div class="d-flex gap-2">
-      <a
-        href="/inventory/transfers/<%= transfer.id %>/stn"
+      <button
+        type="button"
         class="btn btn-primary"
-        target="_blank"
-        rel="noopener"
+        onclick="window.print()"
       >
         Print STN
-      </a>
+      </button>
 
       <a
         href="/inventory/transfers/<%= transfer.id %>/barcodes"
@@ -652,3 +651,78 @@
 
   </div>
   <% } %>
+
+  <style>
+    #stn-print-document { display: none; }
+    @page { size: A4 landscape; margin: 10mm; }
+    @media print {
+      body * { visibility: hidden !important; }
+      #stn-print-document,
+      #stn-print-document * { visibility: visible !important; }
+      #stn-print-document {
+        display: block !important;
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        color: #17202a;
+        background: #fff;
+        font: 10px Arial, sans-serif;
+      }
+      #stn-print-document header { display: flex; justify-content: space-between; border-bottom: 2px solid #263b55; padding-bottom: 10px; margin-bottom: 12px; }
+      #stn-print-document h1 { margin: 0 0 4px; font-size: 20px; }
+      #stn-print-document .stn-number { font-size: 16px; font-weight: bold; }
+      #stn-print-document .meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px 18px; margin-bottom: 14px; }
+      #stn-print-document .label { display: block; color: #596674; font-size: 8px; text-transform: uppercase; margin-bottom: 3px; }
+      #stn-print-document table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 8px; }
+      #stn-print-document th, #stn-print-document td { border: 1px solid #aeb8c2; padding: 5px 4px; text-align: left; vertical-align: top; overflow-wrap: anywhere; word-break: break-word; }
+      #stn-print-document th { background: #e9eef3 !important; print-color-adjust: exact; }
+      #stn-print-document th:nth-child(1), #stn-print-document td:nth-child(1) { width: 3%; text-align: center; }
+      #stn-print-document th:nth-child(2), #stn-print-document td:nth-child(2), #stn-print-document th:nth-child(3), #stn-print-document td:nth-child(3) { width: 13%; }
+      #stn-print-document th:nth-child(4), #stn-print-document td:nth-child(4) { width: 10%; }
+      #stn-print-document th:nth-child(5), #stn-print-document td:nth-child(5) { width: 21%; }
+      #stn-print-document th:nth-child(6), #stn-print-document td:nth-child(6) { width: 9%; }
+      #stn-print-document th:nth-child(7), #stn-print-document td:nth-child(7) { width: 10%; }
+      #stn-print-document th:nth-child(8), #stn-print-document td:nth-child(8) { width: 21%; }
+      #stn-print-document thead { display: table-header-group; }
+      #stn-print-document tr { break-inside: avoid; page-break-inside: avoid; }
+      #stn-print-document h2 { font-size: 10px; margin: 16px 0 5px; text-transform: uppercase; }
+      #stn-print-document .notes { border: 1px solid #aeb8c2; padding: 7px; white-space: pre-wrap; min-height: 28px; }
+      #stn-print-document .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 50px; margin-top: 38px; }
+      #stn-print-document .sign { border-top: 1px solid #263b55; padding-top: 5px; }
+    }
+  </style>
+
+  <section id="stn-print-document" aria-hidden="true">
+    <header>
+      <div><h1>Stock Transfer Note</h1><div>Site to site inventory movement</div></div>
+      <div class="stn-number"><%= transfer.transfer_number %></div>
+    </header>
+    <div class="meta">
+      <div><span class="label">From site</span><strong><%= transfer.from_site_code %> - <%= transfer.from_site_name %></strong></div>
+      <div><span class="label">To site</span><strong><%= transfer.to_site_code %> - <%= transfer.to_site_name %></strong></div>
+      <div><span class="label">Status</span><%= transfer.status.replaceAll('_', ' ') %></div>
+      <div><span class="label">Created</span><%= new Date(transfer.created_at).toLocaleString() %></div>
+      <div><span class="label">Prepared by</span><%= transfer.created_by_name || '-' %></div>
+      <div><span class="label">Dispatched</span><%= transfer.dispatched_at ? new Date(transfer.dispatched_at).toLocaleString() : '-' %><%= transfer.dispatched_by_name ? ` by ${transfer.dispatched_by_name}` : '' %></div>
+    </div>
+    <table>
+      <thead><tr><th>#</th><th>Instance code</th><th>Barcode</th><th>Item code</th><th>Description</th><th>Quantity</th><th>Status</th><th>Received at</th></tr></thead>
+      <tbody>
+        <% if (items.length) { %>
+          <% items.forEach((item, index) => { %>
+            <tr>
+              <td><%= index + 1 %></td><td><%= item.instance_code %></td><td><%= item.barcode || '-' %></td>
+              <td><%= item.item_code %></td><td><%= item.item_name %></td>
+              <td><%= Number(item.quantity).toLocaleString() %> <%= item.unit %></td>
+              <td><%= item.status.replaceAll('_', ' ') %></td>
+              <td><% if (item.received_at) { %><%= transfer.to_site_code %> - <%= transfer.to_site_name %><br><%= new Date(item.received_at).toLocaleString() %><% } else { %>-<% } %></td>
+            </tr>
+          <% }) %>
+        <% } else { %>
+          <tr><td colspan="8">No items have been added to this transfer.</td></tr>
+        <% } %>
+      </tbody>
+    </table>
+    <h2>Transfer notes</h2><div class="notes"><%= transfer.notes || '-' %></div>
+    <div class="signatures"><div class="sign">Released by (name, signature and date)</div><div class="sign">Received by (name, signature and date)</div></div>
+  </section>
