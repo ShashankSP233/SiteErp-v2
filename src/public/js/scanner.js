@@ -11,9 +11,8 @@
   'use strict';
 
   var ZXING_SRC = '/vendor/zxing/index.min.js';
-  // QR is the primary format used by inventory labels. Restricting the native
-  // detector avoids spending time trying unrelated linear barcode formats.
-  var NATIVE_FORMATS = ['qr_code'];
+  // Inventory labels use Data Matrix codes, so avoid checking unrelated formats.
+  var NATIVE_FORMATS = ['data_matrix'];
   var zxingPromise = null;
   var state = null; // the open scanner session, if any
 
@@ -35,8 +34,9 @@
     if ('BarcodeDetector' in window) {
       try {
         var supported = await window.BarcodeDetector.getSupportedFormats();
-        if (NATIVE_FORMATS.every(function (f) { return supported.indexOf(f) !== -1; })) {
-          var detector = new window.BarcodeDetector({ formats: NATIVE_FORMATS });
+        var formats = NATIVE_FORMATS.filter(function (f) { return supported.indexOf(f) !== -1; });
+        if (formats.length) {
+          var detector = new window.BarcodeDetector({ formats: formats });
           return async function () {
             var found = await detector.detect(video);
             return found.length ? found[0].rawValue : null;
@@ -48,7 +48,7 @@
     await loadZXing();
     var Z = window.ZXing;
     var hints = new Map();
-    hints.set(Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.QR_CODE]);
+    hints.set(Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.DATA_MATRIX]);
     hints.set(Z.DecodeHintType.TRY_HARDER, true);
     var reader = new Z.MultiFormatReader();
     reader.setHints(hints);
@@ -82,7 +82,7 @@
     root.setAttribute('aria-label', 'Scan code with camera');
 
     var bar = el('div', 'display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;color:#fff;');
-    bar.appendChild(el('strong', '', 'Point the camera at the QR code'));
+    bar.appendChild(el('strong', '', 'Point the camera at the Data Matrix code'));
     var btns = el('div', 'display:flex;gap:8px;');
     var torch = el('button', 'display:none;padding:6px 12px;border:1px solid #fff;background:transparent;color:#fff;border-radius:6px;', 'Light');
     torch.type = 'button';
@@ -98,8 +98,8 @@
 
     var footer = el('div', 'padding:12px;color:#fff;text-align:center;');
     var status = el('div', 'min-height:32px;padding:4px;', 'Starting camera…');
-    var capture = el('button', 'padding:12px 24px;border:0;background:#0d6efd;color:#fff;border-radius:8px;font-weight:700;font-size:1rem;width:min(100%,360px);', 'Scan this QR');
-    capture.type = 'button'; capture.disabled = true;
+    var capture = el('button', 'padding:12px 24px;border:0;background:#0d6efd;color:#fff;border-radius:8px;font-weight:700;font-size:1rem;width:min(100%,360px);', 'Start scan');
+    capture.type = 'button';
     footer.appendChild(status); footer.appendChild(capture);
     root.appendChild(bar); root.appendChild(stage); root.appendChild(footer);
     document.body.appendChild(root);
@@ -160,18 +160,10 @@
     document.addEventListener('keydown', s.onKey);
     ui.close.addEventListener('click', closeScanner);
     ui.capture.addEventListener('click', function () {
-      if (!s.detected || s.closed) return;
-      var code = s.detected;
-      s.last = code; s.lastAt = Date.now(); s.detected = '';
+      if (s.closed || s.armed) return;
+      s.armed = true;
       ui.capture.disabled = true;
-      feedback(s);
-      if (continuous) {
-        ui.status.textContent = 'Scanned: ' + code + ' — point at the next QR code';
-        applyCode(input, code, mode);
-      } else {
-        closeScanner();
-        applyCode(input, code, mode);
-      }
+      ui.status.textContent = 'Reading Data Matrix… hold it steady in the square';
     });
 
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -207,20 +199,28 @@
 
       var decode = await makeDecoder(ui.video);
       if (s.closed) return;
-      ui.status.textContent = 'Looking for a QR code…';
+      ui.status.textContent = 'Camera ready. Tap Start scan when the Data Matrix is in view.';
 
       var tick = async function () {
         if (s.closed) return;
-        if (!s.busy) {
+        if (s.armed && !s.busy) {
           s.busy = true;
           try {
             var raw = await decode();
             var code = raw && String(raw).trim();
             if (code && !s.closed && !(code === s.last && Date.now() - s.lastAt < 2500)) {
-              s.last = code; s.lastAt = Date.now();
-              s.detected = code;
-              ui.status.textContent = 'QR detected: ' + code;
-              ui.capture.disabled = false;
+              s.last = code; s.lastAt = Date.now(); s.armed = false;
+              feedback(s);
+              if (continuous) {
+                ui.status.textContent = 'Scanned: ' + code + ' — tap to scan the next code';
+                ui.capture.textContent = 'Scan next code';
+                applyCode(input, code, mode);
+                ui.capture.disabled = false;
+              } else {
+                closeScanner();
+                applyCode(input, code, mode);
+                return;
+              }
             }
           } catch (e) { /* ignore a bad frame */ }
           s.busy = false;
