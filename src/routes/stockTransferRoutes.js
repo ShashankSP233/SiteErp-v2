@@ -37,9 +37,14 @@ function createStnPdf(transfer, items) {
   let y = pageHeight - margin;
   let pages = [];
 
-  const safe = value => String(value ?? '—')
+  const safe = value => String(value ?? '-')
+    .replace(/[‐‑‒–—−]/g, '-')
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/→/g, 'to')
     .normalize('NFKD')
-    .replace(/[^\x20-\x7E]/g, '?');
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\x20-\x7E]/g, '');
   const pdfText = value => safe(value).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
   const text = (value, x, top, size = 9, bold = false) => {
     operations.push(`BT /${bold ? 'F2' : 'F1'} ${size} Tf ${x} ${top - size} Td (${pdfText(value)}) Tj ET`);
@@ -69,7 +74,7 @@ function createStnPdf(transfer, items) {
       } else current += `${current ? ' ' : ''}${word}`;
     }
     if (current) lines.push(current);
-    return lines.length ? lines : ['—'];
+    return lines.length ? lines : ['-'];
   };
   const section = title => {
     ensureSpace(25); y -= 7; text(title.toUpperCase(), margin, y, 9, true);
@@ -87,13 +92,13 @@ function createStnPdf(transfer, items) {
     const lines = wrap(value, Math.floor(width / 5.3));
     lines.slice(0, 2).forEach((item, i) => text(item, x, top - 11 - i * 11, 9));
   };
-  const date = value => value ? new Date(value).toLocaleString() : '—';
-  field('From site', `${transfer.from_site_code} — ${transfer.from_site_name}`, margin, y);
-  field('To site', `${transfer.to_site_code} — ${transfer.to_site_name}`, 430, y);
+  const date = value => value ? new Date(value).toLocaleString() : '-';
+  field('From site', `${transfer.from_site_code} - ${transfer.from_site_name}`, margin, y);
+  field('To site', `${transfer.to_site_code} - ${transfer.to_site_name}`, 430, y);
   y -= 35;
   field('Status', transfer.status.replaceAll('_', ' '), margin, y);
   field('Created', date(transfer.created_at), 240, y);
-  field('Prepared by', transfer.created_by_name || '—', 430, y);
+  field('Prepared by', transfer.created_by_name || '-', 430, y);
   field('Dispatched', `${date(transfer.dispatched_at)}${transfer.dispatched_by_name ? ` by ${transfer.dispatched_by_name}` : ''}`, 620, y, 180);
   y -= 37;
 
@@ -122,14 +127,16 @@ function createStnPdf(transfer, items) {
   };
   row(columns.map(column => column.title), true);
   items.forEach((item, index) => row([
-    index + 1, item.instance_code, item.barcode || '—', item.item_code, item.item_name,
+    index + 1, item.instance_code, item.barcode || '-', item.item_code, item.item_name,
     `${Number(item.quantity).toLocaleString()} ${item.unit}`, item.status.replaceAll('_', ' '),
-    item.received_at ? date(item.received_at) : '—'
+    item.received_at
+      ? `${transfer.to_site_code} - ${transfer.to_site_name}; ${date(item.received_at)}`
+      : '-'
   ]));
   if (!items.length) row(['', 'No items have been added to this transfer.', '', '', '', '', '', '']);
 
   section('Transfer notes');
-  const noteLines = wrap(transfer.notes || '—', 130);
+  const noteLines = wrap(transfer.notes || '-', 130);
   noteLines.forEach(noteLine => {
     ensureSpace(13); text(noteLine, margin, y, 9); y -= 13;
   });
