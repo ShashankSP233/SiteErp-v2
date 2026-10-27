@@ -343,6 +343,7 @@
                   <th>Item</th>
                   <th>Quantity</th>
                   <th>Status</th>
+                  <th class="text-end">Action</th>
                 </tr>
 
               </thead>
@@ -388,6 +389,13 @@
                       <span class="badge bg-secondary">
                         Ready
                       </span>
+                    </td>
+
+                    <td class="text-end">
+                      <form method="post" action="/inventory/transfers/<%= transfer.id %>/items/<%= item.id %>/remove" onsubmit="return confirm('Remove this instance from the draft transfer?');">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                      </form>
                     </td>
 
                   </tr>
@@ -548,6 +556,7 @@
               <th>Quantity</th>
               <th>Status</th>
               <th>Received At</th>
+              <th>Receiver Note</th>
             </tr>
 
           </thead>
@@ -635,6 +644,18 @@
 
                   <% } %>
 
+                </td>
+
+                <td>
+                  <% if (item.status === 'RECEIVED') { %>
+                    <form method="post" action="/inventory/transfers/<%= transfer.id %>/items/<%= item.id %>/receiver-note" class="d-flex gap-1">
+                      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                      <input type="text" name="receiverNotes" class="form-control form-control-sm" maxlength="1000" value="<%= item.receiver_notes || '' %>" placeholder="Add note" aria-label="Receiver note for <%= item.instance_code %>">
+                      <button type="submit" class="btn btn-sm btn-outline-primary">Save</button>
+                    </form>
+                  <% } else { %>
+                    <span class="text-muted">—</span>
+                  <% } %>
                 </td>
 
               </tr>

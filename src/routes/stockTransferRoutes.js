@@ -5,11 +5,13 @@ const {
   getTransferDestinationSites,
   createTransfer,
   addTransferItem,
+  removeTransferItem,
   listTransfersForUser,
   getTransferForUser,
   dispatchTransfer,
   receiveTransferItems,
-  receiveTransferItemByScan
+  receiveTransferItemByScan,
+  updateTransferItemReceiverNote
 } = require('../repositories/stockTransferRepo');
 
 const {
@@ -58,7 +60,6 @@ router.get(
     }
   }
 );
-
 
 /*
  * New transfer form.
@@ -320,6 +321,28 @@ router.post(
 );
 
 
+/* Remove a mistakenly scanned instance from a draft transfer. */
+router.post(
+  '/inventory/transfers/:id/items/:itemId/remove',
+  requireAuth,
+  requireRole(...TRANSFER_ROLES),
+  async (req, res) => {
+    try {
+      const result = await removeTransferItem({
+        transferId: req.params.id,
+        itemId: req.params.itemId,
+        user: req.session.user
+      });
+      req.session.success = 'Instance removed from the draft transfer.';
+      return res.redirect(`/inventory/transfers/${result.transfer.id}`);
+    } catch (error) {
+      req.session.error = error.message || 'Failed to remove transfer item.';
+      return res.redirect(`/inventory/transfers/${req.params.id}`);
+    }
+  }
+);
+
+
 /*
  * Dispatch transfer.
  */
@@ -544,6 +567,27 @@ router.post(
       res.redirect(
         `/inventory/transfers/${req.params.id}`
       );
+    }
+  }
+);
+
+router.post(
+  '/inventory/transfers/:id/items/:itemId/receiver-note',
+  requireAuth,
+  requireRole(...TRANSFER_ROLES),
+  async (req, res) => {
+    try {
+      const result = await updateTransferItemReceiverNote({
+        transferId: req.params.id,
+        itemId: req.params.itemId,
+        receiverNotes: req.body.receiverNotes,
+        user: req.session.user
+      });
+      req.session.success = 'Receiver note saved.';
+      return res.redirect(`/inventory/transfers/${result.transfer.id}`);
+    } catch (error) {
+      req.session.error = error.message || 'Failed to save receiver note.';
+      return res.redirect(`/inventory/transfers/${req.params.id}`);
     }
   }
 );

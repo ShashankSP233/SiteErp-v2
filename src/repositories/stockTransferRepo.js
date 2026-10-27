@@ -493,6 +493,42 @@ async function addTransferItem({
   });
 }
 
+/** Remove an accidentally scanned instance while its transfer is still a draft. */
+async function removeTransferItem({ transferId, itemId, user }) {
+  const id = Number(transferId);
+  const lineId = Number(itemId);
+  if (!Number.isInteger(id) || id <= 0 || !Number.isInteger(lineId) || lineId <= 0) {
+    throw new Error('Invalid transfer item.');
+  }
+
+  return db.tx(async tx => {
+    const transfer = await tx.one(
+      `SELECT id, transfer_number, from_site_id, status
+       FROM stock_transfers WHERE id = ? FOR UPDATE`,
+      [id]
+    );
+    if (!transfer) throw new Error('Stock transfer not found.');
+    if (transfer.status !== 'DRAFT') throw new Error('Instances can only be removed from a draft transfer.');
+
+    await assertSiteAccess(tx, user, transfer.from_site_id);
+
+    const item = await tx.one(
+      `SELECT id, instance_id, status FROM stock_transfer_items
+       WHERE id = ? AND transfer_id = ? FOR UPDATE`,
+      [lineId, transfer.id]
+    );
+    if (!item) throw new Error('Transfer item not found.');
+    if (item.status !== 'DRAFT') throw new Error('This instance can no longer be removed from the transfer.');
+
+    await tx.query(
+      'DELETE FROM stock_transfer_items WHERE id = ?',
+      [item.id]
+    );
+
+    return { transfer, instanceId: item.instance_id };
+  });
+}
+
 
 /**
  * Get one transfer with all physical instances.
@@ -580,6 +616,7 @@ async function getTransferForUser(
        sti.status,
        sti.received_by,
        sti.received_at,
+       sti.receiver_notes,
 
        ii.instance_code,
        ii.barcode,
@@ -1534,6 +1571,38 @@ async function receiveTransferItemByScan({
     };
   });
 }
+
+async function updateTransferItemReceiverNote({ transferId, itemId, receiverNotes, user }) {
+  const id = Number(transferId);
+  const lineId = Number(itemId);
+  const notes = clean(receiverNotes).slice(0, 1000) || null;
+  if (!Number.isInteger(id) || id <= 0 || !Number.isInteger(lineId) || lineId <= 0) {
+    throw new Error('Invalid transfer item.');
+  }
+
+  return db.tx(async tx => {
+    const transfer = await tx.one(
+      `SELECT id, to_site_id FROM stock_transfers WHERE id = ? FOR UPDATE`,
+      [id]
+    );
+    if (!transfer) throw new Error('Stock transfer not found.');
+    await assertSiteAccess(tx, user, transfer.to_site_id);
+
+    const item = await tx.one(
+      `SELECT id, status FROM stock_transfer_items
+       WHERE id = ? AND transfer_id = ? FOR UPDATE`,
+      [lineId, transfer.id]
+    );
+    if (!item) throw new Error('Transfer item not found.');
+    if (item.status !== 'RECEIVED') throw new Error('A receiver note can only be added after the instance is received.');
+
+    await tx.query(
+      `UPDATE stock_transfer_items SET receiver_notes = ?, updated_at = now() WHERE id = ?`,
+      [notes, item.id]
+    );
+    return { transfer };
+  });
+}
 /**
  * Close Stock Inward.
  *
@@ -1707,11 +1776,13 @@ module.exports = {
   getTransferDestinationSites,
   createTransfer,
   addTransferItem,
+  removeTransferItem,
   listTransfersForUser,
   getTransferForUser,
   dispatchTransfer,
   receiveTransferItems,
   listIncomingTransfersForUser,
   receiveTransferItemByScan,
+  updateTransferItemReceiverNote,
   closeInward
 };

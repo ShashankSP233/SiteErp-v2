@@ -104,9 +104,48 @@ router.get(
           req.session.user
         );
 
+      const filters = {
+        search: String(req.query.search || '').trim(),
+        item: String(req.query.item || ''),
+        site: String(req.query.site || ''),
+        status: String(req.query.status || '').toUpperCase(),
+        condition: String(req.query.condition || '').toUpperCase(),
+        sort: String(req.query.sort || 'newest')
+      };
+      const items = [...new Map(instances.map(instance => [
+        String(instance.item_master_id),
+        { id: instance.item_master_id, code: instance.item_code, name: instance.item_name }
+      ])).values()].sort((a, b) => a.code.localeCompare(b.code));
+      const sites = [...new Map(instances.filter(instance => instance.site_id).map(instance => [
+        String(instance.site_id), { id: instance.site_id, code: instance.site_code, name: instance.site_name }
+      ])).values()].sort((a, b) => a.code.localeCompare(b.code));
+      const filteredInstances = instances.filter(instance => {
+        const searchable = [instance.instance_code, instance.barcode, instance.item_code, instance.item_name, instance.site_code, instance.site_name, instance.brand, instance.batch_number, instance.serial_number]
+          .filter(Boolean).join(' ').toLowerCase();
+        return (!filters.search || searchable.includes(filters.search.toLowerCase())) &&
+          (!filters.item || String(instance.item_master_id) === filters.item) &&
+          (!filters.site || (filters.site === 'none' ? !instance.site_id : String(instance.site_id || '') === filters.site)) &&
+          (!filters.status || String(instance.lifecycle_status || '').toUpperCase() === filters.status) &&
+          (!filters.condition || String(instance.condition || '').toUpperCase() === filters.condition);
+      });
+      const sorters = {
+        newest: (a, b) => new Date(b.created_at) - new Date(a.created_at),
+        oldest: (a, b) => new Date(a.created_at) - new Date(b.created_at),
+        instance_asc: (a, b) => String(a.instance_code).localeCompare(String(b.instance_code)),
+        instance_desc: (a, b) => String(b.instance_code).localeCompare(String(a.instance_code)),
+        item_asc: (a, b) => String(a.item_code).localeCompare(String(b.item_code)),
+        available_desc: (a, b) => Number(b.available_quantity ?? b.current_quantity) - Number(a.available_quantity ?? a.current_quantity)
+      };
+      if (!sorters[filters.sort]) filters.sort = 'newest';
+      filteredInstances.sort(sorters[filters.sort]);
+
       res.render('inventory/instances', {
         title: 'Inventory Instances',
-        instances,
+        instances: filteredInstances,
+        totalInstances: instances.length,
+        items,
+        sites,
+        filters,
         query: req.query
       });
     } catch (err) {

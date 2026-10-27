@@ -21,17 +21,31 @@
   </div>
 <% } %>
 
+<form method="get" action="/inventory/instances" class="card mb-3">
+  <div class="card-body">
+    <div class="row g-2 align-items-end">
+      <div class="col-12 col-md-6 col-xl-3"><label for="instanceSearch" class="form-label">Search</label><input id="instanceSearch" class="form-control" type="search" name="search" value="<%= filters.search %>" placeholder="Instance, barcode, item, brand…"></div>
+      <div class="col-6 col-md-3 col-xl-2"><label for="instanceItem" class="form-label">Item</label><select id="instanceItem" name="item" class="form-select"><option value="">All items</option><% items.forEach(item => { %><option value="<%= item.id %>" <%= filters.item === String(item.id) ? 'selected' : '' %>><%= item.code %> — <%= item.name %></option><% }) %></select></div>
+      <div class="col-6 col-md-3 col-xl-2"><label for="instanceSite" class="form-label">Site</label><select id="instanceSite" name="site" class="form-select"><option value="">All sites</option><option value="none" <%= filters.site === 'none' ? 'selected' : '' %>>No site</option><% sites.forEach(site => { %><option value="<%= site.id %>" <%= filters.site === String(site.id) ? 'selected' : '' %>><%= site.code %> — <%= site.name %></option><% }) %></select></div>
+      <div class="col-6 col-md-3 col-xl-1"><label for="instanceStatus" class="form-label">Status</label><select id="instanceStatus" name="status" class="form-select"><option value="">All</option><% ['ACTIVE','CONSUMED','QUARANTINED'].forEach(status => { %><option value="<%= status %>" <%= filters.status === status ? 'selected' : '' %>><%= status %></option><% }) %></select></div>
+      <div class="col-6 col-md-3 col-xl-1"><label for="instanceCondition" class="form-label">Condition</label><select id="instanceCondition" name="condition" class="form-select"><option value="">All</option><% ['GOOD','DAMAGED','NEEDS_REPAIR'].forEach(condition => { %><option value="<%= condition %>" <%= filters.condition === condition ? 'selected' : '' %>><%= condition.replace('_',' ') %></option><% }) %></select></div>
+      <div class="col-12 col-md-6 col-xl-2"><label for="instanceSort" class="form-label">Sort by</label><select id="instanceSort" name="sort" class="form-select"><option value="newest" <%= filters.sort === 'newest' ? 'selected' : '' %>>Newest received</option><option value="oldest" <%= filters.sort === 'oldest' ? 'selected' : '' %>>Oldest received</option><option value="instance_asc" <%= filters.sort === 'instance_asc' ? 'selected' : '' %>>Instance code A–Z</option><option value="instance_desc" <%= filters.sort === 'instance_desc' ? 'selected' : '' %>>Instance code Z–A</option><option value="item_asc" <%= filters.sort === 'item_asc' ? 'selected' : '' %>>Item code A–Z</option><option value="available_desc" <%= filters.sort === 'available_desc' ? 'selected' : '' %>>Available quantity (high to low)</option></select></div>
+      <div class="col-12 col-xl-1 d-flex gap-2"><button class="btn btn-primary flex-grow-1" type="submit">Apply</button><a class="btn btn-outline-secondary" href="/inventory/instances" aria-label="Clear filters">Clear</a></div>
+    </div>
+  </div>
+</form>
+
 <% if (!instances.length) { %>
 
   <div class="card">
     <div class="card-body text-center py-5">
-      <h5>No inventory instances yet</h5>
+      <h5><%= totalInstances ? 'No matching instances' : 'No inventory instances yet' %></h5>
 
       <p class="text-muted mb-3">
-        Receive your first physical inventory instance to get started.
+        <%= totalInstances ? 'Try changing or clearing your filters.' : 'Receive your first physical inventory instance to get started.' %>
       </p>
 
-      <% if (['admin', 'manager', 'operator'].includes(currentUser.role)) { %>
+      <% if (!totalInstances && ['admin', 'manager', 'operator'].includes(currentUser.role)) { %>
         <a href="/inventory/receive" class="btn btn-primary">
           Add Stock
         </a>
@@ -42,7 +56,7 @@
 <% } else { %>
 
   <div class="card">
-    <div class="card-header bg-white"><span class="text-muted small"><%= instances.length %> physical instance<%= instances.length === 1 ? '' : 's' %></span></div>
+    <div class="card-header bg-white"><span class="text-muted small">Showing <%= instances.length %> of <%= totalInstances %> physical instance<%= totalInstances === 1 ? '' : 's' %></span></div>
 
     <div class="d-none d-xl-block">
       <table class="table table-hover mb-0 align-middle inventory-instance-table">
