@@ -16,9 +16,9 @@ async function dismantleKit(id) {
   return db.tx(async tx => {
     const kit = await tx.one(`SELECT id, kit_code FROM item_kits WHERE id=?${db.rowLock}`, [id]);
     if (!kit) throw new Error('Kit not found.');
-    const instances = await tx.many(`SELECT ii.id, ii.instance_code, ii.site_id, ii.lifecycle_status FROM item_kit_lines l JOIN item_instances ii ON ii.id=l.item_instance_id WHERE l.kit_id=?${db.rowLock}`, [id]);
+    const instances = await tx.many(`SELECT ii.id, ii.instance_code, ii.site_id, ii.lifecycle_status, im.is_consumable FROM item_kit_lines l JOIN item_instances ii ON ii.id=l.item_instance_id JOIN item_masters im ON im.id=ii.item_master_id WHERE l.kit_id=?${db.rowLock}`, [id]);
     if (!instances.length) throw new Error('This kit has no instances to return.');
-    const notReturned = instances.filter(instance => !instance.site_id || instance.lifecycle_status !== 'ACTIVE');
+    const notReturned = instances.filter(instance => !(instance.is_consumable && instance.lifecycle_status === 'CONSUMED') && (!instance.site_id || instance.lifecycle_status !== 'ACTIVE'));
     if (notReturned.length) throw new Error(`Cannot dismantle: these instances are not back at a site: ${notReturned.map(item => item.instance_code).join(', ')}.`);
     const ids = instances.map(item => item.id);
     const placeholders = ids.map(() => '?').join(',');

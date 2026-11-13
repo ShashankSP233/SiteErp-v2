@@ -932,11 +932,6 @@ async function createIssueBatch({ recipientType, recipientReference, reason, iss
       const kit = await tx.one(`SELECT id FROM item_kits WHERE id=? AND status='ACTIVE'`, [kitId]);
       const members = await tx.one(`SELECT COUNT(*) AS n FROM item_kit_lines WHERE kit_id=?`, [kitId]);
       if (!kit || Number(members.n) === 0) throw new Error('Choose active kits that contain physical instances.');
-      const consumables = await tx.one(
-        `SELECT COUNT(*) AS n FROM item_kit_lines l JOIN item_instances ii ON ii.id=l.item_instance_id JOIN item_masters im ON im.id=ii.item_master_id WHERE l.kit_id=? AND im.is_consumable=true`,
-        [kitId]
-      );
-      if (Number(consumables.n) > 0) throw new Error('A kit in an issue batch must contain returnable, non-consumable item instances.');
       await tx.query(`INSERT INTO inventory_issue_batch_kits(batch_id,kit_id) VALUES (?,?)`, [batchId, kitId]);
       const kitInstances = await tx.many(`SELECT item_instance_id FROM item_kit_lines WHERE kit_id=?`, [kitId]);
       for (const member of kitInstances) uniqueInstanceIds.add(Number(member.item_instance_id));
@@ -1087,7 +1082,7 @@ async function finalizeIssueBatch({ batchId, issuedBy, userRole }) {
     const missing = members.filter(row => !stagedSet.has(Number(row.item_instance_id)));
     if (missing.length) {
       const kit = await db.one(`SELECT kit_code FROM item_kits WHERE id=?`, [kitId]);
-      throw new Error(`Scan all ${members.length} instances in kit ${kit.kit_code} before issuing this batch.`);
+      throw new Error(`Include all ${members.length} instances in kit ${kit.kit_code} before issuing this batch.`);
     }
   }
   for (const item of staged) await issueInstance({ instanceCode: item.instance_code, issuedBy, userRole, batchId });
@@ -1133,11 +1128,8 @@ async function scanIssueBatchReturn({ batchId, instanceCode, returnedBy, userRol
   if (!batch.finalized_at) throw new Error('This issue batch has not been issued yet.');
   if (batch.status === 'RETURNED') throw new Error('This issue batch is already fully returned.');
   for (const kit of batch.kits) {
-    const issuedMembers = kit.items.filter(item => item.issue_status && ['OPEN','PARTIALLY_CONSUMED'].includes(item.issue_status));
-    const returnedMembers = kit.items.filter(item => item.issue_status === 'RETURNED');
-    if (returnedMembers.length === kit.items.length) continue;
-    if (issuedMembers.length !== kit.items.length) {
-      throw new Error(`Finish scanning every instance in kit ${kit.kit_code} into the issue batch before receiving any items.`);
+    if (kit.items.some(item => !item.issue_status)) {
+      throw new Error(`Finish issuing every instance in kit ${kit.kit_code} before receiving any items.`);
     }
   }
   const normalized = String(instanceCode || '').trim();
@@ -1165,12 +1157,11 @@ async function scanIssueBatchReturn({ batchId, instanceCode, returnedBy, userRol
     `SELECT inv.id, ii.instance_code FROM item_kit_lines l
      JOIN inventory_issues inv ON inv.instance_id=l.item_instance_id AND inv.batch_id=?
      JOIN item_instances ii ON ii.id=inv.instance_id
-     WHERE l.kit_id=? ORDER BY ii.instance_code`,
+     WHERE l.kit_id=? AND inv.status IN ('OPEN','PARTIALLY_CONSUMED') ORDER BY ii.instance_code`,
     [batchId, membership.kit_id]
   );
-  const memberCount = Number((await db.one(`SELECT COUNT(*) AS n FROM item_kit_lines WHERE kit_id=?`, [membership.kit_id])).n);
-  if (expected.length !== memberCount) {
-    throw new Error(`Kit ${membership.kit_code} cannot be received yet: all of its instances must first be issued in this batch.`);
+  if (!expected.length) {
+    throw new Error(`Kit ${membership.kit_code} has no returnable items remaining.`);
   }
   const existingScan = await db.one(`SELECT 1 FROM inventory_issue_batch_return_scans WHERE batch_id=? AND issue_id=?`, [batchId, issue.id]);
   if (existingScan) throw new Error(`${issue.instance_code} has already been scanned for kit ${membership.kit_code}. Scan another instance in the kit.`);
@@ -1178,8 +1169,8 @@ async function scanIssueBatchReturn({ batchId, instanceCode, returnedBy, userRol
   const scanned = await db.many(`SELECT issue_id FROM inventory_issue_batch_return_scans WHERE batch_id=?`, [batchId]);
   const scannedIds = new Set(scanned.map(row => Number(row.issue_id)));
   const kitScanned = expected.filter(row => scannedIds.has(Number(row.id)));
-  if (kitScanned.length < memberCount) {
-    return { pending: true, instanceCode: issue.instance_code, kitCode: membership.kit_code, scannedCount: kitScanned.length, expectedCount: memberCount };
+  if (kitScanned.length < expected.length) {
+    return { pending: true, instanceCode: issue.instance_code, kitCode: membership.kit_code, scannedCount: kitScanned.length, expectedCount: expected.length };
   }
   const returned = [];
   for (const member of expected) {
