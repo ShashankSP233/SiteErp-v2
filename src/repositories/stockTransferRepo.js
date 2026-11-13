@@ -958,6 +958,64 @@ async function dispatchTransfer({
   });
 }
 
+/**
+ * Revert a mistaken dispatch before any item has been received.
+ * Only admins may return every item to the source site and reopen the draft.
+ */
+async function revertTransferDispatch({ transferId, user }) {
+  if (user?.role !== 'admin') throw new Error('Only an admin can revert a stock transfer dispatch.');
+  const id = Number(transferId);
+
+  return db.tx(async tx => {
+    const transfer = await tx.one(
+      `SELECT id, transfer_number, from_site_id, status
+       FROM stock_transfers WHERE id=? FOR UPDATE`, [id]
+    );
+    if (!transfer) throw new Error('Stock transfer not found.');
+    if (transfer.status !== 'IN_TRANSIT') {
+      throw new Error('Only a transfer that is still fully in transit can have its dispatch reverted.');
+    }
+
+    const items = await tx.many(
+      `SELECT sti.id, sti.instance_id, sti.quantity, sti.status,
+              ii.instance_code, ii.site_id, ii.lifecycle_status, ii.current_quantity
+       FROM stock_transfer_items sti
+       JOIN item_instances ii ON ii.id=sti.instance_id
+       WHERE sti.transfer_id=? ORDER BY sti.id FOR UPDATE`, [transfer.id]
+    );
+    if (!items.length) throw new Error('This transfer has no items to return to the source site.');
+    for (const item of items) {
+      if (item.status !== 'IN_TRANSIT' || item.lifecycle_status !== 'IN_TRANSIT' || item.site_id != null) {
+        throw new Error(`Cannot revert dispatch because ${item.instance_code} is no longer in transit.`);
+      }
+    }
+
+    for (const item of items) {
+      await tx.query(
+        `UPDATE item_instances SET site_id=?, lifecycle_status='ACTIVE', updated_at=now() WHERE id=?`,
+        [transfer.from_site_id, item.instance_id]
+      );
+      await tx.query(
+        `UPDATE stock_transfer_items SET status='DRAFT', updated_at=now() WHERE id=?`, [item.id]
+      );
+      await tx.query(
+        `INSERT INTO inventory_movements (
+           instance_id, movement_type, quantity, from_site_id, to_site_id,
+           reference_type, reference_id, reason, performed_by
+         ) VALUES (?, 'ADJUSTMENT_IN', ?, NULL, ?, 'STOCK_TRANSFER', ?, ?, ?)`,
+        [item.instance_id, item.quantity, transfer.from_site_id, transfer.transfer_number,
+          'Admin reverted mistaken stock transfer dispatch', user.id]
+      );
+    }
+
+    return tx.one(
+      `UPDATE stock_transfers
+       SET status='DRAFT', dispatched_by=NULL, dispatched_at=NULL, updated_at=now()
+       WHERE id=? RETURNING *`, [transfer.id]
+    );
+  });
+}
+
 
 /**
  * Receive selected transfer items at the destination site.
@@ -1780,6 +1838,7 @@ module.exports = {
   listTransfersForUser,
   getTransferForUser,
   dispatchTransfer,
+  revertTransferDispatch,
   receiveTransferItems,
   listIncomingTransfersForUser,
   receiveTransferItemByScan,

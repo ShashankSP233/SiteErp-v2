@@ -9,6 +9,7 @@ const {
   listTransfersForUser,
   getTransferForUser,
   dispatchTransfer,
+  revertTransferDispatch,
   receiveTransferItems,
   receiveTransferItemByScan,
   updateTransferItemReceiverNote
@@ -408,6 +409,35 @@ router.post(
       res.redirect(
         `/inventory/transfers/${req.params.id}`
       );
+    }
+  }
+);
+
+/* Revert a mistaken dispatch, before any receiving has taken place. */
+router.post(
+  '/inventory/transfers/:id/revert-dispatch',
+  requireAuth,
+  requireRole('admin'),
+  async (req, res) => {
+    try {
+      const transfer = await revertTransferDispatch({
+        transferId: req.params.id,
+        user: req.session.user
+      });
+      await logAudit({
+        userId: req.session.user.id,
+        action: 'REVERT_STOCK_TRANSFER_DISPATCH',
+        entity: 'stock_transfer',
+        entityId: transfer.id,
+        details: { transferNumber: transfer.transfer_number },
+        ip: req.ip,
+        userAgent: req.get('user-agent')
+      });
+      req.session.success = `${transfer.transfer_number} dispatch reverted. Its items are back at the source site and the transfer is a draft.`;
+      return res.redirect(`/inventory/transfers/${transfer.id}`);
+    } catch (error) {
+      req.session.error = error.message || 'Failed to revert stock transfer dispatch.';
+      return res.redirect(`/inventory/transfers/${req.params.id}`);
     }
   }
 );

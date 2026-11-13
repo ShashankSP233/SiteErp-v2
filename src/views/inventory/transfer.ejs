@@ -78,6 +78,22 @@
           </button>
         </form>
       <% } %>
+
+      <% if (
+        currentUser?.role === 'admin' &&
+        transfer.status === 'IN_TRANSIT' &&
+        items.length > 0 &&
+        items.every(item => item.status === 'IN_TRANSIT')
+      ) { %>
+        <form
+          method="POST"
+          action="/inventory/transfers/<%= transfer.id %>/revert-dispatch"
+          onsubmit="return confirm('Revert this dispatch? All items will return to the source site and the transfer will become a draft.');"
+        >
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <button type="submit" class="btn btn-outline-danger">Revert Dispatch</button>
+        </form>
+      <% } %>
     </div>
 
   </div>
