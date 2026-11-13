@@ -949,7 +949,7 @@ async function createIssueBatch({ recipientType, recipientReference, reason, iss
         }
         const open = await tx.one(`SELECT 1 AS yes FROM inventory_issues WHERE instance_id=? AND status IN ('OPEN','PARTIALLY_CONSUMED')`, [instance.id]);
         if (open) throw new Error(`Instance ${instance.instance_code} already has an active issue.`);
-        const membership = await tx.one(`SELECT k.kit_id,k.kit_code FROM item_kit_lines l JOIN item_kits k ON k.id=l.kit_id WHERE l.item_instance_id=? AND k.status='ACTIVE'`, [instance.id]);
+        const membership = await tx.one(`SELECT k.id AS kit_id,k.kit_code FROM item_kit_lines l JOIN item_kits k ON k.id=l.kit_id WHERE l.item_instance_id=? AND k.status='ACTIVE'`, [instance.id]);
         if (membership && !uniqueKitIds.includes(Number(membership.kit_id))) {
           throw new Error(`Instance ${instance.instance_code} belongs to kit ${membership.kit_code}. Add that kit before selecting its members.`);
         }
@@ -1028,7 +1028,7 @@ async function stageIssueBatchInstance({ batchId, instanceCode, scannedBy }) {
   );
   if (!instance) throw new Error(`No item instance was found for ${code}.`);
   const membership = await db.one(
-    `SELECT k.kit_id, k.kit_code FROM item_kit_lines l JOIN item_kits k ON k.id=l.kit_id
+    `SELECT k.id AS kit_id, k.kit_code FROM item_kit_lines l JOIN item_kits k ON k.id=l.kit_id
      WHERE l.item_instance_id=? AND k.status='ACTIVE'`, [instance.id]
   );
   if (membership) {
