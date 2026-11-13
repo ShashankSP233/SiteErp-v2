@@ -1,11 +1,11 @@
-<div class="mb-4"><div class="text-muted small">Inventory / Issue Batch</div><h1 class="h3 mb-1">Create Issue Batch</h1><p class="text-muted mb-0">Choose a recipient, add kits if needed, then scan or search the individual instances for the pending issue list.</p></div>
+<div class="mb-4"><div class="text-muted small">Inventory / Issue Batch</div><h1 class="h3 mb-1">Create Issue Batch</h1><p class="text-muted mb-0">Choose a recipient, add kits if needed, then scan or search any individual instances for the pending issue list.</p></div>
 <% if (error) { %><div class="alert alert-danger alert-dismissible fade show" role="alert"><%= error %><button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div><% } %>
 
 <section class="card shadow-sm"><div class="card-header bg-white py-3"><h2 class="h5 mb-0">Batch Details</h2></div><div class="card-body">
   <form method="post" action="/inventory/issue-batches" id="issue-batch-form"><% if (typeof csrfToken !== 'undefined') { %><input type="hidden" name="_csrf" value="<%= csrfToken %>"><% } %>
     <div class="row g-3"><div class="col-md-4"><label class="form-label" for="recipientType">Recipient type</label><select class="form-select" id="recipientType" name="recipientType" required><option value="">Select recipient</option><option value="EMPLOYEE">Employee</option><option value="PROJECT">Project</option><option value="DEPARTMENT">Department</option><option value="OTHER">Other</option></select></div><div class="col-md-8"><label class="form-label" for="recipientReference">Recipient name / reference</label><input class="form-control" id="recipientReference" name="recipientReference" maxlength="255" required placeholder="Employee name or ID"></div><div class="col-12"><label class="form-label" for="reason">Reason (optional)</label><input class="form-control" id="reason" name="reason" maxlength="500"></div></div>
 
-    <div class="mt-4"><h3 class="h6">Kits <span class="text-muted fw-normal">(optional)</span></h3><p class="small text-muted">Type a kit code or name to see matching kits. Add a kit, then scan or add all its member instances below.</p>
+    <div class="mt-4"><h3 class="h6">Kits <span class="text-muted fw-normal">(optional)</span></h3><p class="small text-muted">Type a kit code or name to see matching kits. Adding a kit includes all its available member instances in this issue.</p>
       <% const activeKits = kits.filter(kit => kit.status === 'ACTIVE'); %>
       <% if (!activeKits.length) { %><div class="text-muted small">No active kits are defined.</div><% } else { %>
       <div class="row g-2 align-items-end"><div class="col-md-9"><label class="form-label" for="kit-search">Search kits</label><input class="form-control" id="kit-search" list="kit-options" placeholder="Type kit code or name" autocomplete="off"><datalist id="kit-options"><% activeKits.forEach(kit => { %><option value="<%= kit.kit_code %> — <%= kit.name %>" data-id="<%= kit.id %>"></option><% }) %></datalist></div><div class="col-md-3 d-grid"><button class="btn btn-outline-primary" type="button" id="add-kit">Add Kit</button></div></div>
@@ -18,7 +18,7 @@
       <div class="row g-2 align-items-end"><div class="col-md-9"><label class="form-label" for="instance-search">Scan or search instances</label><input class="form-control" id="instance-search" list="instance-options" data-scan="enter" placeholder="Scan barcode or type an instance code" autocomplete="off"><datalist id="instance-options"><% instances.forEach(instance => { const label = `${instance.item_code} — ${instance.item_name} · ${instance.site_code || ''}`; %><option value="<%= instance.instance_code %>" label="<%= label %>" data-id="<%= instance.id %>"></option><% if (instance.barcode && instance.barcode !== instance.instance_code) { %><option value="<%= instance.barcode %>" label="<%= label %>" data-id="<%= instance.id %>"></option><% } %><% }) %></datalist></div><div class="col-md-3 d-grid"><button class="btn btn-outline-primary" type="button" id="add-instance">Add Instance</button></div></div>
       <% } %>
       <div class="mt-3 border rounded" id="pending-list"><div class="p-3 text-center text-muted" id="pending-empty">No instances added yet.</div><div class="list-group list-group-flush" id="selected-instances" aria-live="polite"></div></div>
-      <div class="form-text mt-2">A kit cannot be issued until every instance in it has been added. The final review page lets you remove items before confirming the issue.</div>
+      <div class="form-text mt-2">The final review page lets you remove individual instances before confirming the issue.</div>
     </div>
     <div class="d-flex justify-content-between mt-4"><a href="/inventory/issues" class="btn btn-outline-secondary">Cancel</a><button class="btn btn-primary">Review Issue List</button></div>
   </form>
@@ -73,14 +73,5 @@
     instanceInput.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); addInstance(); } });
   }
 
-  form.addEventListener('submit', event => {
-    const kitIds = Array.from(form.querySelectorAll('input[name="kitIds"]')).map(input => input.value);
-    const instanceIds = new Set(Array.from(form.querySelectorAll('input[name="instanceIds"]')).map(input => input.value));
-    if (kitIds.length) {
-      const kitItems = <%- JSON.stringify(activeKits.map(kit => ({ id: String(kit.id), instanceIds: kit.items.map(item => String(item.instance_id)) }))) %>;
-      const missing = kitItems.filter(kit => kitIds.includes(kit.id)).flatMap(kit => kit.instanceIds.filter(id => !instanceIds.has(id)));
-      if (missing.length) { event.preventDefault(); alert('Add every physical instance from the selected kit before continuing.'); }
-    }
-  });
 })();
 </script>

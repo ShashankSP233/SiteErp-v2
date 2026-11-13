@@ -109,6 +109,7 @@
         </section>
       <% }) %>
       <% if (!itemMasters.length) { %><div class="alert alert-warning">No active instance-tracked item masters are available.</div><% } %>
+      <% if (itemMasters.length) { %><div class="d-flex justify-content-end pt-1"><button type="button" class="btn btn-outline-primary add-stock-line-bottom">＋ Add item row</button></div><% } %>
     </div>
     <div class="card-footer bg-white d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3 p-3">
       <div class="small text-muted">Stock is added only after labels are printed and each barcode is scanned.</div>
@@ -165,13 +166,16 @@
       output.textContent = `${option.dataset.instanceQuantity || '—'} ${option.dataset.quantityUnit || ''} per ${option.dataset.physicalUnit || 'instance'}`;
     }
 
-    addButton.addEventListener('click', () => {
+    function addStockLine() {
       const index = list.querySelectorAll('.stock-line').length;
       const html = template.innerHTML.replaceAll('__INDEX__', String(index));
       list.insertAdjacentHTML('beforeend', html);
       refreshRows();
       list.querySelector('.stock-line:last-child .stock-item')?.focus();
-    });
+    }
+
+    addButton.addEventListener('click', addStockLine);
+    document.querySelector('.add-stock-line-bottom')?.addEventListener('click', addStockLine);
 
     list.addEventListener('click', event => {
       const button = event.target.closest('.remove-stock-line');

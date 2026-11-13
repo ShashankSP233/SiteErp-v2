@@ -7,7 +7,7 @@
 <div class="card shadow-sm mb-4"><div class="card-header bg-white"><h2 class="h5 mb-0">Create kit</h2></div><div class="card-body">
   <form method="post" action="/kits"><% if (typeof csrfToken !== 'undefined') { %><input type="hidden" name="_csrf" value="<%= csrfToken %>"><% } %>
     <div class="row g-3"><div class="col-md-3"><label class="form-label">Kit code</label><input class="form-control" name="code" required maxlength="80" placeholder="SURVEY-KIT"></div><div class="col-md-3"><label class="form-label">Kit name</label><input class="form-control" name="name" required maxlength="160" placeholder="Survey Kit"></div><div class="col-md-6"><label class="form-label">Description</label><input class="form-control" name="description" maxlength="500"></div></div>
-    <div class="mt-3"><label class="form-label fw-semibold">Physical instances in this kit</label><div id="kit-lines"><div class="row g-2 mb-2 kit-line"><div class="col-md-5"><input class="form-control instance-search" type="search" placeholder="Type item code, name, or instance code" autocomplete="off" aria-label="Search instances"></div><div class="col-md-6"><select class="form-select" name="instanceIds" required><option value="">Select an unassigned instance</option><% instanceGroups.forEach(group => { %><optgroup label="<%= group.label %>"><% group.instances.forEach(instance => { %><option value="<%= instance.id %>" data-search="<%= `${group.label} ${instance.instance_code}`.toLowerCase() %>"><%= instance.instance_code %></option><% }) %></optgroup><% }) %></select></div><div class="col-md-1"><button class="btn btn-outline-danger" type="button" onclick="this.closest('.kit-line').remove()" aria-label="Remove">×</button></div></div></div><button class="btn btn-sm btn-outline-secondary" type="button" id="add-kit-line">Add instance</button></div>
+    <div class="mt-3"><label class="form-label fw-semibold">Physical instances in this kit</label><div id="kit-lines"><div class="row g-2 mb-2 kit-line"><div class="col-md-5"><input class="form-control instance-search" type="search" placeholder="Type item code, name, or instance code" autocomplete="off" aria-label="Search instances"></div><div class="col-md-6"><select class="form-select" name="instanceIds" required><option value="">Select an unassigned instance</option><% instanceGroups.forEach(group => { %><optgroup label="<%= group.label %>"><% group.instances.forEach(instance => { %><option value="<%= instance.id %>" data-search="<%= `${group.label} ${instance.instance_code}`.toLowerCase() %>"><%= instance.instance_code %></option><% }) %></optgroup><% }) %></select></div><div class="col-md-1"><button class="btn btn-outline-danger remove-kit-line" type="button" aria-label="Remove instance">×</button></div></div></div><button class="btn btn-sm btn-outline-secondary" type="button" id="add-kit-line">Add instance</button></div>
     <div class="text-end mt-3"><button class="btn btn-primary">Save Kit</button></div>
   </form></div></div>
 <% } %>
@@ -23,6 +23,21 @@ document.getElementById('add-kit-line')?.addEventListener('click', () => {
   row.querySelectorAll('option').forEach(option => { option.hidden = false; option.disabled = false; });
   row.querySelectorAll('optgroup').forEach(group => { group.hidden = false; });
   document.getElementById('kit-lines').appendChild(row);
+});
+
+document.getElementById('kit-lines')?.addEventListener('click', event => {
+  const button = event.target.closest('.remove-kit-line');
+  if (!button) return;
+  const row = button.closest('.kit-line');
+  const rows = document.querySelectorAll('#kit-lines .kit-line');
+  if (rows.length > 1) {
+    row.remove();
+    return;
+  }
+  row.querySelector('select').value = '';
+  row.querySelector('.instance-search').value = '';
+  row.querySelectorAll('option').forEach(option => { option.hidden = false; option.disabled = false; });
+  row.querySelectorAll('optgroup').forEach(group => { group.hidden = false; });
 });
 
 document.getElementById('kit-lines')?.addEventListener('input', event => {

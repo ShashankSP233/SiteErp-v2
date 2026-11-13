@@ -921,7 +921,7 @@ async function findOpenIssueByInstanceCode(instanceCode) {
 
 async function createIssueBatch({ recipientType, recipientReference, reason, issuedBy, kitIds = [], instanceIds = [] }) {
   const uniqueKitIds = [...new Set((Array.isArray(kitIds) ? kitIds : [kitIds]).map(Number).filter(Number.isInteger))];
-  const uniqueInstanceIds = [...new Set((Array.isArray(instanceIds) ? instanceIds : [instanceIds]).map(Number).filter(Number.isInteger))];
+  const uniqueInstanceIds = new Set((Array.isArray(instanceIds) ? instanceIds : [instanceIds]).map(Number).filter(Number.isInteger));
   return db.tx(async tx => {
     const result = await tx.query(
       `INSERT INTO inventory_issue_batches(recipient_type,recipient_reference,reason,issued_by) VALUES (?,?,?,?) RETURNING id`,
@@ -938,13 +938,16 @@ async function createIssueBatch({ recipientType, recipientReference, reason, iss
       );
       if (Number(consumables.n) > 0) throw new Error('A kit in an issue batch must contain returnable, non-consumable item instances.');
       await tx.query(`INSERT INTO inventory_issue_batch_kits(batch_id,kit_id) VALUES (?,?)`, [batchId, kitId]);
+      const kitInstances = await tx.many(`SELECT item_instance_id FROM item_kit_lines WHERE kit_id=?`, [kitId]);
+      for (const member of kitInstances) uniqueInstanceIds.add(Number(member.item_instance_id));
     }
-    if (uniqueInstanceIds.length) {
+    const stagedInstanceIds = [...uniqueInstanceIds];
+    if (stagedInstanceIds.length) {
       const candidates = await tx.many(
         `SELECT ii.id, ii.instance_code, ii.site_id, ii.lifecycle_status, ii.current_quantity
-         FROM item_instances ii WHERE ii.id IN (${uniqueInstanceIds.map(() => '?').join(',')})`, uniqueInstanceIds
+         FROM item_instances ii WHERE ii.id IN (${stagedInstanceIds.map(() => '?').join(',')})`, stagedInstanceIds
       );
-      if (candidates.length !== uniqueInstanceIds.length) throw new Error('One or more selected instances no longer exist.');
+      if (candidates.length !== stagedInstanceIds.length) throw new Error('One or more selected instances no longer exist.');
       for (const instance of candidates) {
         if (!instance.site_id || instance.lifecycle_status !== 'ACTIVE' || Number(instance.current_quantity) <= 0) {
           throw new Error(`Instance ${instance.instance_code} is not currently available at a site.`);
